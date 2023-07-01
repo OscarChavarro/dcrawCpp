@@ -1015,10 +1015,13 @@ void CLASS canon_sraw_load_raw()
   for (row=0; row < height; row++, ip+=width) {
     if (row & (jh.sraw >> 1))
       for (col=0; col < width; col+=2)
-	for (c=1; c < 3; c++)
-	  if (row == height-1)
-	       ip[col][c] =  ip[col-width][c];
-	  else ip[col][c] = (ip[col-width][c] + ip[col+width][c] + 1) >> 1;
+	for (c=1; c < 3; c++) {
+        if ( row == height - 1 ) {
+            ip[col][c] = ip[col - width][c];
+        } else {
+            ip[col][c] = (ip[col - width][c] + ip[col + width][c] + 1) >> 1;
+        }
+    }
     for (col=1; col < width; col+=2)
       for (c=1; c < 3; c++)
 	if (col == width-1)
@@ -1042,7 +1045,7 @@ void CLASS canon_sraw_load_raw()
       pix[2] = rp[0] + rp[1];
       pix[1] = rp[0] + ((-778*rp[1] - (rp[2] << 11)) >> 12);
     }
-    FORC3 rp[c] = CLIP(pix[c] * sraw_mul[c] >> 10);
+    FORC3 rp[c] = (short)CLIP(pix[c] * sraw_mul[c] >> 10);
   }
   ljpeg_end (&jh);
   maximum = 0x3fff;
@@ -3423,7 +3426,7 @@ void CLASS foveon_interpolate()
     FORC3 diag[c][i] = LAST(1,1)*LAST(2,2) - LAST(1,2)*LAST(2,1);
   #undef LAST
   FORC3 div[c] = diag[c][0]*0.3127 + diag[c][1]*0.329 + diag[c][2]*0.3583;
-  sprintf (str, "%sRGBNeutral", model2);
+  snprintf(str, 128, "%sRGBNeutral", model2);
   if (foveon_camf_param ("IncludeBlocks", str))
     foveon_fixed (div, 3, str);
   num = 0;
@@ -6014,7 +6017,7 @@ int CLASS parse_tiff_ifd (int base)
 	  raw_height = height;
 	  left_margin = top_margin = filters = flip = 0;
 	}
-	sprintf (model, "Ixpress %d-Mp", height*width/1000000);
+	snprintf(model, 64, "Ixpress %d-Mp", height*width/1000000);
 	load_raw = &CLASS imacon_full_load_raw;
 	if (filters) {
 	  if (left_margin & 1) filters = 0x61616161;
@@ -6943,7 +6946,7 @@ void CLASS parse_smal (int offset, int fsize)
   raw_height = height = get2();
   raw_width  = width  = get2();
   strcpy (make, "SMaL");
-  sprintf (model, "v%d %dx%d", ver, width, height);
+  snprintf(model, 64, "v%d %dx%d", ver, width, height);
   if (ver == 6) load_raw = &CLASS smal_v6_load_raw;
   if (ver == 9) load_raw = &CLASS smal_v9_load_raw;
 }
@@ -6971,7 +6974,7 @@ void CLASS parse_cine()
   }
   fseek (ifp, off_setup+792, SEEK_SET);
   strcpy (make, "CINE");
-  sprintf (model, "%d", get4());
+  snprintf(model, 64, "%d", get4());
   fseek (ifp, 12, SEEK_CUR);
   switch ((i=get4()) & 0xffffff) {
     case  3:  filters = 0x94949494;  break;
@@ -8283,7 +8286,7 @@ void CLASS adobe_coeff (const char *make, const char *model)
   char name[130];
   int i, j;
 
-  sprintf (name, "%s %s", make, model);
+  snprintf(name, 130, "%s %s", make, model);
   for (i=0; i < sizeof table / sizeof *table; i++)
     if (!strncmp (name, table[i].prefix, strlen(table[i].prefix))) {
       if (table[i].black)   black   = (ushort) table[i].black;
@@ -8681,8 +8684,8 @@ void CLASS identify()
   fread (head, 1, 32, ifp);
   fseek (ifp, 0, SEEK_END);
   flen = fsize = ftell(ifp);
-  if ((cp = (char *) memmem (head, 32, "MMMM", 4)) ||
-      (cp = (char *) memmem (head, 32, "IIII", 4))) {
+  if ((cp = (char *) memmem (head, 32, (char *)"MMMM", 4)) ||
+      (cp = (char *) memmem (head, 32, (char *)"IIII", 4))) {
     parse_phase_one (cp-head);
     if (cp-head && parse_tiff(0)) apply_tiff();
   } else if (order == LITTLE_ENDIAN_ORDER || order == BIG_ENDIAN_ORDER) {
@@ -8725,7 +8728,10 @@ void CLASS identify()
     parse_fuji (get4());
     if (thumb_offset > 120) {
       fseek (ifp, 120, SEEK_SET);
-      is_raw += (i = get4()) && 1;
+      i = get4();
+      if ( i ) {
+          is_raw++;
+      }
       if (is_raw == 2 && shot_select)
 	parse_fuji (i);
     }
@@ -9206,7 +9212,7 @@ canon_a5:
     } else if (!strncmp(model,"ALPHA",5) ||
 	       !strncmp(model,"DYNAX",5) ||
 	       !strncmp(model,"MAXXUM",6)) {
-      sprintf (model+20, "DYNAX %-10s", model+6+(model[0]=='M'));
+      snprintf(model + 20, 40, "DYNAX %-10s", model+6+(model[0]=='M'));
       adobe_coeff (make, model+20);
       load_raw = &CLASS packed_load_raw;
     } else if (!strncmp(model,"DiMAGE G",8)) {
@@ -9606,7 +9612,7 @@ bw:   colors = 1;
     load_raw = &CLASS rollei_load_raw;
   }
   if (!model[0])
-    sprintf (model, "%dx%d", width, height);
+    snprintf(model, 64, "%dx%d", width, height);
   if (filters == UINT_MAX) filters = 0x94949494;
   if (thumb_offset && !thumb_height) {
     fseek (ifp, thumb_offset, SEEK_SET);
@@ -9974,7 +9980,7 @@ void CLASS tiff_head (struct tiff_hdr *th, int full)
   strncpy (th->model, model, 64);
   strcpy (th->soft, "dcraw v"DCRAW_VERSION);
   t = localtime (&timestamp);
-  sprintf (th->date, "%04d:%02d:%02d %02d:%02d:%02d",
+  snprintf(th->date, 20, "%04d:%02d:%02d %02d:%02d:%02d",
       t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);
   strncpy (th->artist, artist, 64);
   if (full) {
@@ -10479,12 +10485,14 @@ next:
     convert_to_rgb();
     if (use_fuji_rotate) stretch();
 thumbnail:
-    if (write_fun == &CLASS jpeg_thumb)
-      write_ext = ".jpg";
-    else if (output_tiff && write_fun == &CLASS write_ppm_tiff)
-      write_ext = ".tiff";
-    else
-      write_ext = ".pgm\0.ppm\0.ppm\0.pam" + colors*5-5;
+    if ( write_fun == &CLASS jpeg_thumb ) {
+        write_ext = ".jpg";
+    } else if ( output_tiff && write_fun == &CLASS write_ppm_tiff ) {
+        write_ext = ".tiff";
+    } else {
+        char extensions[4][5] = {".pgm", ".ppm" , ".ppm", ".pam"};
+        write_ext = extensions[colors - 1];
+    }
     ofname = (char *) malloc (strlen(ifname) + 64);
     merror (ofname, "main()");
     if (write_to_stdout)
@@ -10493,7 +10501,7 @@ thumbnail:
       strcpy (ofname, ifname);
       if ((cp = strrchr (ofname, '.'))) *cp = 0;
       if (multi_out)
-	sprintf (ofname+strlen(ofname), "_%0*d",
+	snprintf(ofname + strlen(ofname), strlen(ofname), "_%0*d",
 		snprintf(0,0,"%d",is_raw-1), shot_select);
       if (thumbnail_only)
 	strcat (ofname, ".thumb");
