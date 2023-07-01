@@ -89,6 +89,21 @@ typedef unsigned long long UINT64;
 #define _(String) (String)
 #endif
 
+// App modules
+#include "common/globals.h"
+#include "common/mathMacros.h"
+#include "common/options.h"
+#include "colorRepresentation/whiteBalance.h"
+#include "imageProcess.h"
+#include "imageHandling/rawAnalysis.h"
+#include "persistence/readers/tiffparser.h"
+#include "persistence/readers/globalsio.h"
+#include "persistence/readers/timestamp.h"
+#include "colorRepresentation/cielab.h"
+#include "colorRepresentation/iccProfile.h"
+#include "common/CameraImageInformation.h"
+#include "thumbnailExport.h"
+
 #if !defined(uchar)
 #define uchar unsigned char
 #endif
@@ -294,7 +309,7 @@ void CLASS derror()
 
 ushort CLASS sget2 (uchar *s)
 {
-  if (order == 0x4949)		/* "II" means little-endian */
+  if (order == LITTLE_ENDIAN_ORDER)		/* "II" means little-endian */
     return s[0] | s[1] << 8;
   else				/* "MM" means big-endian */
     return s[0] << 8 | s[1];
@@ -309,7 +324,7 @@ ushort CLASS get2()
 
 unsigned CLASS sget4 (uchar *s)
 {
-  if (order == 0x4949)
+  if (order == LITTLE_ENDIAN_ORDER)
     return s[0] | s[1] << 8 | s[2] << 16 | s[3] << 24;
   else
     return s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3];
@@ -351,7 +366,7 @@ double CLASS getreal (int type)
       return u.d / (signed int) get4();
     case 11: return int_to_float (get4());
     case 12:
-      rev = 7 * ((order == 0x4949) == (ntohs(0x1234) == 0x1234));
+      rev = 7 * ((order == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234));
       for (i=0; i < 8; i++)
 	u.c[i ^ rev] = fgetc(ifp);
       return u.d;
@@ -362,7 +377,7 @@ double CLASS getreal (int type)
 void CLASS read_shorts (ushort *pixel, int count)
 {
   if (fread (pixel, 2, count, ifp) < count) derror();
-  if ((order == 0x4949) == (ntohs(0x1234) == 0x1234))
+  if ((order == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234))
     swab (pixel, pixel, count*2);
 }
 
@@ -1788,7 +1803,7 @@ void CLASS hasselblad_load_raw()
   ushort *ip;
 
   if (!ljpeg_start (&jh, 0)) return;
-  order = 0x4949;
+  order = LITTLE_ENDIAN_ORDER;
   ph1_bits(-1);
   back[4] = (int *) calloc (raw_width, 3*sizeof **back);
   merror (back[4], "hasselblad_load_raw()");
@@ -1962,7 +1977,7 @@ void CLASS nokia_load_raw()
   int rev, dwide, row, col, c;
   double sum[]={0,0};
 
-  rev = 3 * (order == 0x4949);
+  rev = 3 * (order == LITTLE_ENDIAN_ORDER);
   dwide = (raw_width * 5 + 1) / 4;
   data = (uchar *) malloc (dwide*2);
   merror (data, "nokia_load_raw()");
@@ -2368,7 +2383,7 @@ void CLASS lossy_dng_load_raw()
 
   if (meta_offset) {
     fseek (ifp, meta_offset, SEEK_SET);
-    order = 0x4d4d;
+    order = BIG_ENDIAN_ORDER;
     ntags = get4();
     while (ntags--) {
       opcode = get4(); get4(); get4();
@@ -2514,7 +2529,7 @@ void CLASS kodak_262_load_raw()
   pixel = (uchar *) malloc (raw_width*32 + ns*4);
   merror (pixel, "kodak_262_load_raw()");
   strip = (int *) (pixel + raw_width*32);
-  order = 0x4d4d;
+  order = BIG_ENDIAN_ORDER;
   FORC(ns) strip[c] = get4();
   for (row=0; row < raw_height; row++) {
     if ((row & 31) == 0) {
@@ -2682,7 +2697,7 @@ void CLASS sony_load_raw()
 
   fseek (ifp, 200896, SEEK_SET);
   fseek (ifp, (unsigned) fgetc(ifp)*4 - 1, SEEK_CUR);
-  order = 0x4d4d;
+  order = BIG_ENDIAN_ORDER;
   key = get4();
   fseek (ifp, 164600, SEEK_SET);
   fread (head, 1, 40, ifp);
@@ -2756,7 +2771,7 @@ void CLASS samsung_load_raw()
 {
   int row, col, c, i, dir, op[4], len[4];
 
-  order = 0x4949;
+  order = LITTLE_ENDIAN_ORDER;
   for (row=0; row < raw_height; row++) {
     fseek (ifp, strip_offset+row*4, SEEK_SET);
     fseek (ifp, data_offset+get4(), SEEK_SET);
@@ -2810,7 +2825,7 @@ void CLASS samsung3_load_raw()
   int opt, init, mag, pmode, row, tab, col, pred, diff, i, c;
   ushort lent[3][2], len[4], *prow[2];
 
-  order = 0x4949;
+  order = LITTLE_ENDIAN_ORDER;
   fseek (ifp, 9, SEEK_CUR);
   opt = fgetc(ifp);
   init = (get2(),get2());
@@ -5202,7 +5217,7 @@ void CLASS parse_makernote (int base, int uptag)
       !strncmp (buf,"MMMM",4)) return;
   if (!strncmp (buf,"KC"  ,2) ||	/* Konica KD-400Z, KD-510Z */
       !strncmp (buf,"MLY" ,3)) {	/* Minolta DiMAGE G series */
-    order = 0x4d4d;
+    order = BIG_ENDIAN_ORDER;
     while ((i=ftell(ifp)) < data_offset && i < 16384) {
       wb[0] = wb[2];  wb[2] = wb[1];  wb[1] = wb[3];
       wb[3] = get2();
@@ -5229,7 +5244,7 @@ void CLASS parse_makernote (int base, int uptag)
     goto nf;
   } else if (!strncmp (buf,"FUJIFILM",8)) {
     base = ftell(ifp)-10;
-nf: order = 0x4949;
+nf: order = LITTLE_ENDIAN_ORDER;
     fseek (ifp,  2, SEEK_CUR);
   } else if (!strcmp (buf,"OLYMP") ||
 	     !strcmp (buf,"LEICA") ||
@@ -5362,7 +5377,7 @@ nf: order = 0x4949;
       }
     }
     if (tag == 0xa1 && type == 7) {
-      order = 0x4949;
+      order = LITTLE_ENDIAN_ORDER;
       fseek (ifp, 140, SEEK_CUR);
       FORC3 cam_mul[c] = get4();
     }
@@ -5391,7 +5406,7 @@ nf: order = 0x4949;
     if (tag == 0x401 && type == 4 && len == 4)
       FORC4 cblack[c ^ c >> 1] = get4();
     if (tag == 0xe01) {		/* Nikon Capture Note */
-      order = 0x4949;
+      order = LITTLE_ENDIAN_ORDER;
       fseek (ifp, 22, SEEK_CUR);
       for (offset=22; offset+22 < len; offset += 22+i) {
 	tag = get4();
@@ -5425,7 +5440,7 @@ nf: order = 0x4949;
       cam_mul[2] = get2() / 256.0;
     if (tag == 0x2011 && len == 2) {
 get2_256:
-      order = 0x4d4d;
+      order = BIG_ENDIAN_ORDER;
       cam_mul[0] = get2() / 256.0;
       cam_mul[2] = get2() / 256.0;
     }
@@ -6186,7 +6201,7 @@ int CLASS parse_tiff (int base)
 
   fseek (ifp, base, SEEK_SET);
   order = get2();
-  if (order != 0x4949 && order != 0x4d4d) return 0;
+  if (order != LITTLE_ENDIAN_ORDER && order != BIG_ENDIAN_ORDER) return 0;
   get2();
   while ((doff = get4())) {
     fseek (ifp, doff+base, SEEK_SET);
@@ -6309,7 +6324,7 @@ void CLASS apply_tiff()
 	} else if (raw_width*raw_height*2 == tiff_ifd[raw].bytes) {
 	  load_raw = &CLASS unpacked_load_raw;
 	  load_flags = 4;
-	  order = 0x4d4d;
+	  order = BIG_ENDIAN_ORDER;
 	} else
 	  load_raw = &CLASS nikon_load_raw;			break;
       case 65535:
@@ -6623,7 +6638,7 @@ void CLASS parse_sinar_ia()
   int entries, off;
   char str[8], *cp;
 
-  order = 0x4949;
+  order = LITTLE_ENDIAN_ORDER;
   fseek (ifp, 4, SEEK_SET);
   entries = get4();
   fseek (ifp, get4(), SEEK_SET);
@@ -6746,7 +6761,7 @@ void CLASS parse_fuji (int offset)
       FORC4 cam_mul[c ^ 1] = get2();
     } else if (tag == 0xc000 && len > 20000) {
       c = order;
-      order = 0x4949;
+      order = LITTLE_ENDIAN_ORDER;
       while ((tag = get4()) > raw_width);
       width = tag;
       height = get4();
@@ -6766,7 +6781,7 @@ int CLASS parse_jpeg (int offset)
   if (fgetc(ifp) != 0xff || fgetc(ifp) != 0xd8) return 0;
 
   while (fgetc(ifp) == 0xff && (mark = fgetc(ifp)) != 0xda) {
-    order = 0x4d4d;
+    order = BIG_ENDIAN_ORDER;
     len   = get2() - 2;
     save  = ftell(ifp);
     if (mark == 0xc0 || mark == 0xc3 || mark == 0xc9) {
@@ -6792,7 +6807,7 @@ void CLASS parse_riff()
   { "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec" };
   struct tm t;
 
-  order = 0x4949;
+  order = LITTLE_ENDIAN_ORDER;
   fread (tag, 4, 1, ifp);
   size = get4();
   end = ftell(ifp) + size;
@@ -6829,7 +6844,7 @@ void CLASS parse_crx (int end)
   unsigned i, save, size, tag, base;
   static int index=0, wide, high, off, len;
 
-  order = 0x4d4d;
+  order = BIG_ENDIAN_ORDER;
   while (ftell(ifp)+7 < end) {
     save = ftell(ifp);
     if ((size = get4()) < 8) break;
@@ -6858,7 +6873,7 @@ void CLASS parse_crx (int end)
     } else {
         parse_exif (base);
     }
-	order = 0x4d4d;
+	order = BIG_ENDIAN_ORDER;
 	break;
       case 0x746b6864:				/* tkhd */
 	fseek (ifp, 12, SEEK_CUR);
@@ -6899,7 +6914,7 @@ void CLASS parse_qt (int end)
   unsigned save, size;
   char tag[4];
 
-  order = 0x4d4d;
+  order = BIG_ENDIAN_ORDER;
   while (ftell(ifp)+7 < end) {
     save = ftell(ifp);
     if ((size = get4()) < 8) return;
@@ -6919,7 +6934,7 @@ void CLASS parse_smal (int offset, int fsize)
   int ver;
 
   fseek (ifp, offset+2, SEEK_SET);
-  order = 0x4949;
+  order = LITTLE_ENDIAN_ORDER;
   ver = fgetc(ifp);
   if (ver == 6)
     fseek (ifp, 5, SEEK_CUR);
@@ -6937,7 +6952,7 @@ void CLASS parse_cine()
 {
   unsigned off_head, off_setup, off_image, i;
 
-  order = 0x4949;
+  order = LITTLE_ENDIAN_ORDER;
   fseek (ifp, 4, SEEK_SET);
   is_raw = get2() == 2;
   fseek (ifp, 14, SEEK_CUR);
@@ -6986,7 +7001,7 @@ void CLASS parse_redcine()
 {
   unsigned i, len, rdvo;
 
-  order = 0x4d4d;
+  order = BIG_ENDIAN_ORDER;
   is_raw = 0;
   fseek (ifp, 52, SEEK_SET);
   width  = get4();
@@ -7026,7 +7041,7 @@ void CLASS parse_foveon()
   int entries, img=0, off, len, tag, save, i, wide, high, pent, poff[256][2];
   char name[64], value[64];
 
-  order = 0x4949;			/* Little-endian */
+  order = LITTLE_ENDIAN_ORDER;
   fseek (ifp, 36, SEEK_SET);
   flip = get4();
   fseek (ifp, -4, SEEK_END);
@@ -8318,7 +8333,7 @@ short CLASS guess_byte_order (int words)
     }
     t = (t+1) & 3;
   }
-  return sum[0] < sum[1] ? 0x4d4d : 0x4949;
+  return sum[0] < sum[1] ? BIG_ENDIAN_ORDER : LITTLE_ENDIAN_ORDER;
 }
 
 float CLASS find_green (int bps, int bite, int off0, int off1)
@@ -8670,7 +8685,7 @@ void CLASS identify()
       (cp = (char *) memmem (head, 32, "IIII", 4))) {
     parse_phase_one (cp-head);
     if (cp-head && parse_tiff(0)) apply_tiff();
-  } else if (order == 0x4949 || order == 0x4d4d) {
+  } else if (order == LITTLE_ENDIAN_ORDER || order == BIG_ENDIAN_ORDER) {
     if (!memcmp (head+6,"HEAPCCDR",8)) {
       data_offset = hlen;
       parse_ciff (hlen, flen-hlen, 0);
@@ -8745,7 +8760,7 @@ void CLASS identify()
     filters = 0x61616161;
   } else if (!memcmp (head,"NOKIARAW",8)) {
     strcpy (make, "NOKIA");
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     fseek (ifp, 300, SEEK_SET);
     data_offset = get4();
     i = get4();
@@ -8759,7 +8774,7 @@ void CLASS identify()
     mask[0][3] = 1;
     filters = 0x61616161;
   } else if (!memcmp (head,"ARRI",4)) {
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     fseek (ifp, 20, SEEK_SET);
     width = get4();
     height = get4();
@@ -8771,7 +8786,7 @@ void CLASS identify()
     load_flags = 88;
     filters = 0x61616161;
   } else if (!memcmp (head,"XPDS",4)) {
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     fseek (ifp, 0x800, SEEK_SET);
     fread (make, 1, 41, ifp);
     raw_height = get2();
@@ -8827,7 +8842,7 @@ void CLASS identify()
 	    if (!strcmp(make,"Canon")) load_flags |= 256;
 	    load_raw = &CLASS packed_load_raw;     break;
 	  case 16:
-	    order = 0x4949 | 0x404 * (load_flags & 1);
+	    order = LITTLE_ENDIAN_ORDER | 0x404 * (load_flags & 1);
 	    tiff_bps -= load_flags >> 4;
 	    tiff_bps -= load_flags = load_flags >> 1 & 7;
 	    load_raw = &CLASS unpacked_load_raw;
@@ -9143,7 +9158,7 @@ canon_a5:
     load_flags = 6 + 24*(make[0] == 'M');
   } else if (fsize == 6291456) {
     fseek (ifp, 0x300000, SEEK_SET);
-    if ((order = guess_byte_order(0x10000)) == 0x4d4d) {
+    if ((order = guess_byte_order(0x10000)) == BIG_ENDIAN_ORDER) {
       height -= (top_margin = 16);
       width -= (left_margin = 28);
       maximum = 0xf5c0;
@@ -9212,7 +9227,7 @@ konica_510z:
 konica_400z:
       load_raw = &CLASS unpacked_load_raw;
       maximum = 0x3df;
-      order = 0x4d4d;
+      order = BIG_ENDIAN_ORDER;
     }
   } else if (!strcmp(model,"*ist D")) {
     load_raw = &CLASS unpacked_load_raw;
@@ -9231,7 +9246,7 @@ konica_400z:
     filters = 0x61616161;
     colors = 3;
   } else if (!strcmp(make,"Samsung") && raw_width == 5632) {
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     height = 3694;
     top_margin = 2;
     width  = 5574 - (left_margin = 32 + tiff_bps);
@@ -9245,7 +9260,7 @@ konica_400z:
     filters = 0x61616161;
     black = 1 << (tiff_bps - 7);
   } else if (!strcmp(model,"EX1")) {
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     height -= 20;
     top_margin = 2;
     if ((width -= 6) > 3682) {
@@ -9254,7 +9269,7 @@ konica_400z:
       top_margin = 8;
     }
   } else if (!strcmp(model,"WB2000")) {
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     height -= 3;
     top_margin = 2;
     if ((width -= 10) > 3718) {
@@ -9268,7 +9283,7 @@ konica_400z:
     height = 3045;
     width  = 4070;
     top_margin = 3;
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     filters = 0x49494949;
     load_raw = &CLASS unpacked_load_raw;
   } else if (!strcmp(model,"STV680 VGA")) {
@@ -9436,7 +9451,7 @@ konica_400z:
     load_raw = &CLASS sony_load_raw;
   } else if (!strcmp(make,"Sony") && raw_width == 3984) {
     width = 3925;
-    order = 0x4d4d;
+    order = BIG_ENDIAN_ORDER;
   } else if (!strcmp(make,"Sony") && raw_width == 4288) {
     width -= 32;
   } else if (!strcmp(make,"Sony") && raw_width == 4600) {
@@ -9464,7 +9479,7 @@ konica_400z:
     } else {
       height -= 4;
       width  -= 4;
-      order = 0x4d4d;
+      order = BIG_ENDIAN_ORDER;
       load_flags = 2;
     }
     filters = 0x61616161;
@@ -9474,7 +9489,7 @@ konica_400z:
     gamma_curve (0, 7, 1, 255);
   } else if (!strcmp(model,"C603") || !strcmp(model,"C330")
 	|| !strcmp(model,"12MP")) {
-    order = 0x4949;
+    order = LITTLE_ENDIAN_ORDER;
     if (filters && data_offset) {
       fseek (ifp, data_offset < 4096 ? 168 : 5252, SEEK_SET);
       read_shorts (curve, 256);
