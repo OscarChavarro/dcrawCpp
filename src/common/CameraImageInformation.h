@@ -1,0 +1,5 @@
+#ifndef __CAMERAIMAGEINFORMATION__
+#define __CAMERAIMAGEINFORMATION__
+
+
+#endif

@@ -1,0 +1,2 @@
+#include "BayessianImage.h"
+

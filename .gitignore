@@ -38,3 +38,6 @@
 build
 cmake-build-debug
 cmake-build-release
+
+# Uncompressed sample raw files
+**/*.awr
