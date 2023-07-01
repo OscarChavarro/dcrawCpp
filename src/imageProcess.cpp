@@ -4,7 +4,7 @@
 // App modules
 #include "common/globals.h"
 #include "common/util.h"
-#include "common/options.h"
+#include "common/Options.h"
 #include "colorRepresentation/colorSpaceMatrices.h"
 #include "interpolation/Interpolator.h"
 #include "imageHandling/rawAnalysis.h"

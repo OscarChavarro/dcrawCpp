@@ -9,7 +9,7 @@
 // App modules
 #include "../common/mathMacros.h"
 #include "../common/util.h"
-#include "../common/options.h"
+#include "../common/Options.h"
 #include "adobeCoeff.h"
 #include "cielab.h"
 #include "whiteBalance.h"

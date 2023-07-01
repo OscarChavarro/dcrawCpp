@@ -11,7 +11,7 @@
 // App
 #include "../../common/globals.h"
 #include "../../common/util.h"
-#include "../../common/options.h"
+#include "../../common/Options.h"
 #include "globalsio.h"
 #include "tiffparser.h"
 #include "timestamp.h"

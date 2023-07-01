@@ -3,7 +3,7 @@
 #include <cstring>
 
 // App modules
-#include "../common/options.h"
+#include "../common/Options.h"
 #include "../common/mathMacros.h"
 #include "../imageHandling/BayessianImage.h"
 #include "../common/CameraImageInformation.h"

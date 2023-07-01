@@ -6,7 +6,7 @@
 #include <ctime>
 
 // App includes
-#include "../../common/options.h"
+#include "../../common/Options.h"
 #include "globalsio.h"
 #include "timestamp.h"
 #include "../../common/CameraImageInformation.h"

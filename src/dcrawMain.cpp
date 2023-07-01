@@ -23,8 +23,6 @@
    $Date: 2018/06/01 20:36:25 $
  */
 
-#define DCRAW_VERSION "9.28"
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -73,6 +71,10 @@ typedef unsigned long long UINT64;
 #define NO_JPEG
 #define NO_LCMS
 #endif
+
+// TODO: Enable this again! being turned off temporary
+#define NO_JASPER
+
 #ifndef NO_JASPER
 #include <jasper/jasper.h>	/* Decode Red camera movies */
 #endif
@@ -92,7 +94,7 @@ typedef unsigned long long UINT64;
 // App modules
 #include "common/globals.h"
 #include "common/mathMacros.h"
-#include "common/options.h"
+#include "common/Options.h"
 #include "colorRepresentation/whiteBalance.h"
 #include "imageProcess.h"
 #include "imageHandling/rawAnalysis.h"
@@ -129,7 +131,7 @@ off_t thumb_offset, meta_offset, profile_offset;
 unsigned shot_order, kodak_cbpp, exif_cfa, unique_id;
 unsigned thumb_length, meta_length, profile_length;
 unsigned thumb_misc;
-unsigned fuji_layout, shot_select=0, multi_out=0;
+unsigned fuji_layout;
 unsigned tiff_nifds, tiff_samples, tiff_bps, tiff_compress;
 unsigned black, maximum, mix_green;
 unsigned zero_is_bad;
@@ -141,19 +143,17 @@ ushort raw_height, raw_width, height, width, top_margin, left_margin;
 ushort shrink, iheight, iwidth, fuji_width, thumb_width, thumb_height;
 ushort *raw_image, (*image)[4], cblack[4102];
 ushort white[8][8], curve[0x10000], cr2_slice[3], sraw_mul[4];
-double pixel_aspect, aber[4]={1,1,1,1}, gamm[6]={ 0.45,4.5,0,0,0,0 };
-float bright=1, user_mul[4]={0,0,0,0}, threshold=0;
+double pixel_aspect;
 int mask[8][4];
-int half_size=0, four_color_rgb=0, document_mode=0, highlight=0;
-int verbose=0, use_auto_wb=0, use_camera_wb=0, use_camera_matrix=1;
-int output_color=1, output_bps=8, output_tiff=0, med_passes=0;
-int no_auto_bright=0;
-unsigned greybox[4] = { 0, 0, UINT_MAX, UINT_MAX };
-float cam_mul[4], pre_mul[4], cmatrix[3][4], rgb_cam[3][4];
+float cam_mul[4];
+float pre_mul[4];
+float cmatrix[3][4];
+float rgb_cam[3][4];
 const double xyz_rgb[3][3] = {			/* XYZ from RGB */
   { 0.412453, 0.357580, 0.180423 },
   { 0.212671, 0.715160, 0.072169 },
-  { 0.019334, 0.119193, 0.950227 } };
+  { 0.019334, 0.119193, 0.950227 }
+};
 const float d65_white[3] = { 0.950456, 1, 1.088754 };
 int histogram[4][0x2000];
 void (*write_thumb)(), (*write_fun)();
@@ -1058,7 +1058,7 @@ void CLASS adobe_copy_pixel (unsigned row, unsigned col, ushort **rp)
 {
   int c;
 
-  if (tiff_samples == 2 && shot_select) (*rp)++;
+  if (tiff_samples == 2 && OPTIONS_values->shotSelect) (*rp)++;
   if (raw_image) {
     if (row < raw_height && col < raw_width)
       RAW(row,col) = curve[**rp];
@@ -1069,7 +1069,7 @@ void CLASS adobe_copy_pixel (unsigned row, unsigned col, ushort **rp)
 	image[row*width+col][c] = curve[(*rp)[c]];
     *rp += tiff_samples;
   }
-  if (tiff_samples == 2 && shot_select) (*rp)--;
+  if (tiff_samples == 2 && OPTIONS_values->shotSelect) (*rp)--;
 }
 
 void CLASS ljpeg_idct (struct jhead *jh)
@@ -1514,8 +1514,8 @@ void CLASS phase_one_correct()
   ushort *xval[2];
   int qmult_applied = 0, qlin_applied = 0;
 
-  if (half_size || !meta_length) return;
-  if (verbose) fprintf (stderr,_("Phase One correction...\n"));
+  if ( OPTIONS_values->halfSizePreInterpolation || !meta_length) return;
+  if (OPTIONS_values->verbose) fprintf (stderr, _("Phase One correction...\n"));
   fseek (ifp, meta_offset, SEEK_SET);
     GLOBAL_endianOrder = get2();
   fseek (ifp, 6, SEEK_CUR);
@@ -1815,7 +1815,7 @@ void CLASS hasselblad_load_raw()
   merror (back[4], "hasselblad_load_raw()");
   FORC3 back[c] = back[4] + c*raw_width;
   cblack[6] >>= sh = tiff_samples > 1;
-  shot = LIM(shot_select, 1, tiff_samples) - 1;
+  shot = LIM(OPTIONS_values->shotSelect, 1, tiff_samples) - 1;
   for (row=0; row < raw_height; row++) {
     FORC4 back[(c+3) & 3] = back[c];
     for (col=0; col < raw_width; col+=2) {
@@ -1872,7 +1872,7 @@ void CLASS leaf_hdr_load_raw()
 	fseek (ifp, data_offset + 4*tile++, SEEK_SET);
 	fseek (ifp, get4(), SEEK_SET);
       }
-      if (filters && c != shot_select) continue;
+      if (filters && c != OPTIONS_values->shotSelect) continue;
       if (filters) pixel = raw_image + r*raw_width;
       read_shorts (pixel, raw_width);
       if (!filters && (row = r - top_margin) < height)
@@ -1905,7 +1905,7 @@ void CLASS sinar_4shot_load_raw()
   unsigned shot, row, col, r, c;
 
   if (raw_image) {
-    shot = LIM (shot_select, 1, 4) - 1;
+    shot = LIM (OPTIONS_values->shotSelect, 1, 4) - 1;
     fseek (ifp, data_offset + shot*4, SEEK_SET);
     fseek (ifp, get4(), SEEK_SET);
     unpacked_load_raw();
@@ -3386,7 +3386,7 @@ void CLASS foveon_interpolate()
   char str[128];
   const char* cp;
 
-  if (verbose)
+  if (OPTIONS_values->verbose)
     fprintf (stderr,_("Foveon interpolation...\n"));
 
   foveon_load_camf();
@@ -3908,7 +3908,7 @@ void CLASS bad_pixels (const char *cfname)
 	    n++;
 	  }
     BAYER2(row,col) = tot/n;
-    if (verbose) {
+    if (OPTIONS_values->verbose) {
       if (!fixed++)
 	fprintf (stderr,_("Fixed dead pixels at:"));
       fprintf (stderr, " %d,%d", col, row);
@@ -3983,7 +3983,7 @@ void CLASS gamma_curve (double pwr, double ts, int mode, int imax)
   else      g[5] = 1 / (g[1]*SQR(g[3])/2 + 1
 		- g[2] - g[3] -	g[2]*g[3]*(log(g[3]) - 1)) - 1;
   if (!mode--) {
-    memcpy (gamm, g, sizeof gamm);
+    memcpy (OPTIONS_values->gammaParameters, g, sizeof OPTIONS_values->gammaParameters);
     return;
   }
   for (i=0; i < 0x10000; i++) {
@@ -4112,7 +4112,7 @@ void CLASS colorcheck()
     for (sq=0; sq < NSQ; sq++)
       FORCC gmb_cam[sq][c] *= balance[c];
   }
-  if (verbose) {
+  if (OPTIONS_values->verbose) {
     printf ("    { \"%s %s\", %d,\n\t{", make, model, black);
     num = 10000 / (cam_xyz[1][0] + cam_xyz[1][1] + cam_xyz[1][2]);
     FORCC for (j=0; j < 3; j++)
@@ -4142,7 +4142,7 @@ void CLASS wavelet_denoise()
   static const float noise[] =
   { 0.8002,0.2735,0.1202,0.0585,0.0291,0.0152,0.0080,0.0044 };
 
-  if (verbose) fprintf (stderr,_("Wavelet denoising...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("Wavelet denoising...\n"));
 
   while (maximum << scale < 0x10000) scale++;
   maximum <<= --scale;
@@ -4168,7 +4168,7 @@ void CLASS wavelet_denoise()
 	for (row=0; row < iheight; row++)
 	  fimg[lpass + row*iwidth + col] = temp[row] * 0.25;
       }
-      thold = threshold * noise[lev];
+      thold = OPTIONS_values->threshold * noise[lev];
       for (i=0; i < size; i++) {
 	fimg[hpass+i] -= fimg[lpass+i];
 	if	(fimg[hpass+i] < -thold) fimg[hpass+i] += thold;
@@ -4195,7 +4195,7 @@ void CLASS wavelet_denoise()
 	for (col = FC(wlast,1) & 1; col < width; col+=2)
 	  window[2][col] = BAYER(wlast,col);
       }
-      thold = threshold/512;
+      thold = OPTIONS_values->threshold / 512;
       for (col = (FC(row,0) & 1)+1; col < width-1; col+=2) {
 	avg = ( window[0][col-1] + window[0][col+1] +
 		window[2][col-1] + window[2][col+1] - blk[~row & 1]*4 )
@@ -4220,14 +4220,16 @@ void CLASS scale_colors()
   float scale_mul[4], fr, fc;
   ushort *img=0, *pix;
 
-  if (user_mul[0])
-    memcpy (pre_mul, user_mul, sizeof pre_mul);
-  if (use_auto_wb || (use_camera_wb && cam_mul[0] == -1)) {
+  if ( OPTIONS_values->userMul[0] ) {
+      memcpy(pre_mul, OPTIONS_values->userMul, sizeof pre_mul);
+  }
+
+  if ( OPTIONS_values->useAutoWb || (OPTIONS_values->useCameraWb && cam_mul[0] == -1)) {
     memset (dsum, 0, sizeof dsum);
-    bottom = MIN (greybox[1]+greybox[3], height);
-    right  = MIN (greybox[0]+greybox[2], width);
-    for (row=greybox[1]; row < bottom; row += 8)
-      for (col=greybox[0]; col < right; col += 8) {
+    bottom = MIN (OPTIONS_values->greyBox[1] + OPTIONS_values->greyBox[3], height);
+    right  = MIN (OPTIONS_values->greyBox[0] + OPTIONS_values->greyBox[2], width);
+    for (row=OPTIONS_values->greyBox[1]; row < bottom; row += 8)
+      for (col=OPTIONS_values->greyBox[0]; col < right; col += 8) {
 	memset (sum, 0, sizeof sum);
 	for (y=row; y < row+8 && y < bottom; y++)
 	  for (x=col; x < col+8 && x < right; x++)
@@ -4248,7 +4250,7 @@ skip_block: ;
       }
     FORC4 if (dsum[c]) pre_mul[c] = dsum[c+4] / dsum[c];
   }
-  if (use_camera_wb && cam_mul[0] != -1) {
+  if ( OPTIONS_values->useCameraWb && cam_mul[0] != -1) {
     memset (sum, 0, sizeof sum);
     for (row=0; row < 8; row++)
       for (col=0; col < 8; col++) {
@@ -4268,7 +4270,7 @@ skip_block: ;
   if (pre_mul[3] == 0) pre_mul[3] = colors < 4 ? pre_mul[1] : 1;
   dark = black;
   sat = maximum;
-  if (threshold) wavelet_denoise();
+  if (OPTIONS_values->threshold) wavelet_denoise();
   maximum -= black;
   for (dmin=DBL_MAX, dmax=c=0; c < 4; c++) {
     if (dmin > pre_mul[c])
@@ -4276,9 +4278,9 @@ skip_block: ;
     if (dmax < pre_mul[c])
 	dmax = pre_mul[c];
   }
-  if (!highlight) dmax = dmin;
+  if (!OPTIONS_values->highlight) dmax = dmin;
   FORC4 scale_mul[c] = (pre_mul[c] /= dmax) * 65535.0 / maximum;
-  if (verbose) {
+  if (OPTIONS_values->verbose) {
     fprintf (stderr,
       _("Scaling with darkness %d, saturation %d, and\nmultipliers"), dark, sat);
     FORC4 fprintf (stderr, " %f", pre_mul[c]);
@@ -4299,21 +4301,21 @@ skip_block: ;
     val *= scale_mul[i & 3];
     ((ushort *)image)[i] = CLIP(val);
   }
-  if ((aber[0] != 1 || aber[2] != 1) && colors == 3) {
-    if (verbose)
+  if ((OPTIONS_values->chromaticAberrationCorrection[0] != 1 || OPTIONS_values->chromaticAberrationCorrection[2] != 1) && colors == 3) {
+    if (OPTIONS_values->verbose)
       fprintf (stderr,_("Correcting chromatic aberration...\n"));
     for (c=0; c < 4; c+=2) {
-      if (aber[c] == 1) continue;
+      if ( OPTIONS_values->chromaticAberrationCorrection[c] == 1) continue;
       img = (ushort *) malloc (size * sizeof *img);
       merror (img, "scale_colors()");
       for (i=0; i < size; i++)
 	img[i] = image[i][c];
       for (row=0; row < iheight; row++) {
-	ur = fr = (row - iheight*0.5) * aber[c] + iheight*0.5;
+	ur = fr = (row - iheight*0.5) * OPTIONS_values->chromaticAberrationCorrection[c] + iheight * 0.5;
 	if (ur > iheight-2) continue;
 	fr -= ur;
 	for (col=0; col < iwidth; col++) {
-	  uc = fc = (col - iwidth*0.5) * aber[c] + iwidth*0.5;
+	  uc = fc = (col - iwidth*0.5) * OPTIONS_values->chromaticAberrationCorrection[c] + iwidth * 0.5;
 	  if (uc > iwidth-2) continue;
 	  fc -= uc;
 	  pix = img + ur*iwidth + uc;
@@ -4333,7 +4335,7 @@ void CLASS pre_interpolate()
   int row, col, c;
 
   if (shrink) {
-    if (half_size) {
+    if (OPTIONS_values->halfSizePreInterpolation) {
       height = iheight;
       width  = iwidth;
       if (filters == 9) {
@@ -4362,8 +4364,8 @@ void CLASS pre_interpolate()
     }
   }
   if (filters > 1000 && colors == 3) {
-    mix_green = four_color_rgb ^ half_size;
-    if (four_color_rgb | half_size) colors++;
+    mix_green = OPTIONS_values->fourColorRgb ^ OPTIONS_values->halfSizePreInterpolation;
+    if ( OPTIONS_values->fourColorRgb | OPTIONS_values->halfSizePreInterpolation) colors++;
     else {
       for (row = FC(1,0) >> 1; row < height; row+=2)
 	for (col = FC(row,1) & 1; col < width; col+=2)
@@ -4371,7 +4373,7 @@ void CLASS pre_interpolate()
       filters &= ~((filters & 0x55555555) << 1);
     }
   }
-  if (half_size) filters = 0;
+  if (OPTIONS_values->halfSizePreInterpolation) filters = 0;
 }
 
 void CLASS border_interpolate (int border)
@@ -4402,7 +4404,7 @@ void CLASS lin_interpolate()
   int f, c, i, x, y, row, col, shift, color;
   ushort *pix;
 
-  if (verbose) fprintf (stderr,_("Bilinear interpolation...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("Bilinear interpolation...\n"));
   if (filters == 9) size = 6;
   border_interpolate(1);
   for (row=0; row < size; row++)
@@ -4481,7 +4483,7 @@ void CLASS vng_interpolate()
   int g, diff, thold, num, c;
 
   lin_interpolate();
-  if (verbose) fprintf (stderr,_("VNG interpolation...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("VNG interpolation...\n"));
 
   if (filters == 1) prow = pcol = 16;
   if (filters == 9) prow = pcol =  6;
@@ -4586,7 +4588,7 @@ void CLASS ppg_interpolate()
   ushort (*pix)[4];
 
   border_interpolate(3);
-  if (verbose) fprintf (stderr,_("PPG interpolation...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("PPG interpolation...\n"));
 
 /*  Fill in the green layer with gradients and pattern recognition: */
   for (row=3; row < height-3; row++)
@@ -4682,7 +4684,7 @@ void CLASS xtrans_interpolate (int passes)
    float (*drv)[TS][TS], diff[6], tr;
    char (*homo)[TS][TS], *buffer;
 
-  if (verbose)
+  if (OPTIONS_values->verbose)
     fprintf (stderr,_("%d-pass X-Trans interpolation...\n"), passes);
 
   cielab (0,0);
@@ -4907,7 +4909,7 @@ void CLASS ahd_interpolate()
    short (*lab)[TS][TS][3], (*lix)[3];
    char (*homo)[TS][TS], *buffer;
 
-  if (verbose) fprintf (stderr,_("AHD interpolation...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("AHD interpolation...\n"));
 
   cielab (0,0);
   border_interpolate(5);
@@ -5010,8 +5012,8 @@ void CLASS median_filter()
   { 1,2, 4,5, 7,8, 0,1, 3,4, 6,7, 1,2, 4,5, 7,8,
     0,3, 5,8, 4,7, 3,6, 1,4, 2,5, 4,7, 4,2, 6,4, 4,2 };
 
-  for (pass=1; pass <= med_passes; pass++) {
-    if (verbose)
+  for (pass=1; pass <= OPTIONS_values->med_passes; pass++) {
+    if (OPTIONS_values->verbose)
       fprintf (stderr,_("Median filter pass %d...\n"), pass);
     for (c=0; c < 3; c+=2) {
       for (pix = image; pix < image+width*height; pix++)
@@ -5042,7 +5044,7 @@ void CLASS blend_highlights()
   float cam[2][4], lab[2][4], sum[2], chratio;
 
   if ((unsigned) (colors-3) > 1) return;
-  if (verbose) fprintf (stderr,_("Blending highlights...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("Blending highlights...\n"));
   FORCC if (clip > (i = 65535*pre_mul[c])) clip = i;
   for (row=0; row < height; row++)
     for (col=0; col < width; col++) {
@@ -5077,9 +5079,9 @@ void CLASS recover_highlights()
   static const signed char dir[8][2] =
     { {-1,-1}, {-1,0}, {-1,1}, {0,1}, {1,1}, {1,0}, {1,-1}, {0,-1} };
 
-  if (verbose) fprintf (stderr,_("Rebuilding highlights...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("Rebuilding highlights...\n"));
 
-  grow = pow (2, 4-highlight);
+  grow = pow (2, 4 - OPTIONS_values->highlight);
   FORCC hsat[c] = 32000 * pre_mul[c];
   for (kc=0, c=1; c < colors; c++)
     if (pre_mul[kc] < pre_mul[c]) kc = c;
@@ -5942,7 +5944,7 @@ int CLASS parse_tiff_ifd (int base)
 	colors = 4;
 	for ( GLOBAL_colorTransformForRaw = i=0; i < 3; i++) {
 	  FORC4 fscanf (ifp, "%f", &rgb_cam[i][c^1]);
-	  if (!use_camera_wb) continue;
+	  if (!OPTIONS_values->useCameraWb) continue;
 	  num = 0;
 	  FORC4 num += rgb_cam[i][c];
 	  FORC4 rgb_cam[i][c] /= num;
@@ -6248,7 +6250,7 @@ void CLASS apply_tiff()
     if ((tiff_ifd[i].comp != 6 || tiff_ifd[i].samples != 3) &&
 	(tiff_ifd[i].width | tiff_ifd[i].height) < 0x10000 &&
 	 ns && ((ns > os && (ties = 1)) ||
-		(ns == os && shot_select == ties++))) {
+		(ns == os && OPTIONS_values->shotSelect == ties++))) {
       raw_width     = tiff_ifd[i].width;
       raw_height    = tiff_ifd[i].height;
       tiff_bps      = tiff_ifd[i].bps;
@@ -6456,7 +6458,7 @@ void CLASS parse_external_jpeg()
     }
   if (strcmp (jname, ifname)) {
     if ((ifp = fopen (jname, "rb"))) {
-      if (verbose)
+      if (OPTIONS_values->verbose)
 	fprintf (stderr,_("Reading metadata from %s ...\n"), jname);
       parse_tiff (12);
       thumb_offset = 0;
@@ -6997,8 +6999,8 @@ void CLASS parse_cine()
   fseek (ifp, 668, SEEK_CUR);
   shutter = get4()/1000000000.0;
   fseek (ifp, off_image, SEEK_SET);
-  if (shot_select < is_raw)
-    fseek (ifp, shot_select*8, SEEK_CUR);
+  if ( OPTIONS_values->shotSelect < is_raw)
+    fseek (ifp, OPTIONS_values->shotSelect * 8, SEEK_CUR);
   data_offset  = (INT64) get4() + 8;
   data_offset += (INT64) get4() << 32;
 }
@@ -7019,7 +7021,7 @@ void CLASS parse_redcine()
     fseek (ifp, 0, SEEK_SET);
     while ((len = get4()) != EOF) {
       if (get4() == 0x52454456)
-	if (is_raw++ == shot_select)
+	if ( is_raw++ == OPTIONS_values->shotSelect)
 	  data_offset = ftello(ifp) - 8;
       fseek (ifp, len-8, SEEK_CUR);
     }
@@ -7027,7 +7029,7 @@ void CLASS parse_redcine()
     rdvo = get4();
     fseek (ifp, 12, SEEK_CUR);
     is_raw = get4();
-    fseeko (ifp, rdvo+8 + shot_select*4, SEEK_SET);
+    fseeko (ifp, rdvo + 8 + OPTIONS_values->shotSelect * 4, SEEK_SET);
     data_offset = get4();
   }
 }
@@ -8735,10 +8737,10 @@ void CLASS identify()
       if ( i ) {
           is_raw++;
       }
-      if (is_raw == 2 && shot_select)
+      if (is_raw == 2 && OPTIONS_values->shotSelect)
 	parse_fuji (i);
     }
-    fseek (ifp, 100+28*(shot_select > 0), SEEK_SET);
+    fseek (ifp, 100+28*(OPTIONS_values->shotSelect > 0), SEEK_SET);
     parse_tiff (data_offset = get4());
     parse_tiff (thumb_offset+12);
     apply_tiff();
@@ -9336,11 +9338,11 @@ konica_400z:
     }
     if (tiff_samples > 1) {
       is_raw = tiff_samples+1;
-      if (!shot_select && !half_size) filters = 0;
+      if ( !OPTIONS_values->shotSelect && !OPTIONS_values->halfSizePreInterpolation) filters = 0;
     }
   } else if (!strcmp(make,"Sinar")) {
     if (!TIFF_CALLBACK_loadRawData) TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-    if (is_raw > 1 && !shot_select && !half_size) filters = 0;
+    if (is_raw > 1 && !OPTIONS_values->shotSelect && !OPTIONS_values->halfSizePreInterpolation) filters = 0;
     maximum = 0x3fff;
   } else if (!strcmp(make,"Leaf")) {
     maximum = 0x3fff;
@@ -9625,7 +9627,7 @@ bw:   colors = 1;
     }
   }
 dng_skip:
-  if ((use_camera_matrix & (use_camera_wb || GLOBAL_dngVersion))
+  if ((OPTIONS_values->useCameraMatrix & (OPTIONS_values->useCameraWb || GLOBAL_dngVersion))
 	&& cmatrix[0][0] > 0.125) {
     memcpy (rgb_cam, cmatrix, sizeof cmatrix);
       GLOBAL_colorTransformForRaw = 0;
@@ -9712,7 +9714,7 @@ void CLASS apply_profile (const char *input, const char *output)
   } else
     fprintf (stderr,_("Cannot open file %s!\n"), output);
   if (!hOutProfile) goto quit;
-  if (verbose)
+  if (OPTIONS_values->verbose)
     fprintf (stderr,_("Applying color profile...\n"));
   hTransform = cmsCreateTransform (hInProfile, TYPE_RGBA_16,
 	hOutProfile, TYPE_RGBA_16, INTENT_PERCEPTUAL, 0);
@@ -9774,15 +9776,15 @@ void CLASS convert_to_rgb()
   static const unsigned pwhite[] = { 0xf351, 0x10000, 0x116cc };
   unsigned pcurve[] = { 0x63757276, 0, 1, 0x1000000 };
 
-  gamma_curve (gamm[0], gamm[1], 0, 0);
+  gamma_curve (OPTIONS_values->gammaParameters[0], OPTIONS_values->gammaParameters[1], 0, 0);
   memcpy (out_cam, rgb_cam, sizeof out_cam);
-    GLOBAL_colorTransformForRaw |= colors == 1 || document_mode ||
-		output_color < 1 || output_color > 6;
+    GLOBAL_colorTransformForRaw |= colors == 1 || OPTIONS_values->documentMode ||
+                                   OPTIONS_values->outputColorSpace < 1 || OPTIONS_values->outputColorSpace > 6;
   if (!GLOBAL_colorTransformForRaw) {
       GLOBAL_outputIccProfile = (unsigned *) calloc (phead[0], 1);
     merror (GLOBAL_outputIccProfile, "convert_to_rgb()");
     memcpy (GLOBAL_outputIccProfile, phead, sizeof phead);
-    if (output_color == 5) GLOBAL_outputIccProfile[4] = GLOBAL_outputIccProfile[5];
+    if ( OPTIONS_values->outputColorSpace == 5) GLOBAL_outputIccProfile[4] = GLOBAL_outputIccProfile[5];
       GLOBAL_outputIccProfile[0] = 132 + 12 * pbody[0];
     for (i=0; i < pbody[0]; i++) {
         GLOBAL_outputIccProfile[GLOBAL_outputIccProfile[0] / 4] = i ? (i > 1 ? 0x58595a20 : 0x64657363) : 0x74657874;
@@ -9790,12 +9792,12 @@ void CLASS convert_to_rgb()
         GLOBAL_outputIccProfile[0] += (pbody[i * 3 + 3] + 3) & -4;
     }
     memcpy (GLOBAL_outputIccProfile + 32, pbody, sizeof pbody);
-      GLOBAL_outputIccProfile[pbody[5] / 4 + 2] = strlen(name[output_color - 1]) + 1;
+      GLOBAL_outputIccProfile[pbody[5] / 4 + 2] = strlen(name[OPTIONS_values->outputColorSpace - 1]) + 1;
     memcpy ((char *)GLOBAL_outputIccProfile + pbody[8] + 8, pwhite, sizeof pwhite);
-    pcurve[3] = (short)(256/gamm[5]+0.5) << 16;
+    pcurve[3] = (short)(256 / OPTIONS_values->gammaParameters[5] + 0.5) << 16;
     for (i=4; i < 7; i++)
       memcpy ((char *)GLOBAL_outputIccProfile + pbody[i * 3 + 2], pcurve, sizeof pcurve);
-    pseudoinverse ((double (*)[3]) out_rgb[output_color-1], inverse, 3);
+    pseudoinverse ((double (*)[3]) out_rgb[OPTIONS_values->outputColorSpace - 1], inverse, 3);
     for (i=0; i < 3; i++)
       for (j=0; j < 3; j++) {
 	for (num = k=0; k < 3; k++)
@@ -9805,15 +9807,15 @@ void CLASS convert_to_rgb()
     for (i=0; i < phead[0]/4; i++)
         GLOBAL_outputIccProfile[i] = htonl(GLOBAL_outputIccProfile[i]);
     strcpy ((char *)GLOBAL_outputIccProfile + pbody[2] + 8, "auto-generated by dcraw");
-    strcpy ((char *)GLOBAL_outputIccProfile + pbody[5] + 12, name[output_color - 1]);
+    strcpy ((char *)GLOBAL_outputIccProfile + pbody[5] + 12, name[OPTIONS_values->outputColorSpace - 1]);
     for (i=0; i < 3; i++)
       for (j=0; j < colors; j++)
 	for (out_cam[i][j] = k=0; k < 3; k++)
-	  out_cam[i][j] += out_rgb[output_color-1][i][k] * rgb_cam[k][j];
+	  out_cam[i][j] += out_rgb[OPTIONS_values->outputColorSpace - 1][i][k] * rgb_cam[k][j];
   }
-  if (verbose)
+  if (OPTIONS_values->verbose)
     fprintf (stderr, GLOBAL_colorTransformForRaw ? _("Building histograms...\n") :
-                     _("Converting to %s colorspace...\n"), name[output_color-1]);
+                     _("Converting to %s colorspace...\n"), name[OPTIONS_values->outputColorSpace - 1]);
 
   memset (histogram, 0, sizeof histogram);
   for (img=image[0], row=0; row < height; row++)
@@ -9827,12 +9829,12 @@ void CLASS convert_to_rgb()
 	}
 	FORC3 img[c] = CLIP((int) out[c]);
       }
-      else if (document_mode)
+      else if (OPTIONS_values->documentMode)
 	img[0] = img[fcol(row,col)];
       FORCC histogram[c][img[c] >> 3]++;
     }
-  if (colors == 4 && output_color) colors = 3;
-  if (document_mode && filters) colors = 1;
+  if (colors == 4 && OPTIONS_values->outputColorSpace) colors = 3;
+  if ( OPTIONS_values->documentMode && filters) colors = 1;
 }
 
 void CLASS fuji_rotate()
@@ -9844,7 +9846,7 @@ void CLASS fuji_rotate()
   ushort wide, high, (*img)[4], (*pix)[4];
 
   if (!fuji_width) return;
-  if (verbose)
+  if (OPTIONS_values->verbose)
     fprintf (stderr,_("Rotating image 45 degrees...\n"));
   fuji_width = (fuji_width - 1 + shrink) >> shrink;
   step = sqrt(0.5);
@@ -9880,7 +9882,7 @@ void CLASS stretch()
   double rc, frac;
 
   if (pixel_aspect == 1) return;
-  if (verbose) fprintf (stderr,_("Stretching the image...\n"));
+  if (OPTIONS_values->verbose) fprintf (stderr, _("Stretching the image...\n"));
   if (pixel_aspect < 1) {
     newdim = height / pixel_aspect + 0.5;
     img = (ushort (*)[4]) calloc (width, newdim*sizeof *img);
@@ -9990,10 +9992,10 @@ void CLASS tiff_head (struct tiff_hdr *th, int full)
     tiff_set (th, &th->ntag, 254, 4, 1, 0);
     tiff_set (th, &th->ntag, 256, 4, 1, width);
     tiff_set (th, &th->ntag, 257, 4, 1, height);
-    tiff_set (th, &th->ntag, 258, 3, colors, output_bps);
+    tiff_set (th, &th->ntag, 258, 3, colors, OPTIONS_values->outputBitsPerPixel);
     if (colors > 2)
       th->tag[th->ntag-1].val.i = TOFF(th->bps);
-    FORC4 th->bps[c] = output_bps;
+    FORC4 th->bps[c] = OPTIONS_values->outputBitsPerPixel;
     tiff_set (th, &th->ntag, 259, 3, 1, 1);
     tiff_set (th, &th->ntag, 262, 3, 1, 1 + (colors > 1));
   }
@@ -10005,7 +10007,7 @@ void CLASS tiff_head (struct tiff_hdr *th, int full)
     tiff_set (th, &th->ntag, 273, 4, 1, sizeof *th + psize);
     tiff_set (th, &th->ntag, 277, 3, 1, colors);
     tiff_set (th, &th->ntag, 278, 4, 1, height);
-    tiff_set (th, &th->ntag, 279, 4, 1, height*width*colors*output_bps/8);
+    tiff_set (th, &th->ntag, 279, 4, 1, height * width * colors * OPTIONS_values->outputBitsPerPixel / 8);
   } else
     tiff_set (th, &th->ntag, 274, 3, 1, "12435867"[GLOBAL_flipsMask] - '0');
   tiff_set (th, &th->ntag, 282, 5, 1, TOFF(th->rat[0]));
@@ -10069,20 +10071,20 @@ void CLASS write_ppm_tiff()
 
   perc = width * height * 0.01;		/* 99th percentile white level */
   if (fuji_width) perc /= 2;
-  if (!((highlight & ~2) || no_auto_bright))
+  if (!((OPTIONS_values->highlight & ~2) || OPTIONS_values->noAutoBright))
     for (white=c=0; c < colors; c++) {
       for (val=0x2000, total=0; --val > 32; )
 	if ((total += histogram[c][val]) > perc) break;
       if (white < val) white = val;
     }
-  gamma_curve (gamm[0], gamm[1], 2, (white << 3)/bright);
+  gamma_curve (OPTIONS_values->gammaParameters[0], OPTIONS_values->gammaParameters[1], 2, (white << 3) / OPTIONS_values->brightness);
   iheight = height;
   iwidth  = width;
   if ( GLOBAL_flipsMask & 4) SWAP(height, width);
-  ppm = (uchar *) calloc (width, colors*output_bps/8);
+  ppm = (uchar *) calloc (width, colors * OPTIONS_values->outputBitsPerPixel / 8);
   ppm2 = (ushort *) ppm;
   merror (ppm, "write_ppm_tiff()");
-  if (output_tiff) {
+  if (OPTIONS_values->outputTiff) {
     tiff_head (&th, 1);
     fwrite (&th, sizeof th, 1, ofp);
     if (GLOBAL_outputIccProfile)
@@ -10090,37 +10092,40 @@ void CLASS write_ppm_tiff()
   } else if (colors > 3)
     fprintf (ofp,
              "P7\nWIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
-             width, height, colors, (1 << output_bps)-1, GLOBAL_bayerPatternLabels);
+             width, height, colors, (1 << OPTIONS_values->outputBitsPerPixel) - 1, GLOBAL_bayerPatternLabels);
   else
     fprintf (ofp, "P%d\n%d %d\n%d\n",
-	colors/2+5, width, height, (1 << output_bps)-1);
+	colors/2+5, width, height, (1 << OPTIONS_values->outputBitsPerPixel) - 1);
   soff  = flip_index (0, 0);
   cstep = flip_index (0, 1) - soff;
   rstep = flip_index (1, 0) - flip_index (0, width);
   for (row=0; row < height; row++, soff += rstep) {
     for (col=0; col < width; col++, soff += cstep)
-      if (output_bps == 8)
+      if ( OPTIONS_values->outputBitsPerPixel == 8)
 	   FORCC ppm [col*colors+c] = curve[image[soff][c]] >> 8;
       else FORCC ppm2[col*colors+c] = curve[image[soff][c]];
-    if (output_bps == 16 && !output_tiff && htons(0x55aa) != 0x55aa)
+    if ( OPTIONS_values->outputBitsPerPixel == 16 && !OPTIONS_values->outputTiff && htons(0x55aa) != 0x55aa)
       swab (ppm2, ppm2, width*colors*2);
-    fwrite (ppm, colors*output_bps/8, width, ofp);
+    fwrite (ppm, colors * OPTIONS_values->outputBitsPerPixel / 8, width, ofp);
   }
   free (ppm);
 }
 
-int CLASS main (int argc, const char **argv)
-{
-  int arg, status=0, quality, i, c;
-  int timestamp_only=0, thumbnail_only=0, identify_only=0;
-  int user_qual=-1, user_black=-1, user_sat=-1, user_flip=-1;
-  int use_fuji_rotate=1, write_to_stdout=0, read_from_stdin=0;
-  const char *sp, *bpfile=0, *dark_frame=0, *write_ext;
-  char opm, opt, *ofname, *cp;
+int
+main (int argc, const char **argv) {
+  OPTIONS_values = new Options();
+
+  int status = 0;
+  int quality;
+  int i;
+  int c;
+  const char *sp;
+  const char *write_ext;
+  char opm;
+  char opt;
+  char *ofname;
+  char *cp;
   struct utimbuf ut;
-#ifndef NO_LCMS
-  const char *cam_profile=0, *out_profile=0;
-#endif
 
 #ifndef LOCALTIME
   putenv ((char *) "TZ=UTC");
@@ -10132,122 +10137,9 @@ int CLASS main (int argc, const char **argv)
   textdomain ("dcraw");
 #endif
 
-  if (argc == 1) {
-    printf(_("\nRaw photo decoder \"dcraw\" v%s"), DCRAW_VERSION);
-    printf(_("\nby Dave Coffin, dcoffin a cybercom o net\n"));
-    printf(_("\nUsage:  %s [OPTION]... [FILE]...\n\n"), argv[0]);
-    puts(_("-v        Print verbose messages"));
-    puts(_("-c        Write image data to standard output"));
-    puts(_("-e        Extract embedded thumbnail image"));
-    puts(_("-i        Identify files without decoding them"));
-    puts(_("-i -v     Identify files and show metadata"));
-    puts(_("-z        Change file dates to camera timestamp"));
-    puts(_("-w        Use camera white balance, if possible"));
-    puts(_("-a        Average the whole image for white balance"));
-    puts(_("-A <x y w h> Average a grey box for white balance"));
-    puts(_("-r <r g b g> Set custom white balance"));
-    puts(_("+M/-M     Use/don't use an embedded color matrix"));
-    puts(_("-C <r b>  Correct chromatic aberration"));
-    puts(_("-P <file> Fix the dead pixels listed in this file"));
-    puts(_("-K <file> Subtract dark frame (16-bit raw PGM)"));
-    puts(_("-k <num>  Set the darkness level"));
-    puts(_("-S <num>  Set the saturation level"));
-    puts(_("-n <num>  Set threshold for wavelet denoising"));
-    puts(_("-H [0-9]  Highlight mode (0=clip, 1=unclip, 2=blend, 3+=rebuild)"));
-    puts(_("-t [0-7]  Flip image (0=none, 3=180, 5=90CCW, 6=90CW)"));
-    puts(_("-o [0-6]  Output colorspace (raw,sRGB,Adobe,Wide,ProPhoto,XYZ,ACES)"));
-#ifndef NO_LCMS
-    puts(_("-o <file> Apply output ICC profile from file"));
-    puts(_("-p <file> Apply camera ICC profile from file or \"embed\""));
-#endif
-    puts(_("-d        Document mode (no color, no interpolation)"));
-    puts(_("-D        Document mode without scaling (totally raw)"));
-    puts(_("-j        Don't stretch or rotate raw pixels"));
-    puts(_("-W        Don't automatically brighten the image"));
-    puts(_("-b <num>  Adjust brightness (default = 1.0)"));
-    puts(_("-g <p ts> Set custom gamma curve (default = 2.222 4.5)"));
-    puts(_("-q [0-3]  Set the interpolation quality"));
-    puts(_("-h        Half-size color image (twice as fast as \"-q 0\")"));
-    puts(_("-f        Interpolate RGGB as four colors"));
-    puts(_("-m <num>  Apply a 3x3 median filter to R-G and B-G"));
-    puts(_("-s [0..N-1] Select one raw image or \"all\" from each file"));
-    puts(_("-6        Write 16-bit instead of 8-bit"));
-    puts(_("-4        Linear 16-bit, same as \"-6 -W -g 1 1\""));
-    puts(_("-T        Write TIFF instead of PPM"));
-    puts("");
-    return 1;
-  }
-  argv[argc] = "";
-  for (arg=1; (((opm = argv[arg][0]) - 2) | 2) == '+'; ) {
-    opt = argv[arg++][1];
-    if ((cp = (char *) strchr (sp="nbrkStqmHACg", opt)))
-      for (i=0; i < "114111111422"[cp-sp]-'0'; i++)
-	if (!isdigit(argv[arg+i][0])) {
-	  fprintf (stderr,_("Non-numeric argument to \"-%c\"\n"), opt);
-	  return 1;
-	}
-    switch (opt) {
-      case 'n':  threshold   = atof(argv[arg++]);  break;
-      case 'b':  bright      = atof(argv[arg++]);  break;
-      case 'r':
-	   FORC4 user_mul[c] = atof(argv[arg++]);  break;
-      case 'C':  aber[0] = 1 / atof(argv[arg++]);
-		 aber[2] = 1 / atof(argv[arg++]);  break;
-      case 'g':  gamm[0] =     atof(argv[arg++]);
-		 gamm[1] =     atof(argv[arg++]);
-		 if (gamm[0]) gamm[0] = 1/gamm[0]; break;
-      case 'k':  user_black  = atoi(argv[arg++]);  break;
-      case 'S':  user_sat    = atoi(argv[arg++]);  break;
-      case 't':  user_flip   = atoi(argv[arg++]);  break;
-      case 'q':  user_qual   = atoi(argv[arg++]);  break;
-      case 'm':  med_passes  = atoi(argv[arg++]);  break;
-      case 'H':  highlight   = atoi(argv[arg++]);  break;
-      case 's':
-	shot_select = abs(atoi(argv[arg]));
-	multi_out = !strcmp(argv[arg++],"all");
-	break;
-      case 'o':
-	if (isdigit(argv[arg][0]) && !argv[arg][1])
-	  output_color = atoi(argv[arg++]);
-#ifndef NO_LCMS
-	else     out_profile = argv[arg++];
-	break;
-      case 'p':  cam_profile = argv[arg++];
-#endif
-	break;
-      case 'P':  bpfile     = argv[arg++];  break;
-      case 'K':  dark_frame = argv[arg++];  break;
-      case 'z':  timestamp_only    = 1;  break;
-      case 'e':  thumbnail_only    = 1;  break;
-      case 'i':  identify_only     = 1;  break;
-      case 'c':  write_to_stdout   = 1;  break;
-      case 'v':  verbose           = 1;  break;
-      case 'h':  half_size         = 1;  break;
-      case 'f':  four_color_rgb    = 1;  break;
-      case 'A':  FORC4 greybox[c]  = atoi(argv[arg++]);
-      case 'a':  use_auto_wb       = 1;  break;
-      case 'w':  use_camera_wb     = 1;  break;
-      case 'M':  use_camera_matrix = 3 * (opm == '+');  break;
-      case 'I':  read_from_stdin   = 1;  break;
-      case 'E':  document_mode++;
-      case 'D':  document_mode++;
-      case 'd':  document_mode++;
-      case 'j':  use_fuji_rotate   = 0;  break;
-      case 'W':  no_auto_bright    = 1;  break;
-      case 'T':  output_tiff       = 1;  break;
-      case '4':  gamm[0] = gamm[1] =
-		 no_auto_bright    = 1;
-      case '6':  output_bps       = 16;  break;
-      default:
-	fprintf (stderr,_("Unknown option \"-%c\".\n"), opt);
-	return 1;
-    }
-  }
-  if (arg == argc) {
-    fprintf (stderr,_("No files to process.\n"));
-    return 1;
-  }
-  if (write_to_stdout) {
+  int arg = OPTIONS_values->setArguments(argc, argv);
+
+  if ( OPTIONS_values->write_to_stdout ) {
     if (isatty(1)) {
       fprintf (stderr,_("Will not write an image to the terminal!\n"));
       return 1;
@@ -10278,20 +10170,20 @@ int CLASS main (int argc, const char **argv)
       continue;
     }
     status = (identify(),!is_raw);
-    if (user_flip >= 0)
-        GLOBAL_flipsMask = user_flip;
+    if ( OPTIONS_values->user_flip >= 0)
+        GLOBAL_flipsMask = OPTIONS_values->user_flip;
     switch ((GLOBAL_flipsMask + 3600) % 360) {
       case 270: GLOBAL_flipsMask = 5;  break;
       case 180: GLOBAL_flipsMask = 3;  break;
       case  90: GLOBAL_flipsMask = 6;
     }
-    if (timestamp_only) {
+    if (OPTIONS_values->timestamp_only) {
       if ((status = !timestamp))
 	fprintf (stderr,_("%s has no timestamp.\n"), ifname);
-      else if (identify_only)
+      else if (OPTIONS_values->identify_only)
 	printf ("%10ld%10d %s\n", (long) timestamp, shot_order, ifname);
       else {
-	if (verbose)
+	if (OPTIONS_values->verbose)
 	  fprintf (stderr,_("%s time set to %d.\n"), ifname, (int) timestamp);
 	ut.actime = ut.modtime = timestamp;
 	utime (ifname, &ut);
@@ -10299,7 +10191,7 @@ int CLASS main (int argc, const char **argv)
       goto next;
     }
     write_fun = &CLASS write_ppm_tiff;
-    if (thumbnail_only) {
+    if (OPTIONS_values->thumbnail_only) {
       if ((status = !thumb_offset)) {
 	fprintf (stderr,_("%s has no thumbnail.\n"), ifname);
 	goto next;
@@ -10321,7 +10213,7 @@ int CLASS main (int argc, const char **argv)
       height += height & 1;
       width  += width  & 1;
     }
-    if (identify_only && verbose && make[0]) {
+    if ( OPTIONS_values->identify_only && OPTIONS_values->verbose && make[0]) {
       printf (_("\nFilename: %s\n"), ifname);
       printf (_("Timestamp: %s"), ctime(&timestamp));
       printf (_("Camera: %s %s\n"), make, model);
@@ -10349,20 +10241,20 @@ int CLASS main (int argc, const char **argv)
     } else if (!is_raw)
       fprintf (stderr,_("Cannot decode file %s\n"), ifname);
     if (!is_raw) goto next;
-    shrink = filters && (half_size || (!identify_only &&
-	(threshold || aber[0] != 1 || aber[2] != 1)));
+    shrink = filters && (OPTIONS_values->halfSizePreInterpolation || (!OPTIONS_values->identify_only &&
+                                                              (OPTIONS_values->threshold || OPTIONS_values->chromaticAberrationCorrection[0] != 1 || OPTIONS_values->chromaticAberrationCorrection[2] != 1)));
     iheight = (height + shrink) >> shrink;
     iwidth  = (width  + shrink) >> shrink;
-    if (identify_only) {
-      if (verbose) {
-	if (document_mode == 3) {
+    if (OPTIONS_values->identify_only) {
+      if (OPTIONS_values->verbose) {
+	if ( OPTIONS_values->documentMode == 3) {
 	  top_margin = left_margin = fuji_width = 0;
 	  height = raw_height;
 	  width  = raw_width;
 	}
 	iheight = (height + shrink) >> shrink;
 	iwidth  = (width  + shrink) >> shrink;
-	if (use_fuji_rotate) {
+	if (OPTIONS_values->useFujiRotate) {
 	  if (fuji_width) {
 	    fuji_width = (fuji_width - 1 + shrink) >> shrink;
 	    iwidth = fuji_width / sqrt(0.5);
@@ -10412,17 +10304,17 @@ next:
       image = (ushort (*)[4]) calloc (iheight, iwidth*sizeof *image);
       merror (image, "main()");
     }
-    if (verbose)
+    if (OPTIONS_values->verbose)
       fprintf (stderr,_("Loading %s %s image from %s ...\n"),
 	make, model, ifname);
-    if (shot_select >= is_raw)
-      fprintf (stderr,_("%s: \"-s %d\" requests a nonexistent image!\n"),
-	ifname, shot_select);
+    if ( OPTIONS_values->shotSelect >= is_raw)
+      fprintf (stderr, _("%s: \"-s %d\" requests a nonexistent image!\n"),
+               ifname, OPTIONS_values->shotSelect);
     fseeko (ifp, data_offset, SEEK_SET);
-    if (raw_image && read_from_stdin)
+    if ( raw_image && OPTIONS_values->readFromStdin)
       fread (raw_image, 2, raw_height*raw_width, stdin);
     else (*TIFF_CALLBACK_loadRawData)();
-    if (document_mode == 3) {
+    if ( OPTIONS_values->documentMode == 3) {
       top_margin = left_margin = fuji_width = 0;
       height = raw_height;
       width  = raw_width;
@@ -10436,10 +10328,10 @@ next:
       free (raw_image);
     }
     if (zero_is_bad) remove_zeroes();
-    bad_pixels (bpfile);
-    if (dark_frame) subtract (dark_frame);
+    bad_pixels (OPTIONS_values->bpfile);
+    if (OPTIONS_values->dark_frame) subtract (OPTIONS_values->dark_frame);
     quality = 2 + !fuji_width;
-    if (user_qual >= 0) quality = user_qual;
+    if ( OPTIONS_values->user_qual >= 0) quality = OPTIONS_values->user_qual;
     i = cblack[3];
     FORC3 if (i > cblack[c]) i = cblack[c];
     FORC4 cblack[c] -= i;
@@ -10450,21 +10342,21 @@ next:
     FORC (cblack[4] * cblack[5])
       cblack[6+c] -= i;
     black += i;
-    if (user_black >= 0) black = user_black;
+    if ( OPTIONS_values->user_black >= 0) black = OPTIONS_values->user_black;
     FORC4 cblack[c] += black;
-    if (user_sat > 0) maximum = user_sat;
+    if ( OPTIONS_values->user_sat > 0) maximum = OPTIONS_values->user_sat;
 #ifdef COLORCHECK
     colorcheck();
 #endif
     if (is_foveon) {
-      if ( document_mode || TIFF_CALLBACK_loadRawData == &CLASS foveon_dp_load_raw) {
+      if ( OPTIONS_values->documentMode || TIFF_CALLBACK_loadRawData == &CLASS foveon_dp_load_raw) {
 	for (i=0; i < height*width*4; i++)
 	  if ((short) image[0][i] < 0) image[0][i] = 0;
       } else foveon_interpolate();
-    } else if (document_mode < 2)
+    } else if ( OPTIONS_values->documentMode < 2)
       scale_colors();
     pre_interpolate();
-    if (filters && !document_mode) {
+    if (filters && !OPTIONS_values->documentMode) {
       if (quality == 0)
 	lin_interpolate();
       else if (quality == 1 || colors > 3)
@@ -10480,18 +10372,18 @@ next:
       for (colors=3, i=0; i < height*width; i++)
 	image[i][1] = (image[i][1] + image[i][3]) >> 1;
     if (!is_foveon && colors == 3) median_filter();
-    if (!is_foveon && highlight == 2) blend_highlights();
-    if (!is_foveon && highlight > 2) recover_highlights();
-    if (use_fuji_rotate) fuji_rotate();
+    if ( !is_foveon && OPTIONS_values->highlight == 2) blend_highlights();
+    if ( !is_foveon && OPTIONS_values->highlight > 2) recover_highlights();
+    if (OPTIONS_values->useFujiRotate) fuji_rotate();
 #ifndef NO_LCMS
-    if (cam_profile) apply_profile (cam_profile, out_profile);
+    if (OPTIONS_values->cameraIccProfileFilename) apply_profile (OPTIONS_values->cameraIccProfileFilename, OPTIONS_values->customOutputProfileForColorSpace);
 #endif
     convert_to_rgb();
-    if (use_fuji_rotate) stretch();
+    if (OPTIONS_values->useFujiRotate) stretch();
 thumbnail:
     if ( write_fun == &CLASS jpeg_thumb ) {
         write_ext = ".jpg";
-    } else if ( output_tiff && write_fun == &CLASS write_ppm_tiff ) {
+    } else if ( OPTIONS_values->outputTiff && write_fun == &CLASS write_ppm_tiff ) {
         write_ext = ".tiff";
     } else {
         char extensions[4][5] = {".pgm", ".ppm" , ".ppm", ".pam"};
@@ -10499,15 +10391,15 @@ thumbnail:
     }
     ofname = (char *) malloc (strlen(ifname) + 64);
     merror (ofname, "main()");
-    if (write_to_stdout)
+    if (OPTIONS_values->write_to_stdout)
       strcpy (ofname,_("standard output"));
     else {
       strcpy (ofname, ifname);
       if ((cp = strrchr (ofname, '.'))) *cp = 0;
-      if (multi_out)
+      if (OPTIONS_values->multiOut)
 	snprintf(ofname + strlen(ofname), strlen(ofname), "_%0*d",
-		snprintf(0,0,"%d",is_raw-1), shot_select);
-      if (thumbnail_only)
+             snprintf(0,0,"%d",is_raw-1), OPTIONS_values->shotSelect);
+      if (OPTIONS_values->thumbnail_only)
 	strcat (ofname, ".thumb");
       strcat (ofname, write_ext);
       ofp = fopen (ofname, "wb");
@@ -10517,7 +10409,7 @@ thumbnail:
 	goto cleanup;
       }
     }
-    if (verbose)
+    if (OPTIONS_values->verbose)
       fprintf (stderr,_("Writing data to %s ...\n"), ofname);
     (*write_fun)();
     fclose(ifp);
@@ -10527,10 +10419,12 @@ cleanup:
     if (ofname) free (ofname);
     if (GLOBAL_outputIccProfile) free (GLOBAL_outputIccProfile);
     if (image) free (image);
-    if (multi_out) {
-      if (++shot_select < is_raw) arg--;
-      else shot_select = 0;
+    if (OPTIONS_values->multiOut) {
+      if ( ++OPTIONS_values->shotSelect < is_raw) arg--;
+      else OPTIONS_values->shotSelect = 0;
     }
   }
+
+  delete OPTIONS_values;
   return status;
 }

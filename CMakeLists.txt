@@ -26,8 +26,8 @@ add_executable(dcraw
         src/common/globals.cpp
         src/common/globals.h
         src/common/mathMacros.h
-        src/common/options.cpp
-        src/common/options.h
+        src/common/Options.cpp
+        src/common/Options.h
         src/common/util.cpp
         src/common/util.h
         src/dcrawMain.cpp

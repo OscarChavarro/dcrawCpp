@@ -3,7 +3,7 @@
 
 #include "globals.h"
 #include "util.h"
-#include "options.h"
+#include "Options.h"
 #include "CameraImageInformation.h"
 
 double clampUnitInterval(double x) {

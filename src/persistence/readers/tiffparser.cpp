@@ -21,7 +21,7 @@
 #include "../../postprocessors/gamma.h"
 #include "../../colorRepresentation/cielab.h"
 #include "../../colorRepresentation/whiteBalance.h"
-#include "../../common/options.h"
+#include "../../common/Options.h"
 #include "../writers/jpeg.h"
 #include "../../common/clearGlobalData.h"
 

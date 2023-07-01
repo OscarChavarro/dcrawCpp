@@ -9,7 +9,7 @@
 #include "../../common/globals.h"
 #include "../../common/mathMacros.h"
 #include "../../common/util.h"
-#include "../../common/options.h"
+#include "../../common/Options.h"
 #include "../../imageHandling/BayessianImage.h"
 #include "../../postprocessors/gamma.h"
 #include "../../postprocessors/histogram.h"

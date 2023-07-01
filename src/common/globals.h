@@ -30,6 +30,7 @@ extern char GLOBAL_bayerPatternLabels[5];
 // 0: will map to RGB or custom (raw), non-0: map from sRGB/Adobe/Wide/ProPhoto/XYZ/ACES (non-raw)
 extern unsigned GLOBAL_colorTransformForRaw;
 
+// Others
 extern void (*CALLBACK_loadThumbnailRawData)();
 
 #endif

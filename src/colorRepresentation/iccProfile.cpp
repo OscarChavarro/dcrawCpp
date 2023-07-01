@@ -8,7 +8,7 @@
 // App modules
 #include "../common/globals.h"
 #include "../common/util.h"
-#include "../common/options.h"
+#include "../common/Options.h"
 #include "../common/CameraImageInformation.h"
 #include "../persistence/readers/globalsio.h"
 #include "../imageHandling/BayessianImage.h"
