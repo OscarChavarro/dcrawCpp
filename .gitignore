@@ -47,3 +47,6 @@ cmake-build-release-coverage
 **/*.pgm
 **/*.pam
 **/*.DS_Store
+
+# Data created by program
+default.profraw
