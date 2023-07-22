@@ -11,3 +11,6 @@
 #include "../persistence/readers/globalsio.h"
 #include "../postprocessors/gamma.h"
 
+void clearGlobalData() {
+
+}

@@ -184,15 +184,6 @@ struct ph1 {
 #define FORC4 FORC(4)
 #define FORCC FORC(colors)
 
-#define SQR(x) ((x)*(x))
-#define ABS(x) (((int)(x) ^ ((int)(x) >> 31)) - ((int)(x) >> 31))
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#define LIM(x,min,max) MAX(min,MIN(x,max))
-#define ULIM(x,y,z) ((y) < (z) ? LIM(x,y,z) : LIM(x,z,y))
-#define CLIP(x) LIM((int)(x),0,65535)
-#define SWAP(a,b) { a=a+b; b=a-b; a=a-b; }
-
 /*
    In order to inline this calculation, I make the risky
    assumption that all filter patterns can be described
@@ -8370,10 +8361,11 @@ float CLASS find_green (int bps, int bite, int off0, int off1)
 }
 
 /*
-   Identify which camera created this file, and set global variables
-   accordingly.
- */
-void CLASS identify()
+Identify which camera created this file, and set global variables
+accordingly.
+*/
+void
+tiffIdentify()
 {
   static const short pana[][6] = {
     { 3130, 1743,  4,  0, -6,  0 },
@@ -10169,7 +10161,7 @@ main (int argc, const char **argv) {
       perror (ifname);
       continue;
     }
-    status = (identify(),!is_raw);
+    status = (tiffIdentify(),!is_raw);
     if ( OPTIONS_values->user_flip >= 0)
         GLOBAL_flipsMask = OPTIONS_values->user_flip;
     switch ((GLOBAL_flipsMask + 3600) % 360) {
