@@ -240,7 +240,8 @@ struct ph1 {
 #define BAYER2(row, col) \
     image[((row) >> shrink)*iwidth + ((col) >> shrink)][fcol(row,col)]
 
-int CLASS fcol(int row, int col) {
+int
+fcol(int row, int col) {
     static const char filter[16][16] =
             {{2, 1, 1, 3, 2, 3, 2, 0, 3, 2, 3, 0, 1, 2, 1, 0},
              {0, 3, 0, 2, 0, 1, 3, 1, 0, 1, 1, 2, 0, 3, 3, 2},
@@ -266,78 +267,99 @@ int CLASS fcol(int row, int col) {
 
 #ifndef __GLIBC__
 
-char *my_memmem(char *haystack, size_t haystacklen,
+char *
+my_memmem(char *haystack, size_t haystacklen,
                 char *needle, size_t needlelen) {
     char *c;
-    for ( c = haystack; c <= haystack + haystacklen - needlelen; c++ )
-        if ( !memcmp(c, needle, needlelen))
+    for ( c = haystack; c <= haystack + haystacklen - needlelen; c++ ) {
+        if ( !memcmp(c, needle, needlelen)) {
             return c;
+        }
+    }
     return 0;
 }
 
 #define memmem my_memmem
 
-char *my_strcasestr(char *haystack, const char *needle) {
+char *
+my_strcasestr(char *haystack, const char *needle) {
     char *c;
-    for ( c = haystack; *c; c++ )
-        if ( !strncasecmp(c, needle, strlen(needle)))
+    for ( c = haystack; *c; c++ ) {
+        if ( !strncasecmp(c, needle, strlen(needle))) {
             return c;
+        }
+    }
     return 0;
 }
 
 #define strcasestr my_strcasestr
 #endif
 
-void CLASS merror(void *ptr, const char *where) {
-    if ( ptr ) return;
+void
+merror(void *ptr, const char *where) {
+    if ( ptr ) {
+        return;
+    }
     fprintf(stderr, _("%s: Out of memory in %s\n"), ifname, where);
     longjmp(failure, 1);
 }
 
-void CLASS derror() {
+void
+derror() {
     if ( !data_error ) {
         fprintf(stderr, "%s: ", ifname);
-        if ( feof(ifp))
+        if ( feof(ifp) ) {
             fprintf(stderr, _("Unexpected end of file\n"));
-        else
+        } else {
             fprintf(stderr, _("Corrupt data near 0x%llx\n"), (INT64) ftello(ifp));
+        }
     }
     data_error++;
 }
 
-ushort CLASS sget2(uchar *s) {
-    if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER )        /* "II" means little-endian */
+ushort
+sget2(uchar *s) {
+    if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER ) {
+        /* "II" means little-endian */
         return s[0] | s[1] << 8;
-    else                /* "MM" means big-endian */
+    } else {
+        /* "MM" means big-endian */
         return s[0] << 8 | s[1];
+    }
 }
 
-ushort CLASS get2() {
+ushort
+get2() {
     uchar str[2] = {0xff, 0xff};
     fread(str, 1, 2, ifp);
     return sget2(str);
 }
 
-unsigned CLASS sget4(uchar *s) {
-    if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER )
+unsigned
+sget4(uchar *s) {
+    if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER ) {
         return s[0] | s[1] << 8 | s[2] << 16 | s[3] << 24;
-    else
+    } else {
         return s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3];
+    }
 }
 
 #define sget4(s) sget4((uchar *)s)
 
-unsigned CLASS get4() {
+unsigned
+get4() {
     uchar str[4] = {0xff, 0xff, 0xff, 0xff};
     fread(str, 1, 4, ifp);
     return sget4(str);
 }
 
-unsigned CLASS getint(int type) {
+unsigned
+getint(int type) {
     return type == 3 ? get2() : get4();
 }
 
-float CLASS int_to_float(int i) {
+float
+int_to_float(int i) {
     union {
         int i;
         float f;
@@ -346,7 +368,8 @@ float CLASS int_to_float(int i) {
     return u.f;
 }
 
-double CLASS getreal(int type) {
+double
+getreal(int type) {
     union {
         char c[8];
         double d;
@@ -372,29 +395,38 @@ double CLASS getreal(int type) {
             return int_to_float(get4());
         case 12:
             rev = 7 * ((GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234));
-            for ( i = 0; i < 8; i++ )
+            for ( i = 0; i < 8; i++ ) {
                 u.c[i ^ rev] = fgetc(ifp);
+            }
             return u.d;
         default:
             return fgetc(ifp);
     }
 }
 
-void CLASS read_shorts(ushort *pixel, int count) {
-    if ( fread(pixel, 2, count, ifp) < count ) derror();
-    if ((GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234))
+void
+read_shorts(ushort *pixel, int count) {
+    if ( fread(pixel, 2, count, ifp) < count ) {
+        derror();
+    }
+    if ( (GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234) ) {
         swab(pixel, pixel, count * 2);
+    }
 }
 
-void CLASS cubic_spline(const int *x_, const int *y_, const int len) {
+void
+cubic_spline(const int *x_, const int *y_, const int len) {
     float **A, *b, *c, *d, *x, *y;
     int i, j;
 
-    A = (float **) calloc(((2 * len + 4) * sizeof **A + sizeof *A), 2 * len);
-    if ( !A ) return;
+    A = (float **)calloc(((2 * len + 4) * sizeof **A + sizeof *A), 2 * len);
+    if ( !A ) {
+        return;
+    }
     A[0] = (float *) (A + 2 * len);
-    for ( i = 1; i < 2 * len; i++ )
+    for ( i = 1; i < 2 * len; i++ ) {
         A[i] = A[0] + 2 * len * i;
+    }
     y = len + (x = i + (d = i + (c = i + (b = A[0] + i * i))));
     for ( i = 0; i < len; i++ ) {
         x[i] = x_[i] / 65535.0;
@@ -414,13 +446,15 @@ void CLASS cubic_spline(const int *x_, const int *y_, const int len) {
     }
     for ( i = 1; i < len - 2; i++ ) {
         float v = A[i + 1][i] / A[i][i];
-        for ( j = 1; j <= len - 1; j++ )
+        for ( j = 1; j <= len - 1; j++ ) {
             A[i + 1][j] -= v * A[i][j];
+        }
     }
     for ( i = len - 2; i > 0; i-- ) {
         float acc = 0;
-        for ( j = i; j <= len - 2; j++ )
+        for ( j = i; j <= len - 2; j++ ) {
             acc += A[i][j] * c[j];
+        }
         c[i] = (A[i][len - 1] - acc) / A[i][i];
     }
     for ( i = 0; i < 0x10000; i++ ) {
@@ -434,13 +468,13 @@ void CLASS cubic_spline(const int *x_, const int *y_, const int len) {
                         + (c[j] * 0.5) * v * v + ((c[j + 1] - c[j]) / (6 * d[j])) * v * v * v;
             }
         }
-        curve[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 :
-                                      (ushort) (y_out * 65535.0 + 0.5));
+        curve[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 : (ushort) (y_out * 65535.0 + 0.5));
     }
     free(A);
 }
 
-void CLASS canon_600_fixed_wb(int temp) {
+void
+canon_600_fixed_wb(int temp) {
     static const short mul[4][5] = {
             {667,  358, 397, 565, 452},
             {731,  390, 367, 499, 517},
@@ -449,18 +483,29 @@ void CLASS canon_600_fixed_wb(int temp) {
     int lo, hi, i;
     float frac = 0;
 
-    for ( lo = 4; --lo; )
-        if ( *mul[lo] <= temp ) break;
-    for ( hi = 0; hi < 3; hi++ )
-        if ( *mul[hi] >= temp ) break;
-    if ( lo != hi )
+    for ( lo = 4; --lo; ) {
+        if ( *mul[lo] <= temp ) {
+            break;
+        }
+    }
+    for ( hi = 0; hi < 3; hi++ ) {
+        if ( *mul[hi] >= temp ) {
+            break;
+        }
+    }
+    if ( lo != hi ) {
         frac = (float) (temp - *mul[lo]) / (*mul[hi] - *mul[lo]);
-    for ( i = 1; i < 5; i++ )
+    }
+    for ( i = 1; i < 5; i++ ) {
         pre_mul[i - 1] = 1 / (frac * mul[hi][i] + (1 - frac) * mul[lo][i]);
+    }
 }
 
-/* Return values:  0 = white  1 = near white  2 = not white */
-int CLASS canon_600_color(int ratio[2], int mar) {
+/*
+Return values:  0 = white  1 = near white  2 = not white
+*/
+int
+canon_600_color(int ratio[2], int mar) {
     int clipped = 0, target, miss;
 
     if ( flash_used ) {
@@ -473,7 +518,9 @@ int CLASS canon_600_color(int ratio[2], int mar) {
             clipped = 1;
         }
     } else {
-        if ( ratio[1] < -264 || ratio[1] > 461 ) return 2;
+        if ( ratio[1] < -264 || ratio[1] > 461 ) {
+            return 2;
+        }
         if ( ratio[1] < -50 ) {
             ratio[1] = -50;
             clipped = 1;
@@ -487,59 +534,91 @@ int CLASS canon_600_color(int ratio[2], int mar) {
              ? -38 - (398 * ratio[1] >> 10)
              : -123 + (48 * ratio[1] >> 10);
     if ( target - mar <= ratio[0] &&
-         target + 20 >= ratio[0] && !clipped )
+         target + 20 >= ratio[0] && !clipped ) {
         return 0;
+    }
     miss = target - ratio[0];
-    if ( abs(miss) >= mar * 4 ) return 2;
-    if ( miss < -20 ) miss = -20;
-    if ( miss > mar ) miss = mar;
+    if ( abs(miss) >= mar * 4 ) {
+        return 2;
+    }
+    if ( miss < -20 ) {
+        miss = -20;
+    }
+    if ( miss > mar ) {
+        miss = mar;
+    }
     ratio[0] = target - miss;
     return 1;
 }
 
-void CLASS canon_600_auto_wb() {
+void
+canon_600_auto_wb() {
     int mar, row, col, i, j, st, count[] = {0, 0};
     int test[8], total[2][8], ratio[2][2], stat[2];
 
     memset(&total, 0, sizeof total);
     i = canon_ev + 0.5;
-    if ( i < 10 ) mar = 150;
-    else
-        if ( i > 12 ) mar = 20;
-        else mar = 280 - 20 * i;
-    if ( flash_used ) mar = 80;
-    for ( row = 14; row < height - 14; row += 4 )
+    if ( i < 10 ) {
+        mar = 150;
+    } else {
+        if ( i > 12 ) {
+            mar = 20;
+        } else {
+            mar = 280 - 20 * i;
+        }
+    }
+    if ( flash_used ) {
+        mar = 80;
+    }
+    for ( row = 14; row < height - 14; row += 4 ) {
         for ( col = 10; col < width; col += 2 ) {
-            for ( i = 0; i < 8; i++ )
+            for ( i = 0; i < 8; i++ ) {
                 test[(i & 4) + FC(row + (i >> 1), col + (i & 1))] =
                         BAYER(row + (i >> 1), col + (i & 1));
-            for ( i = 0; i < 8; i++ )
-                if ( test[i] < 150 || test[i] > 1500 ) goto next;
-            for ( i = 0; i < 4; i++ )
-                if ( abs(test[i] - test[i + 4]) > 50 ) goto next;
+            }
+            for ( i = 0; i < 8; i++ ) {
+                if ( test[i] < 150 || test[i] > 1500 ) {
+                    goto next;
+                }
+            }
+            for ( i = 0; i < 4; i++ ) {
+                if ( abs(test[i] - test[i + 4]) > 50 ) {
+                    goto next;
+                }
+            }
             for ( i = 0; i < 2; i++ ) {
-                for ( j = 0; j < 4; j += 2 )
+                for ( j = 0; j < 4; j += 2 ) {
                     ratio[i][j >> 1] = ((test[i * 4 + j + 1] - test[i * 4 + j]) << 10) / test[i * 4 + j];
+                }
                 stat[i] = canon_600_color(ratio[i], mar);
             }
-            if ((st = stat[0] | stat[1]) > 1 ) goto next;
-            for ( i = 0; i < 2; i++ )
-                if ( stat[i] )
-                    for ( j = 0; j < 2; j++ )
+            if ( (st = stat[0] | stat[1]) > 1 ) {
+                goto next;
+            }
+            for ( i = 0; i < 2; i++ ) {
+                if ( stat[i] ) {
+                    for ( j = 0; j < 2; j++ ) {
                         test[i * 4 + j * 2 + 1] = test[i * 4 + j * 2] * (0x400 + ratio[i][j]) >> 10;
-            for ( i = 0; i < 8; i++ )
+                    }
+                }
+            }
+            for ( i = 0; i < 8; i++ ) {
                 total[st][i] += test[i];
+            }
             count[st]++;
             next:;
         }
+    }
     if ( count[0] | count[1] ) {
         st = count[0] * 200 < count[1];
-        for ( i = 0; i < 4; i++ )
+        for ( i = 0; i < 4; i++ ) {
             pre_mul[i] = 1.0 / (total[st][i] + total[st][i + 4]);
+        }
     }
 }
 
-void CLASS canon_600_coeff() {
+void
+canon_600_coeff() {
     static const short table[6][12] = {
             {-190,  702,  -1878, 2390, 1861, -1349, 905, -393, -432,  944,  2617, -2105},
             {-1203, 1715, -1136, 1648, 1388, -876,  267, 245,  -1641, 2153, 3921, -3409},
@@ -554,10 +633,15 @@ void CLASS canon_600_coeff() {
     yc = pre_mul[3] / pre_mul[2];
     if ( mc > 1 && mc <= 1.28 && yc < 0.8789 ) t = 1;
     if ( mc > 1.28 && mc <= 2 ) {
-        if ( yc < 0.8789 ) t = 3;
-        else if ( yc <= 2 ) t = 4;
+        if ( yc < 0.8789 ) {
+            t = 3;
+        } else if ( yc <= 2 ) {
+                t = 4;
+            }
     }
-    if ( flash_used ) t = 5;
+    if ( flash_used ) {
+        t = 5;
+    }
     for ( GLOBAL_colorTransformForRaw = i = 0; i < 3; i++ ) {
         for ( c = 0; c < colors; c++ ) {
             rgb_cam[i][c] = table[t][i * 4 + c] / 1024.0;
@@ -565,7 +649,8 @@ void CLASS canon_600_coeff() {
     }
 }
 
-void CLASS canon_600_load_raw() {
+void
+canon_600_load_raw() {
     uchar data[1120], *dp;
     ushort *pix;
     int irow, row;
@@ -583,11 +668,14 @@ void CLASS canon_600_load_raw() {
             pix[6] = (dp[7] << 2) + (dp[9] >> 4 & 3);
             pix[7] = (dp[8] << 2) + (dp[9] >> 6);
         }
-        if ((row += 2) > height ) row = 1;
+        if ( (row += 2) > height ) {
+            row = 1;
+        }
     }
 }
 
-void CLASS canon_600_correct() {
+void
+canon_600_correct() {
     int row, col, val;
     static const short mul[4][2] =
             {{1141, 1145},
@@ -597,7 +685,9 @@ void CLASS canon_600_correct() {
 
     for ( row = 0; row < height; row++ )
         for ( col = 0; col < width; col++ ) {
-            if ((val = BAYER(row, col) - black) < 0 ) val = 0;
+            if ( (val = BAYER(row, col) - black) < 0 ) {
+                val = 0;
+            }
             val = val * mul[row & 3][col & 1] >> 9;
             BAYER(row, col) = val;
         }
@@ -608,27 +698,36 @@ void CLASS canon_600_correct() {
     black = 0;
 }
 
-int CLASS canon_s2is() {
+int
+canon_s2is() {
     unsigned row;
 
     for ( row = 0; row < 100; row++ ) {
         fseek(ifp, row * 3340 + 3284, SEEK_SET);
-        if ( getc(ifp) > 15 ) return 1;
+        if ( getc(ifp) > 15 ) {
+            return 1;
+        }
     }
     return 0;
 }
 
-unsigned CLASS getbithuff(int nbits, ushort *huff) {
+unsigned
+getbithuff(int nbits, ushort *huff) {
     static unsigned bitbuf = 0;
     static int vbits = 0, reset = 0;
     unsigned c;
 
-    if ( nbits > 25 ) return 0;
-    if ( nbits < 0 )
+    if ( nbits > 25 ) {
+        return 0;
+    }
+    if ( nbits < 0 ) {
         return bitbuf = vbits = reset = 0;
-    if ( nbits == 0 || vbits < 0 ) return 0;
+    }
+    if ( nbits == 0 || vbits < 0 ) {
+        return 0;
+    }
     while ( !reset && vbits < nbits && (c = fgetc(ifp)) != EOF &&
-            !(reset = zero_after_ff && c == 0xff && fgetc(ifp))) {
+            !(reset = zero_after_ff && c == 0xff && fgetc(ifp)) ) {
         bitbuf = (bitbuf << 8) + (uchar) c;
         vbits += 8;
     }
@@ -636,64 +735,74 @@ unsigned CLASS getbithuff(int nbits, ushort *huff) {
     if ( huff ) {
         vbits -= huff[c] >> 8;
         c = (uchar) huff[c];
-    } else
+    } else {
         vbits -= nbits;
-    if ( vbits < 0 ) derror();
+    }
+    if ( vbits < 0 ) {
+        derror();
+    }
     return c;
 }
 
-#define getbits(n) getbithuff(n,0)
-#define gethuff(h) getbithuff(*h,h+1)
+#define getbits(n) getbithuff((n), 0)
+#define gethuff(h) getbithuff(*(h), (h) + 1)
 
 /*
-   Construct a decode tree according the specification in *source.
-   The first 16 bytes specify how many codes should be 1-bit, 2-bit
-   3-bit, etc.  Bytes after that are the leaf values.
+Construct a decode tree according the specification in *source.
+The first 16 bytes specify how many codes should be 1-bit, 2-bit
+3-bit, etc.  Bytes after that are the leaf values.
 
-   For example, if the source is
+For example, if the source is
 
-    { 0,1,4,2,3,1,2,0,0,0,0,0,0,0,0,0,
-      0x04,0x03,0x05,0x06,0x02,0x07,0x01,0x08,0x09,0x00,0x0a,0x0b,0xff  },
+{ 0,1,4,2,3,1,2,0,0,0,0,0,0,0,0,0,
+  0x04,0x03,0x05,0x06,0x02,0x07,0x01,0x08,0x09,0x00,0x0a,0x0b,0xff  },
 
-   then the code is
+then the code is
 
-	00		0x04
-	010		0x03
-	011		0x05
-	100		0x06
-	101		0x02
-	1100		0x07
-	1101		0x01
-	11100		0x08
-	11101		0x09
-	11110		0x00
-	111110		0x0a
-	1111110		0x0b
-	1111111		0xff
+00		0x04
+010		0x03
+011		0x05
+100		0x06
+101		0x02
+1100		0x07
+1101		0x01
+11100		0x08
+11101		0x09
+11110		0x00
+111110		0x0a
+1111110		0x0b
+1111111		0xff
  */
-ushort *CLASS make_decoder_ref(const uchar **source) {
+ushort *
+make_decoder_ref(const uchar **source) {
     int max, len, h, i, j;
     const uchar *count;
     ushort *huff;
 
     count = (*source += 16) - 17;
     for ( max = 16; max && !count[max]; max-- );
-    huff = (ushort *) calloc(1 + (1 << max), sizeof *huff);
+    huff = (ushort *)calloc(1 + (1 << max), sizeof *huff);
     merror(huff, "make_decoder()");
     huff[0] = max;
-    for ( h = len = 1; len <= max; len++ )
-        for ( i = 0; i < count[len]; i++, ++*source )
-            for ( j = 0; j < 1 << (max - len); j++ )
-                if ( h <= 1 << max )
+    for ( h = len = 1; len <= max; len++ ) {
+        for ( i = 0; i < count[len]; i++, ++*source ) {
+            for ( j = 0; j < 1 << (max - len); j++ ) {
+                if ( h <= 1 << max ) {
                     huff[h++] = len << 8 | **source;
+                }
+            }
+        }
+    }
     return huff;
 }
 
-ushort *CLASS make_decoder(const uchar *source) {
+ushort *
+make_decoder(const uchar *source) {
     return make_decoder_ref(&source);
 }
 
-void CLASS crw_init_tables(unsigned table, ushort *huff[2]) {
+void
+crw_init_tables(unsigned table, ushort *huff[2]) {
     static const uchar first_tree[3][29] = {
             {0, 1, 4, 2, 3, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0x04, 0x03, 0x05, 0x06, 0x02, 0x07, 0x01, 0x08, 0x09, 0x00, 0x0a, 0x0b, 0xff},
@@ -749,32 +858,39 @@ void CLASS crw_init_tables(unsigned table, ushort *huff[2]) {
                     0xd3, 0xaa, 0xc4, 0xca, 0xf2, 0xb1, 0xe4, 0xd1, 0x83, 0x63, 0xea, 0xc3,
                     0xe2, 0x82, 0xf1, 0xa3, 0xc2, 0xa1, 0xc1, 0xe3, 0xa2, 0xe1, 0xff, 0xff}
     };
-    if ( table > 2 ) table = 2;
+    if ( table > 2 ) {
+        table = 2;
+    }
     huff[0] = make_decoder(first_tree[table]);
     huff[1] = make_decoder(second_tree[table]);
 }
 
 /*
-   Return 0 if the image starts with compressed data,
-   1 if it starts with uncompressed low-order bits.
+Return 0 if the image starts with compressed data,
+1 if it starts with uncompressed low-order bits.
 
-   In Canon compressed data, 0xff is always followed by 0x00.
+In Canon compressed data, 0xff is always followed by 0x00.
  */
-int CLASS canon_has_lowbits() {
+int
+canon_has_lowbits() {
     uchar test[0x4000];
     int ret = 1, i;
 
     fseek(ifp, 0, SEEK_SET);
     fread(test, 1, sizeof test, ifp);
-    for ( i = 540; i < sizeof test - 1; i++ )
+    for ( i = 540; i < sizeof test - 1; i++ ) {
         if ( test[i] == 0xff ) {
-            if ( test[i + 1] ) return 1;
+            if ( test[i + 1] ) {
+                return 1;
+            }
             ret = 0;
         }
+    }
     return ret;
 }
 
-void CLASS canon_load_raw() {
+void
+canon_load_raw() {
     ushort *pixel, *prow, *huff[2];
     int nblocks, lowbits, i, c, row, r, save, val;
     int block, diffbuf[64], leaf, len, diff, carry = 0, pnum = 0, base[2];
@@ -792,23 +908,34 @@ void CLASS canon_load_raw() {
             memset(diffbuf, 0, sizeof diffbuf);
             for ( i = 0; i < 64; i++ ) {
                 leaf = gethuff(huff[i > 0]);
-                if ( leaf == 0 && i ) break;
-                if ( leaf == 0xff ) continue;
+                if ( leaf == 0 && i ) {
+                    break;
+                }
+                if ( leaf == 0xff ) {
+                    continue;
+                }
                 i += leaf >> 4;
                 len = leaf & 15;
-                if ( len == 0 ) continue;
+                if ( len == 0 ) {
+                    continue;
+                }
                 diff = getbits(len);
-                if ((diff & (1 << (len - 1))) == 0 )
+                if ( (diff & (1 << (len - 1))) == 0 ) {
                     diff -= (1 << len) - 1;
-                if ( i < 64 ) diffbuf[i] = diff;
+                }
+                if ( i < 64 ) {
+                    diffbuf[i] = diff;
+                }
             }
             diffbuf[0] += carry;
             carry = diffbuf[0];
             for ( i = 0; i < 64; i++ ) {
-                if ( pnum++ % raw_width == 0 )
+                if ( pnum++ % raw_width == 0 ) {
                     base[0] = base[1] = 512;
-                if ((pixel[(block << 6) + i] = base[i & 1] += diffbuf[i]) >> 10 )
+                }
+                if ( (pixel[(block << 6) + i] = base[i & 1] += diffbuf[i]) >> 10 ) {
                     derror();
+                }
             }
         }
         if ( lowbits ) {
@@ -818,7 +945,9 @@ void CLASS canon_load_raw() {
                 c = fgetc(ifp);
                 for ( r = 0; r < 8; r += 2, prow++ ) {
                     val = (*prow << 2) + ((c >> r) & 3);
-                    if ( raw_width == 2672 && val < 512 ) val += 2;
+                    if ( raw_width == 2672 && val < 512 ) {
+                        val += 2;
+                    }
                     *prow = val;
                 }
             }
@@ -835,19 +964,26 @@ struct jhead {
     ushort quant[64], idct[64], *huff[20], *free[20], *row;
 };
 
-int CLASS ljpeg_start(struct jhead *jh, int info_only) {
+int
+ljpeg_start(struct jhead *jh, int info_only) {
     ushort c, tag, len;
     uchar data[0x10000];
     const uchar *dp;
 
     memset(jh, 0, sizeof *jh);
     jh->restart = INT_MAX;
-    if ((fgetc(ifp), fgetc(ifp)) != 0xd8 ) return 0;
+    if ( (fgetc(ifp), fgetc(ifp)) != 0xd8 ) {
+        return 0;
+    }
     do {
-        if ( !fread(data, 2, 2, ifp)) return 0;
+        if ( !fread(data, 2, 2, ifp)) {
+            return 0;
+        }
         tag = data[0] << 8 | data[1];
         len = (data[2] << 8 | data[3]) - 2;
-        if ( tag <= 0xff00 ) return 0;
+        if ( tag <= 0xff00 ) {
+            return 0;
+        }
         fread(data, 1, len, ifp);
         switch ( tag ) {
             case 0xffc3:
@@ -859,12 +995,17 @@ int CLASS ljpeg_start(struct jhead *jh, int info_only) {
                 jh->high = data[1] << 8 | data[2];
                 jh->wide = data[3] << 8 | data[4];
                 jh->clrs = data[5] + jh->sraw;
-                if ( len == 9 && !GLOBAL_dngVersion ) getc(ifp);
+                if ( len == 9 && !GLOBAL_dngVersion ) {
+                    getc(ifp);
+                }
                 break;
             case 0xffc4:
-                if ( info_only ) break;
-                for ( dp = data; dp < data + len && !((c = *dp++) & -20); )
+                if ( info_only ) {
+                    break;
+                }
+                for ( dp = data; dp < data + len && !((c = *dp++) & -20); ) {
                     jh->free[c] = jh->huff[c] = make_decoder_ref(&dp);
+                }
                 break;
             case 0xffda:
                 jh->psv = data[1 + data[0] * 2];
@@ -880,11 +1021,16 @@ int CLASS ljpeg_start(struct jhead *jh, int info_only) {
         }
     }
     while ( tag != 0xffda );
-    if ( jh->bits > 16 || jh->clrs > 6 ||
-         !jh->bits || !jh->high || !jh->wide || !jh->clrs )
+
+    if ( jh->bits > 16 || jh->clrs > 6 || !jh->bits || !jh->high || !jh->wide || !jh->clrs ) {
         return 0;
-    if ( info_only ) return 1;
-    if ( !jh->huff[0] ) return 0;
+    }
+    if ( info_only ) {
+        return 1;
+    }
+    if ( !jh->huff[0] ) {
+        return 0;
+    }
     for ( c = 0; c < 19; c++ ) {
         if ( !jh->huff[c + 1] ) {
             jh->huff[c + 1] = jh->huff[c];
@@ -903,7 +1049,8 @@ int CLASS ljpeg_start(struct jhead *jh, int info_only) {
     return zero_after_ff = 1;
 }
 
-void CLASS ljpeg_end(struct jhead *jh) {
+void
+ljpeg_end(struct jhead *jh) {
     int c;
     for ( c = 0; c < 4; c++ ) {
         if ( jh->free[c] ) {
@@ -913,19 +1060,23 @@ void CLASS ljpeg_end(struct jhead *jh) {
     free(jh->row);
 }
 
-int CLASS ljpeg_diff(ushort *huff) {
+int
+ljpeg_diff(ushort *huff) {
     int len, diff;
 
     len = gethuff(huff);
-    if ( len == 16 && (!GLOBAL_dngVersion || GLOBAL_dngVersion >= 0x1010000))
+    if ( len == 16 && (!GLOBAL_dngVersion || GLOBAL_dngVersion >= 0x1010000) ) {
         return -32768;
+    }
     diff = getbits(len);
-    if ((diff & (1 << (len - 1))) == 0 )
+    if ( (diff & (1 << (len - 1))) == 0 ) {
         diff -= (1 << len) - 1;
+    }
     return diff;
 }
 
-ushort *CLASS ljpeg_row(int jrow, struct jhead *jh) {
+ushort *
+ljpeg_row(int jrow, struct jhead *jh) {
     int col, c, diff, pred, spred = 0;
     ushort mark = 0, *row[3];
 
@@ -943,14 +1094,18 @@ ushort *CLASS ljpeg_row(int jrow, struct jhead *jh) {
     for ( c = 0; c < 3; c++ ) {
         row[c] = jh->row + jh->wide * jh->clrs * ((jrow + c) & 1);
     }
-    for ( col = 0; col < jh->wide; col++ )
+    for ( col = 0; col < jh->wide; col++ ) {
         for ( c = 0; c < jh->clrs; c++ ) {
             diff = ljpeg_diff(jh->huff[c]);
-            if ( jh->sraw && c <= jh->sraw && (col | c))
+            if ( jh->sraw && c <= jh->sraw && (col | c)) {
                 pred = spred;
-            else
-                if ( col ) pred = row[0][-jh->clrs];
-                else pred = (jh->vpred[c] += diff) - diff;
+            } else {
+                if ( col ) {
+                    pred = row[0][-jh->clrs];
+                } else {
+                    pred = (jh->vpred[c] += diff) - diff;
+                }
+            }
             if ( jrow && col )
                 switch ( jh->psv ) {
                     case 1:
@@ -976,67 +1131,89 @@ ushort *CLASS ljpeg_row(int jrow, struct jhead *jh) {
                     default:
                         pred = 0;
                 }
-            if ((**row = pred + diff) >> jh->bits ) derror();
-            if ( c <= jh->sraw ) spred = **row;
+            if ( (**row = pred + diff) >> jh->bits ) {
+                derror();
+            }
+            if ( c <= jh->sraw ) {
+                spred = **row;
+            }
             row[0]++;
             row[1]++;
         }
+    }
     return row[2];
 }
 
-void CLASS lossless_jpeg_load_raw() {
+void
+lossless_jpeg_load_raw() {
     int jwide, jrow, jcol, val, jidx, i, j, row = 0, col = 0;
     struct jhead jh;
     ushort *rp;
 
-    if ( !ljpeg_start(&jh, 0)) return;
+    if ( !ljpeg_start(&jh, 0) ) {
+        return;
+    }
     jwide = jh.wide * jh.clrs;
 
     for ( jrow = 0; jrow < jh.high; jrow++ ) {
         rp = ljpeg_row(jrow, &jh);
-        if ( GLOBAL_loadFlags & 1 )
+        if ( GLOBAL_loadFlags & 1 ) {
             row = jrow & 1 ? height - 1 - jrow / 2 : jrow / 2;
+        }
         for ( jcol = 0; jcol < jwide; jcol++ ) {
             val = curve[*rp++];
             if ( cr2_slice[0] ) {
                 jidx = jrow * jwide + jcol;
                 i = jidx / (cr2_slice[1] * raw_height);
-                if ((j = i >= cr2_slice[0]))
+                if ( (j = i >= cr2_slice[0]) ) {
                     i = cr2_slice[0];
+                }
                 jidx -= i * (cr2_slice[1] * raw_height);
                 row = jidx / cr2_slice[1 + j];
                 col = jidx % cr2_slice[1 + j] + i * cr2_slice[1];
             }
-            if ( raw_width == 3984 && (col -= 2) < 0 )
+            if ( raw_width == 3984 && (col -= 2) < 0 ) {
                 col += (row--, raw_width);
-            if ((unsigned) row < raw_height ) RAW(row, col) = val;
-            if ( ++col >= raw_width )
+            }
+            if ( (unsigned) row < raw_height ) {
+                RAW(row, col) = val;
+            }
+            if ( ++col >= raw_width ) {
                 col = (row++, 0);
+            }
         }
     }
     ljpeg_end(&jh);
 }
 
-void CLASS canon_sraw_load_raw() {
+void
+canon_sraw_load_raw() {
     struct jhead jh;
     short *rp = 0, (*ip)[4];
     int jwide, slice, scol, ecol, row, col, jrow = 0, jcol = 0, pix[3], c;
     int v[3] = {0, 0, 0}, ver, hue;
     char *cp;
 
-    if ( !ljpeg_start(&jh, 0) || jh.clrs < 4 ) return;
+    if ( !ljpeg_start(&jh, 0) || jh.clrs < 4 ) {
+        return;
+    }
     jwide = (jh.wide >>= 1) * jh.clrs;
 
     for ( ecol = slice = 0; slice <= cr2_slice[0]; slice++ ) {
         scol = ecol;
         ecol += cr2_slice[1] * 2 / jh.clrs;
-        if ( !cr2_slice[0] || ecol > raw_width - 1 ) ecol = raw_width & -2;
+        if ( !cr2_slice[0] || ecol > raw_width - 1 ) {
+            ecol = raw_width & -2;
+        }
         for ( row = 0; row < height; row += (jh.clrs >> 1) - 1 ) {
             ip = (short (*)[4]) image + row * width;
             for ( col = scol; col < ecol; col += 2, jcol += jh.clrs ) {
-                if ((jcol %= jwide) == 0 )
+                if ((jcol %= jwide) == 0 ) {
                     rp = (short *) ljpeg_row(jrow++, &jh);
-                if ( col >= width ) continue;
+                }
+                if ( col >= width ) {
+                    continue;
+                }
                 for ( c = 0; c < jh.clrs - 2; c++ ) {
                     ip[col + (c >> 1) * width + (c & 1)][0] = rp[jcol + c];
                 }
@@ -1049,8 +1226,9 @@ void CLASS canon_sraw_load_raw() {
     sscanf(cp, "%d.%d.%d", v, v + 1, v + 2);
     ver = (v[0] * 1000 + v[1]) * 1000 + v[2];
     hue = (jh.sraw + 1) << 2;
-    if ( unique_id >= 0x80000281 || (unique_id == 0x80000218 && ver > 1000006))
+    if ( unique_id >= 0x80000281 || (unique_id == 0x80000218 && ver > 1000006) ) {
         hue = jh.sraw << 1;
+    }
     ip = (short (*)[4]) image;
     rp = ip[0];
     for ( row = 0; row < height; row++, ip += width ) {
@@ -1063,11 +1241,15 @@ void CLASS canon_sraw_load_raw() {
                         ip[col][c] = (ip[col - width][c] + ip[col + width][c] + 1) >> 1;
                     }
                 }
-        for ( col = 1; col < width; col += 2 )
-            for ( c = 1; c < 3; c++ )
-                if ( col == width - 1 )
+        for ( col = 1; col < width; col += 2 ) {
+            for ( c = 1; c < 3; c++ ) {
+                if ( col == width - 1 ) {
                     ip[col][c] = ip[col - 1][c];
-                else ip[col][c] = (ip[col - 1][c] + ip[col + 1][c] + 1) >> 1;
+                } else {
+                    ip[col][c] = (ip[col - 1][c] + ip[col + 1][c] + 1) >> 1;
+                }
+            }
+        }
     }
     for ( ; rp < ip[0]; rp += 4 ) {
         if ( unique_id == 0x80000218 ||
@@ -1094,25 +1276,33 @@ void CLASS canon_sraw_load_raw() {
     maximum = 0x3fff;
 }
 
-void CLASS adobe_copy_pixel(unsigned row, unsigned col, ushort **rp) {
+void
+adobe_copy_pixel(unsigned row, unsigned col, ushort **rp) {
     int c;
 
-    if ( tiff_samples == 2 && OPTIONS_values->shotSelect ) (*rp)++;
+    if ( tiff_samples == 2 && OPTIONS_values->shotSelect ) {
+        (*rp)++;
+    }
     if ( raw_image ) {
-        if ( row < raw_height && col < raw_width )
+        if ( row < raw_height && col < raw_width ) {
             RAW(row, col) = curve[**rp];
+        }
         *rp += tiff_samples;
     } else {
-        if ( row < height && col < width )
+        if ( row < height && col < width ) {
             for ( c = 0; c < tiff_samples; c++ ) {
                 image[row * width + col][c] = curve[(*rp)[c]];
             }
+        }
         *rp += tiff_samples;
     }
-    if ( tiff_samples == 2 && OPTIONS_values->shotSelect ) (*rp)--;
+    if ( tiff_samples == 2 && OPTIONS_values->shotSelect ) {
+        (*rp)--;
+    }
 }
 
-void CLASS ljpeg_idct(struct jhead *jh) {
+void
+ljpeg_idct(struct jhead *jh) {
     int c, i, j, len, skip, coef;
     float work[3][8][8];
     static float cs[106] = {0};
@@ -1132,10 +1322,13 @@ void CLASS ljpeg_idct(struct jhead *jh) {
     for ( i = 1; i < 64; i++ ) {
         len = gethuff (jh->huff[16]);
         i += skip = len >> 4;
-        if ( !(len &= 15) && skip < 15 ) break;
+        if ( !(len &= 15) && skip < 15 ) {
+            break;
+        }
         coef = getbits(len);
-        if ((coef & (1 << (len - 1))) == 0 )
+        if ( (coef & (1 << (len - 1))) == 0 ) {
             coef -= (1 << len) - 1;
+        }
         ((float *) work)[zigzag[i]] = coef * jh->quant[i];
     }
     for ( c = 0; c < 8; c++ ) {
@@ -1164,18 +1357,24 @@ void CLASS ljpeg_idct(struct jhead *jh) {
     }
 }
 
-void CLASS lossless_dng_load_raw() {
+void
+lossless_dng_load_raw() {
     unsigned save, trow = 0, tcol = 0, jwide, jrow, jcol, row, col, i, j;
     struct jhead jh;
     ushort *rp;
 
     while ( trow < raw_height ) {
         save = ftell(ifp);
-        if ( tile_length < INT_MAX )
+        if ( tile_length < INT_MAX ) {
             fseek(ifp, get4(), SEEK_SET);
-        if ( !ljpeg_start(&jh, 0)) break;
+        }
+        if ( !ljpeg_start(&jh, 0)) {
+            break;
+        }
         jwide = jh.wide;
-        if ( filters ) jwide *= jh.clrs;
+        if ( filters ) {
+            jwide *= jh.clrs;
+        }
         jwide /= MIN (is_raw, tiff_samples);
         switch ( jh.algo ) {
             case 0xc1:
@@ -1187,9 +1386,11 @@ void CLASS lossless_dng_load_raw() {
                         rp = jh.idct;
                         row = trow + jcol / tile_width + jrow * 2;
                         col = tcol + jcol % tile_width;
-                        for ( i = 0; i < 16; i += 2 )
-                            for ( j = 0; j < 8; j++ )
+                        for ( i = 0; i < 16; i += 2 ) {
+                            for ( j = 0; j < 8; j++ ) {
                                 adobe_copy_pixel(row + i, col + j, &rp);
+                            }
+                        }
                     }
                 }
                 break;
@@ -1198,39 +1399,45 @@ void CLASS lossless_dng_load_raw() {
                     rp = ljpeg_row(jrow, &jh);
                     for ( jcol = 0; jcol < jwide; jcol++ ) {
                         adobe_copy_pixel(trow + row, tcol + col, &rp);
-                        if ( ++col >= tile_width || col >= raw_width )
+                        if ( ++col >= tile_width || col >= raw_width ) {
                             row += 1 + (col = 0);
+                        }
                     }
                 }
         }
         fseek(ifp, save + 4, SEEK_SET);
-        if ((tcol += tile_width) >= raw_width )
+        if ( (tcol += tile_width) >= raw_width ) {
             trow += tile_length + (tcol = 0);
+        }
         ljpeg_end(&jh);
     }
 }
 
-void CLASS packed_dng_load_raw() {
+void
+packed_dng_load_raw() {
     ushort *pixel, *rp;
     int row, col;
 
     pixel = (ushort *) calloc(raw_width, tiff_samples * sizeof *pixel);
     merror(pixel, "packed_dng_load_raw()");
     for ( row = 0; row < raw_height; row++ ) {
-        if ( tiff_bps == 16 )
+        if ( tiff_bps == 16 ) {
             read_shorts(pixel, raw_width * tiff_samples);
-        else {
+        } else {
             getbits(-1);
-            for ( col = 0; col < raw_width * tiff_samples; col++ )
+            for ( col = 0; col < raw_width * tiff_samples; col++ ) {
                 pixel[col] = getbits(tiff_bps);
+            }
         }
-        for ( rp = pixel, col = 0; col < raw_width; col++ )
+        for ( rp = pixel, col = 0; col < raw_width; col++ ) {
             adobe_copy_pixel(row, col, &rp);
+        }
     }
     free(pixel);
 }
 
-void CLASS pentax_load_raw() {
+void
+pentax_load_raw() {
     ushort bit[2][15], huff[4097];
     int dep, row, col, diff, c, i;
     ushort vpred[2][2] = {{0, 0},
@@ -1253,17 +1460,24 @@ void CLASS pentax_load_raw() {
     huff[0] = 12;
     fseek(ifp, data_offset, SEEK_SET);
     getbits(-1);
-    for ( row = 0; row < raw_height; row++ )
+    for ( row = 0; row < raw_height; row++ ) {
         for ( col = 0; col < raw_width; col++ ) {
             diff = ljpeg_diff(huff);
-            if ( col < 2 ) hpred[col] = vpred[row & 1][col] += diff;
-            else hpred[col & 1] += diff;
+            if ( col < 2 ) {
+                hpred[col] = vpred[row & 1][col] += diff;
+            } else {
+                hpred[col & 1] += diff;
+            }
             RAW(row, col) = hpred[col & 1];
-            if ( hpred[col & 1] >> tiff_bps ) derror();
+            if ( hpred[col & 1] >> tiff_bps ) {
+                derror();
+            }
         }
+    }
 }
 
-void CLASS nikon_load_raw() {
+void
+nikon_load_raw() {
     static const uchar nikon_tree[][32] = {
             {0, 1, 5, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0,    /* 12-bit lossy */
                     5,    4,    3,    6,    2,    7, 1,  0, 8,  9,  11, 10, 12},
@@ -1283,26 +1497,38 @@ void CLASS nikon_load_raw() {
     fseek(ifp, meta_offset, SEEK_SET);
     ver0 = fgetc(ifp);
     ver1 = fgetc(ifp);
-    if ( ver0 == 0x49 || ver1 == 0x58 )
+    if ( ver0 == 0x49 || ver1 == 0x58 ) {
         fseek(ifp, 2110, SEEK_CUR);
-    if ( ver0 == 0x46 ) tree = 2;
-    if ( tiff_bps == 14 ) tree += 3;
+    }
+    if ( ver0 == 0x46 ) {
+        tree = 2;
+    }
+    if ( tiff_bps == 14 ) {
+        tree += 3;
+    }
     read_shorts(vpred[0], 4);
     max = 1 << tiff_bps & 0x7fff;
-    if ((csize = get2()) > 1 )
+    if ( (csize = get2()) > 1 ) {
         step = max / (csize - 1);
+    }
     if ( ver0 == 0x44 && ver1 == 0x20 && step > 0 ) {
-        for ( i = 0; i < csize; i++ )
+        for ( i = 0; i < csize; i++ ) {
             curve[i * step] = get2();
-        for ( i = 0; i < max; i++ )
+        }
+        for ( i = 0; i < max; i++ ) {
             curve[i] = (curve[i - i % step] * (step - i % step) +
                         curve[i - i % step + step] * (i % step)) / step;
+        }
         fseek(ifp, meta_offset + 562, SEEK_SET);
         split = get2();
-    } else
-        if ( ver0 != 0x46 && csize <= 0x4001 )
+    } else {
+        if ( ver0 != 0x46 && csize <= 0x4001 ) {
             read_shorts(curve, max = csize);
-    while ( curve[max - 2] == curve[max - 1] ) max--;
+        }
+    }
+    while ( curve[max - 2] == curve[max - 1] ) {
+        max--;
+    }
     huff = make_decoder(nikon_tree[tree]);
     fseek(ifp, data_offset, SEEK_SET);
     getbits(-1);
@@ -1317,22 +1543,29 @@ void CLASS nikon_load_raw() {
             len = i & 15;
             shl = i >> 4;
             diff = ((getbits(len - shl) << 1) + 1) << shl >> 1;
-            if ((diff & (1 << (len - 1))) == 0 )
+            if ((diff & (1 << (len - 1))) == 0 ) {
                 diff -= (1 << len) - !shl;
-            if ( col < 2 ) hpred[col] = vpred[row & 1][col] += diff;
-            else hpred[col & 1] += diff;
-            if ((ushort) (hpred[col & 1] + min) >= max ) derror();
-            RAW(row, col) = curve[LIM((short) hpred[col & 1], 0, 0x3fff)];
+            }
+            if ( col < 2 ) {
+                hpred[col] = vpred[row & 1][col] += diff;
+            } else {
+                hpred[col & 1] += diff;
+            }
+            if ( (ushort) (hpred[col & 1] + min) >= max ) {
+                derror();
+            }
+            RAW(row, col) = curve[LIM((short)hpred[col & 1], 0, 0x3fff)];
         }
     }
     free(huff);
 }
 
-void CLASS nikon_yuv_load_raw() {
+void
+nikon_yuv_load_raw() {
     int row, col, yuv[4], rgb[3], b, c;
     UINT64 bitbuf = 0;
 
-    for ( row = 0; row < raw_height; row++ )
+    for ( row = 0; row < raw_height; row++ ) {
         for ( col = 0; col < raw_width; col++ ) {
             if ( !(b = col & 1)) {
                 bitbuf = 0;
@@ -1350,43 +1583,51 @@ void CLASS nikon_yuv_load_raw() {
                 image[row * width + col][c] = curve[LIM(rgb[c], 0, 0xfff)] / cam_mul[c];
             }
         }
+    }
 }
 
 /*
-   Returns 1 for a Coolpix 995, 0 for anything else.
- */
-int CLASS nikon_e995() {
+Returns 1 for a Coolpix 995, 0 for anything else.
+*/
+int
+nikon_e995() {
     int i, histo[256];
     const uchar often[] = {0x00, 0x55, 0xaa, 0xff};
 
     memset(histo, 0, sizeof histo);
     fseek(ifp, -2000, SEEK_END);
-    for ( i = 0; i < 2000; i++ )
+    for ( i = 0; i < 2000; i++ ) {
         histo[fgetc(ifp)]++;
-    for ( i = 0; i < 4; i++ )
-        if ( histo[often[i]] < 200 )
+    }
+    for ( i = 0; i < 4; i++ ) {
+        if ( histo[often[i]] < 200 ) {
             return 0;
+        }
+    }
     return 1;
 }
 
 /*
-   Returns 1 for a Coolpix 2100, 0 for anything else.
- */
-int CLASS nikon_e2100() {
+Returns 1 for a Coolpix 2100, 0 for anything else.
+*/
+int
+nikon_e2100() {
     uchar t[12];
     int i;
 
     fseek(ifp, 0, SEEK_SET);
     for ( i = 0; i < 1024; i++ ) {
         fread(t, 1, 12, ifp);
-        if (((t[2] & t[4] & t[7] & t[9]) >> 4
-             & t[1] & t[6] & t[8] & t[11] & 3) != 3 )
+        if ( ((t[2] & t[4] & t[7] & t[9]) >> 4
+             & t[1] & t[6] & t[8] & t[11] & 3) != 3 ) {
             return 0;
+        }
     }
     return 1;
 }
 
-void CLASS nikon_3700() {
+void
+nikon_3700() {
     int bits, i;
     uchar dp[24];
     static const struct {
@@ -1409,22 +1650,28 @@ void CLASS nikon_3700() {
 }
 
 /*
-   Separates a Minolta DiMAGE Z2 from a Nikon E4300.
- */
-int CLASS minolta_z2() {
+Separates a Minolta DiMAGE Z2 from a Nikon E4300.
+*/
+int
+minolta_z2() {
     int i, nz;
     char tail[424];
 
     fseek(ifp, -sizeof tail, SEEK_END);
     fread(tail, 1, sizeof tail, ifp);
-    for ( nz = i = 0; i < sizeof tail; i++ )
-        if ( tail[i] ) nz++;
+    for ( nz = i = 0; i < sizeof tail; i++ ) {
+        if ( tail[i] ) {
+            nz++;
+        }
+    }
     return nz > 20;
 }
 
-void CLASS jpeg_thumb();
+void
+jpeg_thumb();
 
-void CLASS ppm_thumb() {
+void
+ppm_thumb() {
     char *thumb;
     thumb_length = thumb_width * thumb_height * 3;
     thumb = (char *) malloc(thumb_length);
@@ -1435,21 +1682,24 @@ void CLASS ppm_thumb() {
     free(thumb);
 }
 
-void CLASS ppm16_thumb() {
+void
+ppm16_thumb() {
     int i;
     char *thumb;
     thumb_length = thumb_width * thumb_height * 3;
     thumb = (char *) calloc(thumb_length, 2);
     merror(thumb, "ppm16_thumb()");
     read_shorts((ushort *) thumb, thumb_length);
-    for ( i = 0; i < thumb_length; i++ )
+    for ( i = 0; i < thumb_length; i++ ) {
         thumb[i] = ((ushort *) thumb)[i] >> 8;
+    }
     fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
     fwrite(thumb, 1, thumb_length, ofp);
     free(thumb);
 }
 
-void CLASS layer_thumb() {
+void
+layer_thumb() {
     int i, c;
     char *thumb, map[][4] = {"012", "102"};
 
@@ -1468,7 +1718,8 @@ void CLASS layer_thumb() {
     free(thumb);
 }
 
-void CLASS rollei_thumb() {
+void
+rollei_thumb() {
     unsigned i;
     ushort *thumb;
 
@@ -1485,7 +1736,8 @@ void CLASS rollei_thumb() {
     free(thumb);
 }
 
-void CLASS rollei_load_raw() {
+void
+rollei_load_raw() {
     uchar pixel[10];
     unsigned iten = 0, isix, i, buffer = 0, todo[16];
 
@@ -1500,35 +1752,43 @@ void CLASS rollei_load_raw() {
             todo[i] = isix++;
             todo[i + 1] = buffer >> (14 - i) * 5;
         }
-        for ( i = 0; i < 16; i += 2 )
+        for ( i = 0; i < 16; i += 2 ) {
             raw_image[todo[i]] = (todo[i + 1] & 0x3ff);
+        }
     }
     maximum = 0x3ff;
 }
 
-int CLASS raw(unsigned row, unsigned col) {
+int
+raw(unsigned row, unsigned col) {
     return (row < raw_height && col < raw_width) ? RAW(row, col) : 0;
 }
 
-void CLASS phase_one_flat_field(int is_float, int nc) {
+void
+phase_one_flat_field(int is_float, int nc) {
     ushort head[8];
     unsigned wide, high, y, x, c, rend, cend, row, col;
     float *mrow, num, mult[4];
 
     read_shorts(head, 8);
-    if ( head[2] * head[3] * head[4] * head[5] == 0 ) return;
+    if ( head[2] * head[3] * head[4] * head[5] == 0 ) {
+        return;
+    }
     wide = head[2] / head[4] + (head[2] % head[4] != 0);
     high = head[3] / head[5] + (head[3] % head[5] != 0);
-    mrow = (float *) calloc(nc * wide, sizeof *mrow);
+    mrow = (float *)calloc(nc * wide, sizeof *mrow);
     merror(mrow, "phase_one_flat_field()");
     for ( y = 0; y < high; y++ ) {
-        for ( x = 0; x < wide; x++ )
+        for ( x = 0; x < wide; x++ ) {
             for ( c = 0; c < nc; c += 2 ) {
                 num = is_float ? getreal(11) : get2() / 32768.0;
                 if ( y == 0 ) mrow[c * wide + x] = num;
                 else mrow[(c + 1) * wide + x] = (num - mrow[c * wide + x]) / head[5];
             }
-        if ( y == 0 ) continue;
+        }
+        if ( y == 0 ) {
+            continue;
+        }
         rend = head[1] + y * head[5];
         for ( row = rend - head[5];
               row < raw_height && row < rend &&
@@ -1547,19 +1807,23 @@ void CLASS phase_one_flat_field(int is_float, int nc) {
                         c = RAW(row, col) * mult[c];
                         RAW(row, col) = LIM(c, 0, 65535);
                     }
-                    for ( c = 0; c < nc; c += 2 )
+                    for ( c = 0; c < nc; c += 2 ) {
                         mult[c] += mult[c + 1];
+                    }
                 }
             }
-            for ( x = 0; x < wide; x++ )
-                for ( c = 0; c < nc; c += 2 )
+            for ( x = 0; x < wide; x++ ) {
+                for ( c = 0; c < nc; c += 2 ) {
                     mrow[c * wide + x] += mrow[(c + 1) * wide + x];
+                }
+            }
         }
     }
     free(mrow);
 }
 
-void CLASS phase_one_correct() {
+void
+phase_one_correct() {
     unsigned entries, tag, data, save, col, row, type;
     int len, i, j, k, cip, val[4], dev[4], sum, max;
     int head[9], diff, mindiff = INT_MAX, off_412 = 0;
@@ -1580,8 +1844,12 @@ void CLASS phase_one_correct() {
     ushort *xval[2];
     int qmult_applied = 0, qlin_applied = 0;
 
-    if ( OPTIONS_values->halfSizePreInterpolation || !meta_length ) return;
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("Phase One correction...\n"));
+    if ( OPTIONS_values->halfSizePreInterpolation || !meta_length ) {
+        return;
+    }
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("Phase One correction...\n"));
+    }
     fseek(ifp, meta_offset, SEEK_SET);
     GLOBAL_endianOrder = get2();
     fseek(ifp, 6, SEEK_CUR);
@@ -1594,71 +1862,90 @@ void CLASS phase_one_correct() {
         data = get4();
         save = ftell(ifp);
         fseek(ifp, meta_offset + data, SEEK_SET);
-        if ( tag == 0x419 ) {                /* Polynomial curve */
-            for ( get4(), i = 0; i < 8; i++ )
+        if ( tag == 0x419 ) {
+            // Polynomial curve
+            for ( get4(), i = 0; i < 8; i++ ) {
                 poly[i] = getreal(11);
+            }
             poly[3] += (ph1.tag_210 - poly[7]) * poly[6] + 1;
             for ( i = 0; i < 0x10000; i++ ) {
                 num = (poly[5] * i + poly[3]) * i + poly[1];
                 curve[i] = LIM(num, 0, 65535);
             }
-            goto apply;                /* apply to right half */
-        } else
-            if ( tag == 0x41a ) {            /* Polynomial curve */
-                for ( i = 0; i < 4; i++ )
+            goto apply; // apply to right half
+        } else {
+            if ( tag == 0x41a ) {
+                // Polynomial curve
+                for ( i = 0; i < 4; i++ ) {
                     poly[i] = getreal(11);
+                }
                 for ( i = 0; i < 0x10000; i++ ) {
-                    for ( num = 0, j = 4; j--; )
+                    for ( num = 0, j = 4; j--; ) {
                         num = num * i + poly[j];
+                    }
                     curve[i] = LIM(num + i, 0, 65535);
                 }
-                apply:                    /* apply to whole image */
-                for ( row = 0; row < raw_height; row++ )
-                    for ( col = (tag & 1) * ph1.split_col; col < raw_width; col++ )
+                apply: // apply to whole image
+                for ( row = 0; row < raw_height; row++ ) {
+                    for ( col = (tag & 1) * ph1.split_col; col < raw_width; col++ ) {
                         RAW(row, col) = curve[RAW(row, col)];
-            } else
-                if ( tag == 0x400 ) {            /* Sensor defects */
+                    }
+                }
+            } else {
+                if ( tag == 0x400 ) {
+                    // Sensor defects
                     while ((len -= 8) >= 0 ) {
                         col = get2();
                         row = get2();
                         type = get2();
                         get2();
-                        if ( col >= raw_width ) continue;
-                        if ( type == 131 || type == 137 )        /* Bad column */
-                            for ( row = 0; row < raw_height; row++ )
+                        if ( col >= raw_width ) {
+                            continue;
+                        }
+                        if ( type == 131 || type == 137 ) {
+                            // Bad column
+                            for ( row = 0; row < raw_height; row++ ) {
                                 if ( FC(row - top_margin, col - left_margin) == 1 ) {
-                                    for ( sum = i = 0; i < 4; i++ )
+                                    for ( sum = i = 0; i < 4; i++ ) {
                                         sum += val[i] = raw(row + dir[i][0], col + dir[i][1]);
+                                    }
                                     for ( max = i = 0; i < 4; i++ ) {
                                         dev[i] = abs((val[i] << 2) - sum);
-                                        if ( dev[max] < dev[i] ) max = i;
+                                        if ( dev[max] < dev[i] ) {
+                                            max = i;
+                                        }
                                     }
                                     RAW(row, col) = (sum - val[max]) / 3.0 + 0.5;
                                 } else {
-                                    for ( sum = 0, i = 8; i < 12; i++ )
+                                    for ( sum = 0, i = 8; i < 12; i++ ) {
                                         sum += raw(row + dir[i][0], col + dir[i][1]);
+                                    }
                                     RAW(row, col) = 0.5 + sum * 0.0732233 +
                                                     (raw(row, col - 2) + raw(row, col + 2)) * 0.3535534;
                                 }
-                        else
-                            if ( type == 129 ) {            /* Bad pixel */
+                            }
+                        } else {
+                            if ( type == 129 ) {
+                                // Bad pixel
                                 if ( row >= raw_height ) continue;
                                 j = (FC(row - top_margin, col - left_margin) != 1) * 4;
                                 for ( sum = 0, i = j; i < j + 8; i++ )
                                     sum += raw(row + dir[i][0], col + dir[i][1]);
                                 RAW(row, col) = (sum + 4) >> 3;
                             }
+                        }
                     }
-                } else
-                    if ( tag == 0x401 ) {            /* All-color flat fields */
+                } else {
+                    if ( tag == 0x401 ) {
+                        // All-color flat fields
                         phase_one_flat_field(1, 2);
-                    } else
+                    } else {
                         if ( tag == 0x416 || tag == 0x410 ) {
                             phase_one_flat_field(0, 2);
-                        } else
+                        } else {
                             if ( tag == 0x40b ) {            /* Red+blue flat field */
                                 phase_one_flat_field(0, 4);
-                            } else
+                            } else {
                                 if ( tag == 0x412 ) {
                                     fseek(ifp, 36, SEEK_CUR);
                                     diff = abs(get2() - ph1.tag_21a);
@@ -1666,14 +1953,18 @@ void CLASS phase_one_correct() {
                                         mindiff = diff;
                                         off_412 = ftell(ifp) - 38;
                                     }
-                                } else
-                                    if ( tag == 0x41f && !qlin_applied ) { /* Quadrant linearization */
+                                } else {
+                                    if ( tag == 0x41f && !qlin_applied ) {
+                                        // Quadrant linearization
                                         ushort lc[2][2][16], ref[16];
                                         int qr, qc;
-                                        for ( qr = 0; qr < 2; qr++ )
-                                            for ( qc = 0; qc < 2; qc++ )
-                                                for ( i = 0; i < 16; i++ )
+                                        for ( qr = 0; qr < 2; qr++ ) {
+                                            for ( qc = 0; qc < 2; qc++ ) {
+                                                for ( i = 0; i < 16; i++ ) {
                                                     lc[qr][qc][i] = get4();
+                                                }
+                                            }
+                                        }
                                         for ( i = 0; i < 16; i++ ) {
                                             int v = 0;
                                             for ( qr = 0; qr < 2; qr++ )
@@ -1693,15 +1984,18 @@ void CLASS phase_one_correct() {
                                                 cx[18] = cf[18] = 65535;
                                                 cubic_spline(cx, cf, 19);
                                                 for ( row = (qr ? ph1.split_row : 0);
-                                                      row < (qr ? raw_height : ph1.split_row); row++ )
+                                                      row < (qr ? raw_height : ph1.split_row); row++ ) {
                                                     for ( col = (qc ? ph1.split_col : 0);
-                                                          col < (qc ? raw_width : ph1.split_col); col++ )
+                                                          col < (qc ? raw_width : ph1.split_col); col++ ) {
                                                         RAW(row, col) = curve[RAW(row, col)];
+                                                    }
+                                                }
                                             }
                                         }
                                         qlin_applied = 1;
-                                    } else
-                                        if ( tag == 0x41e && !qmult_applied ) { /* Quadrant multipliers */
+                                    } else {
+                                        if ( tag == 0x41e && !qmult_applied ) {
+                                            // Quadrant multipliers
                                             float qmult[2][2] = {{1, 1},
                                                                  {1, 1}};
                                             get4();
@@ -1723,23 +2017,29 @@ void CLASS phase_one_correct() {
                                             get4();
                                             get4();
                                             qmult[1][1] = 1.0 + getreal(11);
-                                            for ( row = 0; row < raw_height; row++ )
+                                            for ( row = 0; row < raw_height; row++ ) {
                                                 for ( col = 0; col < raw_width; col++ ) {
                                                     i = qmult[row >= ph1.split_row][col >= ph1.split_col] *
                                                         RAW(row, col);
                                                     RAW(row, col) = LIM(i, 0, 65535);
                                                 }
+                                            }
                                             qmult_applied = 1;
-                                        } else
-                                            if ( tag == 0x431 && !qmult_applied ) { /* Quadrant combined */
+                                        } else {
+                                            if ( tag == 0x431 && !qmult_applied ) {
+                                                // Quadrant combined
                                                 ushort lc[2][2][7], ref[7];
                                                 int qr, qc;
-                                                for ( i = 0; i < 7; i++ )
+                                                for ( i = 0; i < 7; i++ ) {
                                                     ref[i] = get4();
-                                                for ( qr = 0; qr < 2; qr++ )
-                                                    for ( qc = 0; qc < 2; qc++ )
-                                                        for ( i = 0; i < 7; i++ )
+                                                }
+                                                for ( qr = 0; qr < 2; qr++ ) {
+                                                    for ( qc = 0; qc < 2; qc++ ) {
+                                                        for ( i = 0; i < 7; i++ ) {
                                                             lc[qr][qc][i] = get4();
+                                                        }
+                                                    }
+                                                }
                                                 for ( qr = 0; qr < 2; qr++ ) {
                                                     for ( qc = 0; qc < 2; qc++ ) {
                                                         int cx[9], cf[9];
@@ -1751,40 +2051,60 @@ void CLASS phase_one_correct() {
                                                         cx[8] = cf[8] = 65535;
                                                         cubic_spline(cx, cf, 9);
                                                         for ( row = (qr ? ph1.split_row : 0);
-                                                              row < (qr ? raw_height : ph1.split_row); row++ )
+                                                              row < (qr ? raw_height : ph1.split_row); row++ ) {
                                                             for ( col = (qc ? ph1.split_col : 0);
-                                                                  col < (qc ? raw_width : ph1.split_col); col++ )
+                                                                  col < (qc ? raw_width : ph1.split_col); col++ ) {
                                                                 RAW(row, col) = curve[RAW(row, col)];
+                                                            }
+                                                        }
                                                     }
                                                 }
                                                 qmult_applied = 1;
                                                 qlin_applied = 1;
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         fseek(ifp, save, SEEK_SET);
     }
     if ( off_412 ) {
         fseek(ifp, off_412, SEEK_SET);
-        for ( i = 0; i < 9; i++ ) head[i] = get4() & 0x7fff;
+        for ( i = 0; i < 9; i++ ) {
+            head[i] = get4() & 0x7fff;
+        }
         yval[0] = (float *) calloc(head[1] * head[3] + head[2] * head[4], 6);
         merror(yval[0], "phase_one_correct()");
         yval[1] = (float *) (yval[0] + head[1] * head[3]);
         xval[0] = (ushort *) (yval[1] + head[2] * head[4]);
         xval[1] = (ushort *) (xval[0] + head[1] * head[3]);
         get2();
-        for ( i = 0; i < 2; i++ )
-            for ( j = 0; j < head[i + 1] * head[i + 3]; j++ )
+        for ( i = 0; i < 2; i++ ) {
+            for ( j = 0; j < head[i + 1] * head[i + 3]; j++ ) {
                 yval[i][j] = getreal(11);
-        for ( i = 0; i < 2; i++ )
-            for ( j = 0; j < head[i + 1] * head[i + 3]; j++ )
+            }
+        }
+        for ( i = 0; i < 2; i++ ) {
+            for ( j = 0; j < head[i + 1] * head[i + 3]; j++ ) {
                 xval[i][j] = get2();
-        for ( row = 0; row < raw_height; row++ )
+            }
+        }
+        for ( row = 0; row < raw_height; row++ ) {
             for ( col = 0; col < raw_width; col++ ) {
                 cfrac = (float) col * head[3] / raw_width;
                 cfrac -= cip = cfrac;
                 num = RAW(row, col) * 0.5;
                 for ( i = cip; i < cip + 2; i++ ) {
-                    for ( k = j = 0; j < head[1]; j++ )
-                        if ( num < xval[0][k = head[1] * i + j] ) break;
+                    for ( k = j = 0; j < head[1]; j++ ) {
+                        if ( num < xval[0][k = head[1] * i + j] ) {
+                            break;
+                        }
+                    }
                     frac = (j == 0 || j == head[1]) ? 0 :
                            (xval[0][k] - num) / (xval[0][k] - xval[0][k - 1]);
                     mult[i - cip] = yval[0][k - 1] * frac + yval[0][k] * (1 - frac);
@@ -1792,11 +2112,13 @@ void CLASS phase_one_correct() {
                 i = ((mult[0] * (1 - cfrac) + mult[1] * cfrac) * row + num) * 2;
                 RAW(row, col) = LIM(i, 0, 65535);
             }
+        }
         free(yval[0]);
     }
 }
 
-void CLASS phase_one_load_raw() {
+void
+phase_one_load_raw() {
     int a, b, i;
     ushort akey, bkey, mask;
 
@@ -1806,23 +2128,28 @@ void CLASS phase_one_load_raw() {
     mask = ph1.format == 1 ? 0x5555 : 0x1354;
     fseek(ifp, data_offset, SEEK_SET);
     read_shorts(raw_image, raw_width * raw_height);
-    if ( ph1.format )
+    if ( ph1.format ) {
         for ( i = 0; i < raw_width * raw_height; i += 2 ) {
             a = raw_image[i + 0] ^ akey;
             b = raw_image[i + 1] ^ bkey;
             raw_image[i + 0] = (a & mask) | (b & ~mask);
             raw_image[i + 1] = (b & mask) | (a & ~mask);
         }
+    }
 }
 
-unsigned CLASS ph1_bithuff(int nbits, ushort *huff) {
+unsigned
+ph1_bithuff(int nbits, ushort *huff) {
     static UINT64 bitbuf = 0;
     static int vbits = 0;
     unsigned c;
 
-    if ( nbits == -1 )
+    if ( nbits == -1 ) {
         return bitbuf = vbits = 0;
-    if ( nbits == 0 ) return 0;
+    }
+    if ( nbits == 0 ) {
+        return 0;
+    }
     if ( vbits < nbits ) {
         bitbuf = bitbuf << 32 | get4();
         vbits += 32;
@@ -1839,7 +2166,8 @@ unsigned CLASS ph1_bithuff(int nbits, ushort *huff) {
 #define ph1_bits(n) ph1_bithuff(n,0)
 #define ph1_huff(h) ph1_bithuff(*h,h+1)
 
-void CLASS phase_one_load_raw_c() {
+void
+phase_one_load_raw_c() {
     static const int length[] = {8, 7, 6, 9, 11, 10, 5, 12, 14, 13};
     int *offset, len[2], pred[2], row, col, i, j;
     ushort *pixel;
@@ -1849,57 +2177,74 @@ void CLASS phase_one_load_raw_c() {
     merror(pixel, "phase_one_load_raw_c()");
     offset = (int *) (pixel + raw_width);
     fseek(ifp, strip_offset, SEEK_SET);
-    for ( row = 0; row < raw_height; row++ )
+    for ( row = 0; row < raw_height; row++ ) {
         offset[row] = get4();
+    }
     cblack = (short (*)[2]) (offset + raw_height);
     fseek(ifp, ph1.black_col, SEEK_SET);
-    if ( ph1.black_col )
+    if ( ph1.black_col ) {
         read_shorts((ushort *) cblack[0], raw_height * 2);
+    }
     rblack = cblack + raw_height;
     fseek(ifp, ph1.black_row, SEEK_SET);
-    if ( ph1.black_row )
+    if ( ph1.black_row ) {
         read_shorts((ushort *) rblack[0], raw_width * 2);
-    for ( i = 0; i < 256; i++ )
+    }
+    for ( i = 0; i < 256; i++ ) {
         curve[i] = i * i / 3.969 + 0.5;
+    }
     for ( row = 0; row < raw_height; row++ ) {
         fseek(ifp, data_offset + offset[row], SEEK_SET);
         ph1_bits(-1);
         pred[0] = pred[1] = 0;
         for ( col = 0; col < raw_width; col++ ) {
-            if ( col >= (raw_width & -8))
+            if ( col >= (raw_width & -8) ) {
                 len[0] = len[1] = 14;
-            else
-                if ((col & 7) == 0 )
+            } else {
+                if ((col & 7) == 0 ) {
                     for ( i = 0; i < 2; i++ ) {
                         for ( j = 0; j < 5 && !ph1_bits(1); j++ );
-                        if ( j-- ) len[i] = length[j * 2 + ph1_bits(1)];
+                        if ( j-- ) {
+                            len[i] = length[j * 2 + ph1_bits(1)];
+                        }
                     }
-            if ((i = len[col & 1]) == 14 )
+                }
+            }
+            if ((i = len[col & 1]) == 14 ) {
                 pixel[col] = pred[col & 1] = ph1_bits(16);
-            else
+            } else {
                 pixel[col] = pred[col & 1] += ph1_bits(i) + 1 - (1 << (i - 1));
-            if ( pred[col & 1] >> 16 ) derror();
-            if ( ph1.format == 5 && pixel[col] < 256 )
+            }
+            if ( pred[col & 1] >> 16 ) {
+                derror();
+            }
+            if ( ph1.format == 5 && pixel[col] < 256 ) {
                 pixel[col] = curve[pixel[col]];
+            }
         }
         for ( col = 0; col < raw_width; col++ ) {
             i = (pixel[col] << 2 * (ph1.format != 8)) - ph1.black
                 + cblack[row][col >= ph1.split_col]
                 + rblack[col][row >= ph1.split_row];
-            if ( i > 0 ) RAW(row, col) = i;
+            if ( i > 0 ) {
+                RAW(row, col) = i;
+            }
         }
     }
     free(pixel);
     maximum = 0xfffc - ph1.black;
 }
 
-void CLASS hasselblad_load_raw() {
+void
+hasselblad_load_raw() {
     struct jhead jh;
     int shot, row, col, *back[5], len[2], diff[12], pred, sh, f, s, c;
     unsigned upix, urow, ucol;
     ushort *ip;
 
-    if ( !ljpeg_start(&jh, 0)) return;
+    if ( !ljpeg_start(&jh, 0)) {
+        return;
+    }
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
     ph1_bits(-1);
     back[4] = (int *) calloc(raw_width, 3 * sizeof **back);
@@ -1938,14 +2283,16 @@ void CLASS hasselblad_load_raw() {
                 for ( c = 0; c < tiff_samples; c++ ) {
                     pred += diff[(s & 1) * tiff_samples + c];
                     upix = pred >> sh & 0xffff;
-                    if ( raw_image && c == shot )
+                    if ( raw_image && c == shot ) {
                         RAW(row, s) = upix;
+                    }
                     if ( image ) {
                         urow = row - top_margin + (c & 1);
                         ucol = col - left_margin - ((c >> 1) & 1);
                         ip = &image[urow * width + ucol][f];
-                        if ( urow < height && ucol < width )
+                        if ( urow < height && ucol < width ) {
                             *ip = c < 4 ? upix : (*ip + upix) >> 1;
+                        }
                     }
                 }
                 back[2][s] = pred;
@@ -1954,10 +2301,13 @@ void CLASS hasselblad_load_raw() {
     }
     free(back[4]);
     ljpeg_end(&jh);
-    if ( image ) mix_green = 1;
+    if ( image ) {
+        mix_green = 1;
+    }
 }
 
-void CLASS leaf_hdr_load_raw() {
+void
+leaf_hdr_load_raw() {
     ushort *pixel = 0;
     unsigned tile = 0, r, c, row, col;
 
@@ -1971,12 +2321,18 @@ void CLASS leaf_hdr_load_raw() {
                 fseek(ifp, data_offset + 4 * tile++, SEEK_SET);
                 fseek(ifp, get4(), SEEK_SET);
             }
-            if ( filters && c != OPTIONS_values->shotSelect ) continue;
-            if ( filters ) pixel = raw_image + r * raw_width;
+            if ( filters && c != OPTIONS_values->shotSelect ) {
+                continue;
+            }
+            if ( filters ) {
+                pixel = raw_image + r * raw_width;
+            }
             read_shorts(pixel, raw_width);
-            if ( !filters && (row = r - top_margin) < height )
-                for ( col = 0; col < width; col++ )
+            if ( !filters && (row = r - top_margin) < height ) {
+                for ( col = 0; col < width; col++ ) {
                     image[row * width + col][c] = pixel[col + left_margin];
+                }
+            }
         }
     }
     if ( !filters ) {
@@ -1986,20 +2342,25 @@ void CLASS leaf_hdr_load_raw() {
     }
 }
 
-void CLASS unpacked_load_raw() {
+void
+unpacked_load_raw() {
     int row, col, bits = 0;
 
     while ( 1 << ++bits < maximum );
     read_shorts(raw_image, raw_width * raw_height);
-    for ( row = 0; row < raw_height; row++ )
-        for ( col = 0; col < raw_width; col++ )
+    for ( row = 0; row < raw_height; row++ ) {
+        for ( col = 0; col < raw_width; col++ ) {
             if ((RAW(row, col) >>= GLOBAL_loadFlags) >> bits
                 && (unsigned) (row - top_margin) < height
-                && (unsigned) (col - left_margin) < width )
+                && (unsigned) (col - left_margin) < width ) {
                 derror();
+            }
+        }
+    }
 }
 
-void CLASS sinar_4shot_load_raw() {
+void
+sinar_4shot_load_raw() {
     ushort *pixel;
     unsigned shot, row, col, r, c;
 
@@ -2017,9 +2378,13 @@ void CLASS sinar_4shot_load_raw() {
         fseek(ifp, get4(), SEEK_SET);
         for ( row = 0; row < raw_height; row++ ) {
             read_shorts(pixel, raw_width);
-            if ((r = row - top_margin - (shot >> 1 & 1)) >= height ) continue;
+            if ( (r = row - top_margin - (shot >> 1 & 1)) >= height ) {
+                continue;
+            }
             for ( col = 0; col < raw_width; col++ ) {
-                if ((c = col - left_margin - (shot & 1)) >= width ) continue;
+                if ( (c = col - left_margin - (shot & 1)) >= width ) {
+                    continue;
+                }
                 image[r * width + c][(row & 1) * 3 ^ (~col & 1)] = pixel[col];
             }
         }
@@ -2028,23 +2393,31 @@ void CLASS sinar_4shot_load_raw() {
     mix_green = 1;
 }
 
-void CLASS imacon_full_load_raw() {
+void
+imacon_full_load_raw() {
     int row, col;
 
-    if ( !image ) return;
-    for ( row = 0; row < height; row++ )
-        for ( col = 0; col < width; col++ )
+    if ( !image ) {
+        return;
+    }
+    for ( row = 0; row < height; row++ ) {
+        for ( col = 0; col < width; col++ ) {
             read_shorts(image[row * width + col], 3);
+        }
+    }
 }
 
-void CLASS packed_load_raw() {
+void
+packed_load_raw() {
     int vbits = 0, bwide, rbits, bite, half, irow, row, col, val, i;
     UINT64 bitbuf = 0;
 
     bwide = raw_width * tiff_bps / 8;
     bwide += bwide & GLOBAL_loadFlags >> 9;
     rbits = bwide * 8 - raw_width * tiff_bps;
-    if ( GLOBAL_loadFlags & 1 ) bwide = bwide * 16 / 15;
+    if ( GLOBAL_loadFlags & 1 ) {
+        bwide = bwide * 16 / 15;
+    }
     bite = 8 + (GLOBAL_loadFlags & 56);
     half = (raw_height + 1) >> 1;
     for ( irow = 0; irow < raw_height; irow++ ) {
@@ -2052,9 +2425,9 @@ void CLASS packed_load_raw() {
         if ( GLOBAL_loadFlags & 2 &&
              (row = irow % half * 2 + irow / half) == 1 &&
              GLOBAL_loadFlags & 4 ) {
-            if ( vbits = 0, tiff_compress )
+            if ( vbits = 0, tiff_compress ) {
                 fseek(ifp, data_offset - (-half * bwide & -2048), SEEK_SET);
-            else {
+            } else {
                 fseek(ifp, 0, SEEK_END);
                 fseek(ifp, ftell(ifp) >> 3 << 2, SEEK_SET);
             }
@@ -2062,20 +2435,23 @@ void CLASS packed_load_raw() {
         for ( col = 0; col < raw_width; col++ ) {
             for ( vbits -= tiff_bps; vbits < 0; vbits += bite ) {
                 bitbuf <<= bite;
-                for ( i = 0; i < bite; i += 8 )
+                for ( i = 0; i < bite; i += 8 ) {
                     bitbuf |= ((UINT64) fgetc(ifp) << i);
+                }
             }
             val = bitbuf << (64 - tiff_bps - vbits) >> (64 - tiff_bps);
             RAW(row, col ^ (GLOBAL_loadFlags >> 6 & 3)) = val;
             if ( GLOBAL_loadFlags & 1 && (col % 10) == 9 && fgetc(ifp) &&
-                 row < height + top_margin && col < width + left_margin )
+                 row < height + top_margin && col < width + left_margin ) {
                 derror();
+            }
         }
         vbits -= rbits;
     }
 }
 
-void CLASS nokia_load_raw() {
+void
+nokia_load_raw() {
     uchar *data, *dp;
     int rev, dwide, row, col, c;
     double sum[] = {0, 0};
@@ -2097,40 +2473,50 @@ void CLASS nokia_load_raw() {
     }
     free(data);
     maximum = 0x3ff;
-    if ( strcmp(make, "OmniVision")) return;
+    if ( strcmp(make, "OmniVision") ) {
+        return;
+    }
     row = raw_height / 2;
     for ( c = 0; c < width - 1; c++ ) {
         sum[c & 1] += SQR(RAW(row, c) - RAW(row + 1, c + 1));
         sum[~c & 1] += SQR(RAW(row + 1, c) - RAW(row, c + 1));
     }
-    if ( sum[1] > sum[0] ) filters = 0x4b4b4b4b;
+    if ( sum[1] > sum[0] ) {
+        filters = 0x4b4b4b4b;
+    }
 }
 
-void CLASS canon_rmf_load_raw() {
+void
+canon_rmf_load_raw() {
     int row, col, bits, orow, ocol, c;
 
-    for ( row = 0; row < raw_height; row++ )
+    for ( row = 0; row < raw_height; row++ ) {
         for ( col = 0; col < raw_width - 2; col += 3 ) {
             bits = get4();
             for ( c = 0; c < 3; c++ ) {
                 orow = row;
                 if ((ocol = col + c - 4) < 0 ) {
                     ocol += raw_width;
-                    if ((orow -= 2) < 0 )
+                    if ((orow -= 2) < 0 ) {
                         orow += raw_height;
+                    }
                 }
                 RAW(orow, ocol) = curve[bits >> (10 * c + 2) & 0x3ff];
             }
         }
+    }
     maximum = curve[0x3ff];
 }
 
-unsigned CLASS pana_bits(int nbits) {
+unsigned
+pana_bits(int nbits) {
     static uchar buf[0x4000];
     static int vbits;
     int byte;
 
-    if ( !nbits ) return vbits = 0;
+    if ( !nbits ) {
+        return vbits = 0;
+    }
     if ( !vbits ) {
         fread(buf + GLOBAL_loadFlags, 1, 0x4000 - GLOBAL_loadFlags, ifp);
         fread(buf, 1, GLOBAL_loadFlags, ifp);
@@ -2140,29 +2526,39 @@ unsigned CLASS pana_bits(int nbits) {
     return (buf[byte] | buf[byte + 1] << 8) >> (vbits & 7) & ~(-1 << nbits);
 }
 
-void CLASS panasonic_load_raw() {
+void
+panasonic_load_raw() {
     int row, col, i, j, sh = 0, pred[2], nonz[2];
 
     pana_bits(0);
-    for ( row = 0; row < height; row++ )
+    for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < raw_width; col++ ) {
-            if ((i = col % 14) == 0 )
+            if ( (i = col % 14) == 0 ) {
                 pred[0] = pred[1] = nonz[0] = nonz[1] = 0;
-            if ( i % 3 == 2 ) sh = 4 >> (3 - pana_bits(2));
+            }
+            if ( i % 3 == 2 ) {
+                sh = 4 >> (3 - pana_bits(2));
+            }
             if ( nonz[i & 1] ) {
-                if ((j = pana_bits(8))) {
+                if ( (j = pana_bits(8)) ) {
                     if ((pred[i & 1] -= 0x80 << sh) < 0 || sh == 4 )
                         pred[i & 1] &= ~(-1 << sh);
                     pred[i & 1] += j << sh;
                 }
-            } else
-                if ((nonz[i & 1] = pana_bits(8)) || i > 11 )
+            } else {
+                if ( (nonz[i & 1] = pana_bits(8)) || i > 11 ) {
                     pred[i & 1] = nonz[i & 1] << 4 | pana_bits(4);
-            if ((RAW(row, col) = pred[col & 1]) > 4098 && col < width ) derror();
+                }
+            }
+            if ( (RAW(row, col) = pred[col & 1]) > 4098 && col < width ) {
+                derror();
+            }
         }
+    }
 }
 
-void CLASS olympus_load_raw() {
+void
+olympus_load_raw() {
     ushort huff[4096];
     int row, col, nbits, sign, low, high, i, c, w, n, nw;
     int acarry[2][3], *carry, pred, diff;
@@ -2183,19 +2579,25 @@ void CLASS olympus_load_raw() {
             for ( nbits = 2 + i; (ushort) carry[0] >> (nbits + i); nbits++ );
             low = (sign = getbits(3)) & 3;
             sign = sign << 29 >> 31;
-            if ((high = getbithuff(12, huff)) == 12 )
+            if ( (high = getbithuff(12, huff)) == 12 ) {
                 high = getbits(16 - nbits) >> 1;
+            }
             carry[0] = (high << nbits) | getbits(nbits);
             diff = (carry[0] ^ sign) + carry[1];
             carry[1] = (diff * 3 + carry[1]) >> 5;
             carry[2] = carry[0] > 16 ? 0 : carry[2] + 1;
-            if ( col >= width ) continue;
-            if ( row < 2 && col < 2 ) pred = 0;
-            else
-                if ( row < 2 ) pred = RAW(row, col - 2);
-                else
-                    if ( col < 2 ) pred = RAW(row - 2, col);
-                    else {
+            if ( col >= width ) {
+                continue;
+            }
+            if ( row < 2 && col < 2 ) {
+                pred = 0;
+            } else {
+                if ( row < 2 ) {
+                    pred = RAW(row, col - 2);
+                } else {
+                    if ( col < 2 ) {
+                        pred = RAW(row - 2, col);
+                    } else {
                         w = RAW(row, col - 2);
                         n = RAW(row - 2, col);
                         nw = RAW(row - 2, col - 2);
@@ -2203,25 +2605,36 @@ void CLASS olympus_load_raw() {
                             if ( ABS(w - nw) > 32 || ABS(n - nw) > 32 )
                                 pred = w + n - nw;
                             else pred = (w + n) >> 1;
-                        } else pred = ABS(w - nw) > ABS(n - nw) ? w : n;
+                        } else {
+                            pred = ABS(w - nw) > ABS(n - nw) ? w : n;
+                        }
                     }
-            if ((RAW(row, col) = pred + ((diff << 2) | low)) >> 12 ) derror();
+                }
+            }
+            if ( (RAW(row, col) = pred + ((diff << 2) | low)) >> 12 ) {
+                derror();
+            }
         }
     }
 }
 
-void CLASS canon_crx_load_raw() {
+void
+canon_crx_load_raw() {
 }
 
-void CLASS fuji_xtrans_load_raw() {
+void
+fuji_xtrans_load_raw() {
 }
 
-void CLASS minolta_rd175_load_raw() {
+void
+minolta_rd175_load_raw() {
     uchar pixel[768];
     unsigned irow, box, row, col;
 
     for ( irow = 0; irow < 1481; irow++ ) {
-        if ( fread(pixel, 1, 768, ifp) < 768 ) derror();
+        if ( fread(pixel, 1, 768, ifp) < 768 ) {
+            derror();
+        }
         box = irow / 82;
         row = irow % 82 * 12 + ((box < 12) ? box | 1 : (box - 12) * 2);
         switch ( irow ) {
@@ -2238,21 +2651,26 @@ void CLASS minolta_rd175_load_raw() {
                 row = 985;
                 box = 1;
         }
-        if ((box < 12) && (box & 1)) {
-            for ( col = 0; col < 1533; col++, row ^= 1 )
-                if ( col != 1 )
+        if ( (box < 12) && (box & 1) ) {
+            for ( col = 0; col < 1533; col++, row ^= 1 ) {
+                if ( col != 1 ) {
                     RAW(row, col) = (col + 1) & 2 ?
                                     pixel[col / 2 - 1] + pixel[col / 2 + 1] : pixel[col / 2] << 1;
+                }
+            }
             RAW(row, 1) = pixel[1] << 1;
             RAW(row, 1533) = pixel[765] << 1;
-        } else
-            for ( col = row & 1; col < 1534; col += 2 )
+        } else {
+            for ( col = row & 1; col < 1534; col += 2 ) {
                 RAW(row, col) = pixel[col / 2] << 1;
+            }
+        }
     }
     maximum = 0xff << 1;
 }
 
-void CLASS quicktake_100_load_raw() {
+void
+quicktake_100_load_raw() {
     uchar pixel[484][644];
     static const short gstep[16] =
             {-89, -60, -44, -32, -22, -15, -8, -2, 2, 8, 15, 22, 32, 44, 60, 89};
@@ -2286,18 +2704,21 @@ void CLASS quicktake_100_load_raw() {
             val = ((pixel[row - 1][col - 1] + 2 * pixel[row - 1][col + 1] +
                     pixel[row][col - 2]) >> 2) + gstep[getbits(4)];
             pixel[row][col] = val = LIM(val, 0, 255);
-            if ( col < 4 )
+            if ( col < 4 ) {
                 pixel[row][col - 2] = pixel[row + 1][~row & 1] = val;
-            if ( row == 2 )
+            }
+            if ( row == 2 ) {
                 pixel[row - 1][col + 1] = pixel[row - 1][col + 3] = val;
+            }
         }
         pixel[row][col] = val;
     }
-    for ( rb = 0; rb < 2; rb++ )
-        for ( row = 2 + rb; row < height + 2; row += 2 )
+    for ( rb = 0; rb < 2; rb++ ) {
+        for ( row = 2 + rb; row < height + 2; row += 2 ) {
             for ( col = 3 - (row & 1); col < width + 2; col += 2 ) {
-                if ( row < 4 || col < 4 ) sharp = 2;
-                else {
+                if ( row < 4 || col < 4 ) {
+                    sharp = 2;
+                } else {
                     val = ABS(pixel[row - 2][col] - pixel[row][col - 2])
                           + ABS(pixel[row - 2][col] - pixel[row - 2][col - 2])
                           + ABS(pixel[row][col - 2] - pixel[row - 2][col - 2]);
@@ -2307,18 +2728,27 @@ void CLASS quicktake_100_load_raw() {
                 val = ((pixel[row - 2][col] + pixel[row][col - 2]) >> 1)
                       + rstep[sharp][getbits(2)];
                 pixel[row][col] = val = LIM(val, 0, 255);
-                if ( row < 4 ) pixel[row - 2][col + 2] = val;
-                if ( col < 4 ) pixel[row + 2][col - 2] = val;
+                if ( row < 4 ) {
+                    pixel[row - 2][col + 2] = val;
+                }
+                if ( col < 4 ) {
+                    pixel[row + 2][col - 2] = val;
+                }
             }
-    for ( row = 2; row < height + 2; row++ )
+        }
+    }
+    for ( row = 2; row < height + 2; row++ ) {
         for ( col = 3 - (row & 1); col < width + 2; col += 2 ) {
             val = ((pixel[row][col - 1] + (pixel[row][col] << 2) +
                     pixel[row][col + 1]) >> 1) - 0x100;
             pixel[row][col] = LIM(val, 0, 255);
         }
-    for ( row = 0; row < height; row++ )
-        for ( col = 0; col < width; col++ )
+    }
+    for ( row = 0; row < height; row++ ) {
+        for ( col = 0; col < width; col++ ) {
             RAW(row, col) = curve[pixel[row + 2][col + 2]];
+        }
+    }
     maximum = 0x3ff;
 }
 
@@ -2329,7 +2759,8 @@ void CLASS quicktake_100_load_raw() {
 #define PREDICTOR (c ? (buf[c][y-1][x] + buf[c][y][x+1]) / 2 \
 : (buf[c][y-1][x+1] + 2*buf[c][y-1][x] + buf[c][y][x+1]) / 4)
 
-void CLASS kodak_radc_load_raw() {
+void
+kodak_radc_load_raw() {
     static const char src[] = {
             1, 1, 2, 3, 3, 4, 4, 2, 5, 7, 6, 5, 7, 6, 7, 8,
             1, 0, 2, 1, 3, 3, 4, 4, 5, 2, 6, 7, 7, 6, 8, 5, 8, 8,
@@ -2356,13 +2787,15 @@ void CLASS kodak_radc_load_raw() {
     static const ushort pt[] =
             {0, 0, 1280, 1344, 2320, 3616, 3328, 8000, 4095, 16383, 65535, 16383};
 
-    for ( i = 2; i < 12; i += 2 )
-        for ( c = pt[i - 2]; c <= pt[i]; c++ )
+    for ( i = 2; i < 12; i += 2 ) {
+        for ( c = pt[i - 2]; c <= pt[i]; c++ ) {
             curve[c] = (float)
                                (c - pt[i - 2]) / (pt[i] - pt[i - 2]) * (pt[i + 1] - pt[i - 1]) + pt[i - 1] + 0.5;
+        }
+    }
     for ( s = i = 0; i < sizeof src; i += 2 ) {
         for ( c = 0; c < 256 >> src[i]; c++ ) {
-            ((ushort *) huff)[s++] = src[i] << 8 | (uchar) src[i + 1];
+            ((ushort *)huff)[s++] = src[i] << 8 | (uchar)src[i + 1];
         }
     }
     s = kodak_cbpp == 243 ? 2 : 3;
@@ -2370,8 +2803,9 @@ void CLASS kodak_radc_load_raw() {
         huff[18][c] = (8 - s) << 8 | c >> s << s | 1 << (s - 1);
     }
     getbits(-1);
-    for ( i = 0; i < sizeof(buf) / sizeof(short); i++ )
+    for ( i = 0; i < sizeof(buf) / sizeof(short); i++ ) {
         ((short *) buf)[i] = 2048;
+    }
     for ( row = 0; row < height; row += 4 ) {
         for ( c = 0; c < 3; c++ ) {
             mul[c] = getbits(6);
@@ -2381,19 +2815,21 @@ void CLASS kodak_radc_load_raw() {
             s = val > 65564 ? 10 : 12;
             x = ~(-1 << (s - 1));
             val <<= 12 - s;
-            for ( i = 0; i < sizeof(buf[0]) / sizeof(short); i++ )
+            for ( i = 0; i < sizeof(buf[0]) / sizeof(short); i++ ) {
                 ((short *) buf[c])[i] = (((short *) buf[c])[i] * val + x) >> s;
+            }
             last[c] = mul[c];
             for ( r = 0; r <= !c; r++ ) {
                 buf[c][1][width / 2] = buf[c][2][width / 2] = mul[c] << 7;
                 for ( tree = 1, col = width / 2; col > 0; ) {
                     if ((tree = radc_token(tree))) {
                         col -= 2;
-                        if ( tree == 8 )
+                        if ( tree == 8 ) {
                             FORYX buf[c][y][x] = (uchar) radc_token(18) * mul[c];
-                        else
+                        } else {
                             FORYX buf[c][y][x] = radc_token(tree + 10) * 16 + PREDICTOR;
-                    } else
+                        }
+                    } else {
                         do {
                             nreps = (col > 2) ? radc_token(9) + 1 : 1;
                             for ( rep = 0; rep < 8 && rep < nreps && col > 0; rep++ ) {
@@ -2406,20 +2842,26 @@ void CLASS kodak_radc_load_raw() {
                             }
                         }
                         while ( nreps == 9 );
+                    }
                 }
-                for ( y = 0; y < 2; y++ )
+                for ( y = 0; y < 2; y++ ) {
                     for ( x = 0; x < width / 2; x++ ) {
                         val = (buf[c][y + 1][x] << 4) / mul[c];
-                        if ( val < 0 ) val = 0;
-                        if ( c ) RAW(row + y * 2 + c - 1, x * 2 + 2 - c) = val;
-                        else
+                        if ( val < 0 ) {
+                            val = 0;
+                        }
+                        if ( c ) {
+                            RAW(row + y * 2 + c - 1, x * 2 + 2 - c) = val;
+                        } else {
                             RAW(row + r * 2 + y, x * 2 + y) = val;
+                        }
                     }
+                }
                 memcpy(buf[c][0] + !c, buf[c][2], sizeof buf[c][0] - 2 * !c);
             }
         }
-        for ( y = row; y < row + 4; y++ )
-            for ( x = 0; x < width; x++ )
+        for ( y = row; y < row + 4; y++ ) {
+            for ( x = 0; x < width; x++ ) {
                 if ((x + y) & 1 ) {
                     r = x ? x - 1 : x + 1;
                     s = x + 1 < width ? x + 1 : x - 1;
@@ -2427,9 +2869,12 @@ void CLASS kodak_radc_load_raw() {
                     if ( val < 0 ) val = 0;
                     RAW(y, x) = val;
                 }
+            }
+        }
     }
-    for ( i = 0; i < height * width; i++ )
+    for ( i = 0; i < height * width; i++ ) {
         raw_image[i] = curve[raw_image[i]];
+    }
     maximum = 0x3fff;
 }
 
@@ -2453,7 +2898,8 @@ fill_input_buffer(j_decompress_ptr cinfo) {
     return TRUE;
 }
 
-void CLASS kodak_jpeg_load_raw() {
+void
+kodak_jpeg_load_raw() {
     struct jpeg_decompress_struct cinfo;
     struct jpeg_error_mgr jerr;
     JSAMPARRAY buf;
@@ -2466,9 +2912,9 @@ void CLASS kodak_jpeg_load_raw() {
     cinfo.src->fill_input_buffer = fill_input_buffer;
     jpeg_read_header(&cinfo, TRUE);
     jpeg_start_decompress(&cinfo);
-    if ((cinfo.output_width != width) ||
+    if ( (cinfo.output_width != width) ||
         (cinfo.output_height * 2 != height) ||
-        (cinfo.output_components != 3)) {
+        (cinfo.output_components != 3) ) {
         fprintf(stderr, _("%s: incorrect JPEG dimensions\n"), ifname);
         jpeg_destroy_decompress(&cinfo);
         longjmp(failure, 3);
@@ -2492,9 +2938,11 @@ void CLASS kodak_jpeg_load_raw() {
     maximum = 0xff << 1;
 }
 
-void CLASS gamma_curve(double pwr, double ts, int mode, int imax);
+void
+gamma_curve(double pwr, double ts, int mode, int imax);
 
-void CLASS lossy_dng_load_raw() {
+void
+lossy_dng_load_raw() {
     struct jpeg_decompress_struct cinfo;
     struct jpeg_error_mgr jerr;
     JSAMPARRAY buf;
@@ -2517,14 +2965,20 @@ void CLASS lossy_dng_load_raw() {
                 continue;
             }
             fseek(ifp, 20, SEEK_CUR);
-            if ((c = get4()) > 2 ) break;
+            if ( (c = get4()) > 2 ) {
+                break;
+            }
             fseek(ifp, 12, SEEK_CUR);
-            if ((deg = get4()) > 8 ) break;
-            for ( i = 0; i <= deg && i < 9; i++ )
+            if ( (deg = get4()) > 8 ) {
+                break;
+            }
+            for ( i = 0; i <= deg && i < 9; i++ ) {
                 coeff[i] = getreal(12);
+            }
             for ( i = 0; i < 256; i++ ) {
-                for ( tot = j = 0; j <= deg; j++ )
+                for ( tot = j = 0; j <= deg; j++ ) {
                     tot += coeff[j] * pow(i / 255.0, j);
+                }
                 cur[c][i] = tot * 0xffff;
             }
         }
@@ -2539,8 +2993,9 @@ void CLASS lossy_dng_load_raw() {
     jpeg_create_decompress (&cinfo);
     while ( trow < raw_height ) {
         fseek(ifp, save += 4, SEEK_SET);
-        if ( tile_length < INT_MAX )
+        if ( tile_length < INT_MAX ) {
             fseek(ifp, get4(), SEEK_SET);
+        }
         jpeg_stdio_src(&cinfo, ifp);
         jpeg_read_header(&cinfo, TRUE);
         jpeg_start_decompress(&cinfo);
@@ -2557,8 +3012,9 @@ void CLASS lossy_dng_load_raw() {
             }
         }
         jpeg_abort_decompress(&cinfo);
-        if ((tcol += tile_width) >= raw_width )
+        if ( (tcol += tile_width) >= raw_width ) {
             trow += tile_length + (tcol = 0);
+        }
     }
     jpeg_destroy_decompress(&cinfo);
     maximum = 0xffff;
@@ -2566,7 +3022,8 @@ void CLASS lossy_dng_load_raw() {
 
 #endif
 
-void CLASS kodak_dc120_load_raw() {
+void
+kodak_dc120_load_raw() {
     static const int mul[4] = {162, 192, 187, 92};
     static const int add[4] = {0, 636, 424, 212};
     uchar pixel[848];
@@ -2575,37 +3032,46 @@ void CLASS kodak_dc120_load_raw() {
     for ( row = 0; row < height; row++ ) {
         if ( fread(pixel, 1, 848, ifp) < 848 ) derror();
         shift = row * mul[row & 3] + add[row & 3];
-        for ( col = 0; col < width; col++ )
+        for ( col = 0; col < width; col++ ) {
             RAW(row, col) = (ushort) pixel[(col + shift) % 848];
+        }
     }
     maximum = 0xff;
 }
 
-void CLASS eight_bit_load_raw() {
+void
+eight_bit_load_raw() {
     uchar *pixel;
     unsigned row, col;
 
     pixel = (uchar *) calloc(raw_width, sizeof *pixel);
     merror(pixel, "eight_bit_load_raw()");
     for ( row = 0; row < raw_height; row++ ) {
-        if ( fread(pixel, 1, raw_width, ifp) < raw_width ) derror();
-        for ( col = 0; col < raw_width; col++ )
+        if ( fread(pixel, 1, raw_width, ifp) < raw_width ) {
+            derror();
+        }
+        for ( col = 0; col < raw_width; col++ ) {
             RAW(row, col) = curve[pixel[col]];
+        }
     }
     free(pixel);
     maximum = curve[0xff];
 }
 
-void CLASS kodak_c330_load_raw() {
+void
+kodak_c330_load_raw() {
     uchar *pixel;
     int row, col, y, cb, cr, rgb[3], c;
 
-    pixel = (uchar *) calloc(raw_width, 2 * sizeof *pixel);
+    pixel = (uchar *)calloc(raw_width, 2 * sizeof *pixel);
     merror(pixel, "kodak_c330_load_raw()");
     for ( row = 0; row < height; row++ ) {
-        if ( fread(pixel, raw_width, 2, ifp) < 2 ) derror();
-        if ( GLOBAL_loadFlags && (row & 31) == 31 )
+        if ( fread(pixel, raw_width, 2, ifp) < 2 ) {
+            derror();
+        }
+        if ( GLOBAL_loadFlags && (row & 31) == 31 ) {
             fseek(ifp, raw_width * 32, SEEK_CUR);
+        }
         for ( col = 0; col < width; col++ ) {
             y = pixel[col * 2];
             cb = pixel[(col * 2 & -4) | 1] - 128;
@@ -2622,15 +3088,19 @@ void CLASS kodak_c330_load_raw() {
     maximum = curve[0xff];
 }
 
-void CLASS kodak_c603_load_raw() {
+void
+kodak_c603_load_raw() {
     uchar *pixel;
     int row, col, y, cb, cr, rgb[3], c;
 
-    pixel = (uchar *) calloc(raw_width, 3 * sizeof *pixel);
+    pixel = (uchar *)calloc(raw_width, 3 * sizeof *pixel);
     merror(pixel, "kodak_c603_load_raw()");
     for ( row = 0; row < height; row++ ) {
-        if ( ~row & 1 )
-            if ( fread(pixel, raw_width, 3, ifp) < 3 ) derror();
+        if ( ~row & 1 ) {
+            if ( fread(pixel, raw_width, 3, ifp) < 3 ) {
+                derror();
+            }
+        }
         for ( col = 0; col < width; col++ ) {
             y = pixel[width * 2 * (row & 1) + col];
             cb = pixel[width + (col & -2)] - 128;
@@ -2647,7 +3117,8 @@ void CLASS kodak_c603_load_raw() {
     maximum = curve[0xff];
 }
 
-void CLASS kodak_262_load_raw() {
+void
+kodak_262_load_raw() {
     static const uchar kodak_tree[2][26] =
             {{0, 1, 5, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
              {0, 3, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
@@ -2676,13 +3147,23 @@ void CLASS kodak_262_load_raw() {
             chess = (row + col) & 1;
             pi1 = chess ? pi - 2 : pi - raw_width - 1;
             pi2 = chess ? pi - 2 * raw_width : pi - raw_width + 1;
-            if ( col <= chess ) pi1 = -1;
-            if ( pi1 < 0 ) pi1 = pi2;
-            if ( pi2 < 0 ) pi2 = pi1;
-            if ( pi1 < 0 && col > 1 ) pi1 = pi2 = pi - 2;
+            if ( col <= chess ) {
+                pi1 = -1;
+            }
+            if ( pi1 < 0 ) {
+                pi1 = pi2;
+            }
+            if ( pi2 < 0 ) {
+                pi2 = pi1;
+            }
+            if ( pi1 < 0 && col > 1 ) {
+                pi1 = pi2 = pi - 2;
+            }
             pred = (pi1 < 0) ? 0 : (pixel[pi1] + pixel[pi2]) >> 1;
             pixel[pi] = val = pred + ljpeg_diff(huff[chess]);
-            if ( val >> 8 ) derror();
+            if ( val >> 8 ) {
+                derror();
+            }
             val = curve[pixel[pi++]];
             RAW(row, col) = val;
         }
@@ -2693,7 +3174,8 @@ void CLASS kodak_262_load_raw() {
     }
 }
 
-int CLASS kodak_65000_decode(short *out, int bsize) {
+int
+kodak_65000_decode(short *out, int bsize) {
     uchar c, blen[768];
     ushort raw[6];
     INT64 bitbuf = 0;
@@ -2703,20 +3185,21 @@ int CLASS kodak_65000_decode(short *out, int bsize) {
     bsize = (bsize + 3) & -4;
     for ( i = 0; i < bsize; i += 2 ) {
         c = fgetc(ifp);
-        if ((blen[i] = c & 15) > 12 ||
+        if ( (blen[i] = c & 15) > 12 ||
             (blen[i + 1] = c >> 4) > 12 ) {
             fseek(ifp, save, SEEK_SET);
             for ( i = 0; i < bsize; i += 8 ) {
                 read_shorts(raw, 6);
                 out[i] = raw[0] >> 12 << 8 | raw[2] >> 12 << 4 | raw[4] >> 12;
                 out[i + 1] = raw[1] >> 12 << 8 | raw[3] >> 12 << 4 | raw[5] >> 12;
-                for ( j = 0; j < 6; j++ )
+                for ( j = 0; j < 6; j++ ) {
                     out[i + 2 + j] = raw[j] & 0xfff;
+                }
             }
             return 1;
         }
     }
-    if ((bsize & 7) == 4 ) {
+    if ( (bsize & 7) == 4 ) {
         bitbuf = fgetc(ifp) << 8;
         bitbuf += fgetc(ifp);
         bits = 16;
@@ -2724,43 +3207,51 @@ int CLASS kodak_65000_decode(short *out, int bsize) {
     for ( i = 0; i < bsize; i++ ) {
         len = blen[i];
         if ( bits < len ) {
-            for ( j = 0; j < 32; j += 8 )
+            for ( j = 0; j < 32; j += 8 ) {
                 bitbuf += (INT64) fgetc(ifp) << (bits + (j ^ 8));
+            }
             bits += 32;
         }
         diff = bitbuf & (0xffff >> (16 - len));
         bitbuf >>= len;
         bits -= len;
-        if ((diff & (1 << (len - 1))) == 0 )
+        if ( (diff & (1 << (len - 1))) == 0 ) {
             diff -= (1 << len) - 1;
+        }
         out[i] = diff;
     }
     return 0;
 }
 
-void CLASS kodak_65000_load_raw() {
+void
+kodak_65000_load_raw() {
     short buf[256];
     int row, col, len, pred[2], ret, i;
 
-    for ( row = 0; row < height; row++ )
+    for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col += 256 ) {
             pred[0] = pred[1] = 0;
             len = MIN (256, width - col);
             ret = kodak_65000_decode(buf, len);
-            for ( i = 0; i < len; i++ )
-                if ((RAW(row, col + i) = curve[ret ? buf[i] :
-                                               (pred[i & 1] += buf[i])]) >> 12 )
+            for ( i = 0; i < len; i++ ) {
+                if ( (RAW(row, col + i) = curve[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12 ) {
                     derror();
+                }
+            }
         }
+    }
 }
 
-void CLASS kodak_ycbcr_load_raw() {
+void
+kodak_ycbcr_load_raw() {
     short buf[384], *bp;
     int row, col, len, c, i, j, k, y[2][2], cb, cr, rgb[3];
     ushort *ip;
 
-    if ( !image ) return;
-    for ( row = 0; row < height; row += 2 )
+    if ( !image ) {
+        return;
+    }
+    for ( row = 0; row < height; row += 2 ) {
         for ( col = 0; col < width; col += 128 ) {
             len = MIN (128, width - col);
             kodak_65000_decode(buf, len * 3);
@@ -2781,51 +3272,65 @@ void CLASS kodak_ycbcr_load_raw() {
                     }
             }
         }
+    }
 }
 
-void CLASS kodak_rgb_load_raw() {
+void
+kodak_rgb_load_raw() {
     short buf[768], *bp;
     int row, col, len, c, i, rgb[3];
     ushort *ip = image[0];
 
-    for ( row = 0; row < height; row++ )
+    for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col += 256 ) {
             len = MIN (256, width - col);
             kodak_65000_decode(buf, len * 3);
             memset(rgb, 0, sizeof rgb);
-            for ( bp = buf, i = 0; i < len; i++, ip += 4 )
+            for ( bp = buf, i = 0; i < len; i++, ip += 4 ) {
                 for ( c = 0; c < 3; c++ ) {
                     if ((ip[c] = rgb[c] += *bp++) >> 12 ) derror();
                 }
+            }
         }
+    }
 }
 
-void CLASS kodak_thumb_load_raw() {
+void
+kodak_thumb_load_raw() {
     int row, col;
     colors = thumb_misc >> 5;
-    for ( row = 0; row < height; row++ )
-        for ( col = 0; col < width; col++ )
+
+    for ( row = 0; row < height; row++ ) {
+        for ( col = 0; col < width; col++ ) {
             read_shorts(image[row * width + col], colors);
+        }
+    }
     maximum = (1 << (thumb_misc & 31)) - 1;
 }
 
-void CLASS sony_decrypt(unsigned *data, int len, int start, int key) {
+void
+sony_decrypt(unsigned *data, int len, int start, int key) {
     static unsigned pad[128], p;
 
     if ( start ) {
-        for ( p = 0; p < 4; p++ )
+        for ( p = 0; p < 4; p++ ) {
             pad[p] = key = key * 48828125 + 1;
+        }
         pad[3] = pad[3] << 1 | (pad[0] ^ pad[2]) >> 31;
-        for ( p = 4; p < 127; p++ )
+        for ( p = 4; p < 127; p++ ) {
             pad[p] = (pad[p - 4] ^ pad[p - 2]) << 1 | (pad[p - 3] ^ pad[p - 1]) >> 31;
-        for ( p = 0; p < 127; p++ )
+        }
+        for ( p = 0; p < 127; p++ ) {
             pad[p] = htonl(pad[p]);
+        }
     }
-    while ( len-- && p++ )
+    while ( len-- && p++ ) {
         *data++ ^= pad[(p - 1) & 127] = pad[p & 127] ^ pad[(p + 64) & 127];
+    }
 }
 
-void CLASS sony_load_raw() {
+void
+sony_load_raw() {
     uchar head[40];
     ushort *pixel;
     unsigned i, key, row, col;
@@ -2836,21 +3341,28 @@ void CLASS sony_load_raw() {
     key = get4();
     fseek(ifp, 164600, SEEK_SET);
     fread(head, 1, 40, ifp);
-    sony_decrypt((unsigned *) head, 10, 1, key);
-    for ( i = 26; i-- > 22; )
+    sony_decrypt((unsigned *)head, 10, 1, key);
+    for ( i = 26; i-- > 22; ) {
         key = key << 8 | head[i];
+    }
     fseek(ifp, data_offset, SEEK_SET);
     for ( row = 0; row < raw_height; row++ ) {
         pixel = raw_image + row * raw_width;
-        if ( fread(pixel, 2, raw_width, ifp) < raw_width ) derror();
-        sony_decrypt((unsigned *) pixel, raw_width / 2, !row, key);
-        for ( col = 0; col < raw_width; col++ )
-            if ((pixel[col] = ntohs(pixel[col])) >> 14 ) derror();
+        if ( fread(pixel, 2, raw_width, ifp) < raw_width ) {
+            derror();
+        }
+        sony_decrypt((unsigned *)pixel, raw_width / 2, !row, key);
+        for ( col = 0; col < raw_width; col++ ) {
+            if ( (pixel[col] = ntohs(pixel[col])) >> 14 ) {
+                derror();
+            }
+        }
     }
     maximum = 0x3ff0;
 }
 
-void CLASS sony_arw_load_raw() {
+void
+sony_arw_load_raw() {
     ushort huff[32770];
     static const ushort tab[18] =
             {0xf11, 0xf10, 0xe0f, 0xd0e, 0xc0d, 0xb0c, 0xa0b, 0x90a, 0x809,
@@ -2864,20 +3376,28 @@ void CLASS sony_arw_load_raw() {
         }
     }
     getbits(-1);
-    for ( col = raw_width; col--; )
+    for ( col = raw_width; col--; ) {
         for ( row = 0; row < raw_height + 1; row += 2 ) {
-            if ( row == raw_height ) row = 1;
-            if ((sum += ljpeg_diff(huff)) >> 12 ) derror();
-            if ( row < height ) RAW(row, col) = sum;
+            if ( row == raw_height ) {
+                row = 1;
+            }
+            if ( (sum += ljpeg_diff(huff)) >> 12 ) {
+                derror();
+            }
+            if ( row < height ) {
+                RAW(row, col) = sum;
+            }
         }
+    }
 }
 
-void CLASS sony_arw2_load_raw() {
+void
+sony_arw2_load_raw() {
     uchar *data, *dp;
     ushort pix[16];
     int row, col, val, max, min, imax, imin, sh, bit, i;
 
-    data = (uchar *) malloc(raw_width + 1);
+    data = (uchar *)malloc(raw_width + 1);
     merror(data, "sony_arw2_load_raw()");
     for ( row = 0; row < height; row++ ) {
         fread(data, 1, raw_width, ifp);
@@ -2887,24 +3407,32 @@ void CLASS sony_arw2_load_raw() {
             imax = 0x0f & val >> 22;
             imin = 0x0f & val >> 26;
             for ( sh = 0; sh < 4 && 0x80 << sh <= max - min; sh++ );
-            for ( bit = 30, i = 0; i < 16; i++ )
-                if ( i == imax ) pix[i] = max;
-                else
-                    if ( i == imin ) pix[i] = min;
-                    else {
+            for ( bit = 30, i = 0; i < 16; i++ ) {
+                if ( i == imax ) {
+                    pix[i] = max;
+                } else {
+                    if ( i == imin ) {
+                        pix[i] = min;
+                    } else {
                         pix[i] = ((sget2(dp + (bit >> 3)) >> (bit & 7) & 0x7f) << sh) + min;
-                        if ( pix[i] > 0x7ff ) pix[i] = 0x7ff;
+                        if ( pix[i] > 0x7ff ) {
+                            pix[i] = 0x7ff;
+                        }
                         bit += 7;
                     }
-            for ( i = 0; i < 16; i++, col += 2 )
+                }
+            }
+            for ( i = 0; i < 16; i++, col += 2 ) {
                 RAW(row, col) = curve[pix[i] << 1] >> 2;
+            }
             col -= col & 1 ? 1 : 31;
         }
     }
     free(data);
 }
 
-void CLASS samsung_load_raw() {
+void
+samsung_load_raw() {
     int row, col, c, i, dir, op[4], len[4];
 
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
@@ -2914,7 +3442,7 @@ void CLASS samsung_load_raw() {
         ph1_bits(-1);
         for ( c = 0; c < 4; c++ ) {
             len[c] = row < 2 ? 7 : 4;
-        };
+        }
         for ( col = 0; col < raw_width; col += 16 ) {
             dir = ph1_bits(1);
             for ( c = 0; c < 4; c++ ) {
@@ -2942,11 +3470,15 @@ void CLASS samsung_load_raw() {
             }
         }
     }
-    for ( row = 0; row < raw_height - 1; row += 2 )
-        for ( col = 0; col < raw_width - 1; col += 2 ) SWAP (RAW(row, col + 1), RAW(row + 1, col));
+    for ( row = 0; row < raw_height - 1; row += 2 ) {
+        for ( col = 0; col < raw_width - 1; col += 2 ) {
+            SWAP (RAW(row, col + 1), RAW(row + 1, col));
+        }
+    }
 }
 
-void CLASS samsung2_load_raw() {
+void
+samsung2_load_raw() {
     static const ushort tab[14] =
             {0x304, 0x307, 0x206, 0x205, 0x403, 0x600, 0x709,
              0x80a, 0x90b, 0xa0c, 0xa0d, 0x501, 0x408, 0x402};
@@ -2961,17 +3493,24 @@ void CLASS samsung2_load_raw() {
         }
     }
     getbits(-1);
-    for ( row = 0; row < raw_height; row++ )
+    for ( row = 0; row < raw_height; row++ ) {
         for ( col = 0; col < raw_width; col++ ) {
             diff = ljpeg_diff(huff);
-            if ( col < 2 ) hpred[col] = vpred[row & 1][col] += diff;
-            else hpred[col & 1] += diff;
+            if ( col < 2 ) {
+                hpred[col] = vpred[row & 1][col] += diff;
+            } else {
+                hpred[col & 1] += diff;
+            }
             RAW(row, col) = hpred[col & 1];
-            if ( hpred[col & 1] >> tiff_bps ) derror();
+            if ( hpred[col & 1] >> tiff_bps ) {
+                derror();
+            }
         }
+    }
 }
 
-void CLASS samsung3_load_raw() {
+void
+samsung3_load_raw() {
     int opt, init, mag, pmode, row, tab, col, pred, diff, i, c;
     ushort lent[3][2], len[4], *prow[2];
 
@@ -2994,11 +3533,13 @@ void CLASS samsung3_load_raw() {
                 i = ph1_bits(2);
                 mag = i < 3 ? mag - '2' + "204"[i] : ph1_bits(12);
             }
-            if ( opt & 2 )
+            if ( opt & 2 ) {
                 pmode = 7 - 4 * ph1_bits(1);
-            else
-                if ( !ph1_bits(1))
+            } else {
+                if ( !ph1_bits(1)) {
                     pmode = ph1_bits(3);
+                }
+            }
             if ( opt & 1 || !ph1_bits(1)) {
                 for ( c = 0; c < 4; c++ ) {
                     len[c] = ph1_bits(2);
@@ -3030,7 +3571,8 @@ void CLASS samsung3_load_raw() {
 #define HOLE(row) ((holes >> (((row) - raw_height) & 7)) & 1)
 
 /* Kudos to Rich Taylor for figuring out SMaL's compression algorithm. */
-void CLASS smal_decode_segment(unsigned seg[2][2], int holes) {
+void
+smal_decode_segment(unsigned seg[2][2], int holes) {
     uchar hist[3][13] = {
             {7, 7, 0, 0, 63, 55, 47, 39, 31, 23, 15, 7, 0},
             {7, 7, 0, 0, 63, 55, 47, 39, 31, 23, 15, 7, 0},
@@ -3042,18 +3584,24 @@ void CLASS smal_decode_segment(unsigned seg[2][2], int holes) {
 
     fseek(ifp, seg[0][1] + 1, SEEK_SET);
     getbits(-1);
-    if ( seg[1][0] > raw_width * raw_height )
+    if ( seg[1][0] > raw_width * raw_height ) {
         seg[1][0] = raw_width * raw_height;
+    }
     for ( pix = seg[0][0]; pix < seg[1][0]; pix++ ) {
         for ( s = 0; s < 3; s++ ) {
             data = data << nbits | getbits(nbits);
-            if ( carry < 0 )
+            if ( carry < 0 ) {
                 carry = (nbits += carry + 1) < 1 ? nbits - 1 : 0;
-            while ( --nbits >= 0 )
-                if ((data >> nbits & 0xff) == 0xff ) break;
-            if ( nbits > 0 )
+            }
+            while ( --nbits >= 0 ) {
+                if ( (data >> nbits & 0xff) == 0xff ) {
+                    break;
+                }
+            }
+            if ( nbits > 0 ) {
                 data = ((data & ((1 << (nbits - 1)) - 1)) << 1) |
                        ((data + (((data & (1 << (nbits - 1)))) << 1)) & (-1 << nbits));
+            }
             if ( nbits >= 0 ) {
                 data += getbits(1);
                 carry = nbits - 8;
@@ -3061,7 +3609,9 @@ void CLASS smal_decode_segment(unsigned seg[2][2], int holes) {
             count = ((((data - range + 1) & 0xffff) << 2) - 1) / (high >> 4);
             for ( bin = 0; hist[s][bin + 5] > count; bin++ );
             low = hist[s][bin + 5] * (high >> 4) >> 2;
-            if ( bin ) high = hist[s][bin + 4] * (high >> 4) >> 2;
+            if ( bin ) {
+                high = hist[s][bin + 4] * (high >> 4) >> 2;
+            }
             high -= low;
             for ( nbits = 0; high << nbits < 128; nbits++ );
             range = (range + low) << nbits;
@@ -3073,27 +3623,38 @@ void CLASS smal_decode_segment(unsigned seg[2][2], int holes) {
                 hist[s][2] = 1;
             }
             if ( hist[s][hist[s][1] + 4] - hist[s][hist[s][1] + 5] > 1 ) {
-                if ( bin < hist[s][1] )
-                    for ( i = bin; i < hist[s][1]; i++ ) hist[s][i + 5]--;
-                else
-                    if ( next <= bin )
-                        for ( i = hist[s][1]; i < bin; i++ ) hist[s][i + 5]++;
+                if ( bin < hist[s][1] ) {
+                    for ( i = bin; i < hist[s][1]; i++ ) {
+                        hist[s][i + 5]--;
+                    }
+                } else {
+                    if ( next <= bin ) {
+                        for ( i = hist[s][1]; i < bin; i++ ) {
+                            hist[s][i + 5]++;
+                        }
+                    }
+                }
             }
             hist[s][1] = next;
             sym[s] = bin;
         }
         diff = sym[2] << 5 | sym[1] << 2 | (sym[0] & 3);
-        if ( sym[0] & 4 )
+        if ( sym[0] & 4 ) {
             diff = diff ? -diff : 0x80;
-        if ( ftell(ifp) + 12 >= seg[1][1] )
+        }
+        if ( ftell(ifp) + 12 >= seg[1][1] ) {
             diff = 0;
+        }
         raw_image[pix] = pred[pix & 1] += diff;
-        if ( !(pix & 1) && HOLE(pix / raw_width)) pix += 2;
+        if ( !(pix & 1) && HOLE(pix / raw_width) ) {
+            pix += 2;
+        }
     }
     maximum = 0xff;
 }
 
-void CLASS smal_v6_load_raw() {
+void
+smal_v6_load_raw() {
     unsigned seg[2][2];
 
     fseek(ifp, 16, SEEK_SET);
@@ -3104,23 +3665,31 @@ void CLASS smal_v6_load_raw() {
     smal_decode_segment(seg, 0);
 }
 
-int CLASS median4(int *p) {
+int
+median4(int *p) {
     int min, max, sum, i;
 
     min = max = sum = p[0];
     for ( i = 1; i < 4; i++ ) {
         sum += p[i];
-        if ( min > p[i] ) min = p[i];
-        if ( max < p[i] ) max = p[i];
+        if ( min > p[i] ) {
+            min = p[i];
+        }
+        if ( max < p[i] ) {
+            max = p[i];
+        }
     }
     return (sum - min - max) >> 1;
 }
 
-void CLASS fill_holes(int holes) {
+void
+fill_holes(int holes) {
     int row, col, val[4];
 
     for ( row = 2; row < height - 2; row++ ) {
-        if ( !HOLE(row)) continue;
+        if ( !HOLE(row) ) {
+            continue;
+        }
         for ( col = 1; col < width - 1; col += 4 ) {
             val[0] = RAW(row - 1, col - 1);
             val[1] = RAW(row - 1, col + 1);
@@ -3128,39 +3697,46 @@ void CLASS fill_holes(int holes) {
             val[3] = RAW(row + 1, col + 1);
             RAW(row, col) = median4(val);
         }
-        for ( col = 2; col < width - 2; col += 4 )
-            if ( HOLE(row - 2) || HOLE(row + 2))
+        for ( col = 2; col < width - 2; col += 4 ) {
+            if ( HOLE(row - 2) || HOLE(row + 2)) {
                 RAW(row, col) = (RAW(row, col - 2) + RAW(row, col + 2)) >> 1;
-            else {
+            } else {
                 val[0] = RAW(row, col - 2);
                 val[1] = RAW(row, col + 2);
                 val[2] = RAW(row - 2, col);
                 val[3] = RAW(row + 2, col);
                 RAW(row, col) = median4(val);
             }
+        }
     }
 }
 
-void CLASS smal_v9_load_raw() {
+void
+smal_v9_load_raw() {
     unsigned seg[256][2], offset, nseg, holes, i;
 
     fseek(ifp, 67, SEEK_SET);
     offset = get4();
     nseg = (uchar) fgetc(ifp);
     fseek(ifp, offset, SEEK_SET);
-    for ( i = 0; i < nseg * 2; i++ )
+    for ( i = 0; i < nseg * 2; i++ ) {
         ((unsigned *) seg)[i] = get4() + data_offset * (i & 1);
+    }
     fseek(ifp, 78, SEEK_SET);
     holes = fgetc(ifp);
     fseek(ifp, 88, SEEK_SET);
     seg[nseg][0] = raw_height * raw_width;
     seg[nseg][1] = get4() + data_offset;
-    for ( i = 0; i < nseg; i++ )
+    for ( i = 0; i < nseg; i++ ) {
         smal_decode_segment(seg + i, holes);
-    if ( holes ) fill_holes(holes);
+    }
+    if ( holes ) {
+        fill_holes(holes);
+    }
 }
 
-void CLASS redcine_load_raw() {
+void
+redcine_load_raw() {
 #ifndef NO_JASPER
   int c, row, col;
   jas_stream_t *in;
@@ -3173,10 +3749,12 @@ void CLASS redcine_load_raw() {
   in = jas_stream_fopen (ifname, "rb");
   jas_stream_seek (in, data_offset+20, SEEK_SET);
   jimg = jas_image_decode (in, -1, 0);
-  if (!jimg) longjmp (failure, 3);
-  jmat = jas_matrix_create (height/2, width/2);
+  if (!jimg) {
+      longjmp (failure, 3);
+  }
+  jmat = jas_matrix_create(height/2, width/2);
   merror (jmat, "redcine_load_raw()");
-  img = (ushort *) calloc ((height+2), (width+2)*2);
+  img = (ushort *)calloc ((height+2), (width+2)*2);
   merror (img, "redcine_load_raw()");
   for ( c = 0; c < 4; c++ ) {
     jas_image_readcmpt (jimg, c, 0, 0, width/2, height/2, jmat);
@@ -3217,14 +3795,16 @@ void CLASS redcine_load_raw() {
 
 /* RESTRICTED code starts here */
 
-void CLASS foveon_decoder(unsigned size, unsigned code) {
+void
+foveon_decoder(unsigned size, unsigned code) {
     static unsigned huff[1024];
     struct decode *cur;
     int i, len;
 
     if ( !code ) {
-        for ( i = 0; i < size; i++ )
+        for ( i = 0; i < size; i++ ) {
             huff[i] = get4();
+        }
         memset(first_decode, 0, sizeof first_decode);
         free_decode = first_decode;
     }
@@ -3233,13 +3813,17 @@ void CLASS foveon_decoder(unsigned size, unsigned code) {
         fprintf(stderr, _("%s: decoder table overflow\n"), ifname);
         longjmp(failure, 2);
     }
-    if ( code )
-        for ( i = 0; i < size; i++ )
+    if ( code ) {
+        for ( i = 0; i < size; i++ ) {
             if ( huff[i] == code ) {
                 cur->leaf = i;
                 return;
             }
-    if ((len = code >> 27) > 26 ) return;
+        }
+    }
+    if ( (len = code >> 27) > 26 ) {
+        return;
+    }
     code = (len + 1) << 27 | (code & 0x3ffffff) << 1;
 
     cur->branch[0] = free_decode;
@@ -3248,7 +3832,8 @@ void CLASS foveon_decoder(unsigned size, unsigned code) {
     foveon_decoder(size, code + 1);
 }
 
-void CLASS foveon_thumb() {
+void
+foveon_thumb() {
     unsigned bwide, row, col, bitbuf = 0, bit = 1, c, i;
     char *buf;
     struct decode *dindex;
@@ -3257,7 +3842,9 @@ void CLASS foveon_thumb() {
     bwide = get4();
     fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
     if ( bwide > 0 ) {
-        if ( bwide < thumb_width * 3 ) return;
+        if ( bwide < thumb_width * 3 ) {
+            return;
+        }
         buf = (char *) malloc(bwide);
         merror(buf, "foveon_thumb()");
         for ( row = 0; row < thumb_height; row++ ) {
@@ -3271,33 +3858,43 @@ void CLASS foveon_thumb() {
 
     for ( row = 0; row < thumb_height; row++ ) {
         memset(pred, 0, sizeof pred);
-        if ( !bit ) get4();
-        for ( bit = col = 0; col < thumb_width; col++ )
+        if ( !bit ) {
+            get4();
+        }
+        for ( bit = col = 0; col < thumb_width; col++ ) {
             for ( c = 0; c < 3; c++ ) {
                 for ( dindex = first_decode; dindex->branch[0]; ) {
-                    if ((bit = (bit - 1) & 31) == 31 )
-                        for ( i = 0; i < 4; i++ )
+                    if ((bit = (bit - 1) & 31) == 31 ) {
+                        for ( i = 0; i < 4; i++ ) {
                             bitbuf = (bitbuf << 8) + fgetc(ifp);
+                        }
+                    }
                     dindex = dindex->branch[bitbuf >> bit & 1];
                 }
                 pred[c] += dindex->leaf;
                 fputc(pred[c], ofp);
             }
+        }
     }
 }
 
-void CLASS foveon_sd_load_raw() {
+void
+foveon_sd_load_raw() {
     struct decode *dindex;
     short diff[1024];
     unsigned bitbuf = 0;
     int pred[3], row, col, bit = -1, c, i;
 
-    read_shorts((ushort *) diff, 1024);
-    if ( !GLOBAL_loadFlags ) foveon_decoder(1024, 0);
+    read_shorts((ushort *)diff, 1024);
+    if ( !GLOBAL_loadFlags ) {
+        foveon_decoder(1024, 0);
+    }
 
     for ( row = 0; row < height; row++ ) {
         memset(pred, 0, sizeof pred);
-        if ( !bit && !GLOBAL_loadFlags && atoi(model + 2) < 14 ) get4();
+        if ( !bit && !GLOBAL_loadFlags && atoi(model + 2) < 14 ) {
+            get4();
+        }
         for ( col = bit = 0; col < width; col++ ) {
             if ( GLOBAL_loadFlags ) {
                 bitbuf = get4();
@@ -3307,13 +3904,17 @@ void CLASS foveon_sd_load_raw() {
             } else {
                 for ( c = 0; c < 3; c++ ) {
                     for ( dindex = first_decode; dindex->branch[0]; ) {
-                        if ((bit = (bit - 1) & 31) == 31 )
-                            for ( i = 0; i < 4; i++ )
+                        if ( (bit = (bit - 1) & 31) == 31 ) {
+                            for ( i = 0; i < 4; i++ ) {
                                 bitbuf = (bitbuf << 8) + fgetc(ifp);
+                            }
+                        }
                         dindex = dindex->branch[bitbuf >> bit & 1];
                     }
                     pred[c] += diff[dindex->leaf];
-                    if ( pred[c] >> 16 && ~pred[c] >> 16 ) derror();
+                    if ( pred[c] >> 16 && ~pred[c] >> 16 ) {
+                        derror();
+                    }
                 }
             }
             for ( c = 0; c < 3; c++ ) {
@@ -3323,20 +3924,23 @@ void CLASS foveon_sd_load_raw() {
     }
 }
 
-void CLASS foveon_huff(ushort *huff) {
+void
+foveon_huff(ushort *huff) {
     int i, j, clen, code;
 
     huff[0] = 8;
     for ( i = 0; i < 13; i++ ) {
         clen = getc(ifp);
         code = getc(ifp);
-        for ( j = 0; j < 256 >> clen; )
+        for ( j = 0; j < 256 >> clen; ) {
             huff[code + ++j] = clen << 8 | i;
+        }
     }
     get2();
 }
 
-void CLASS foveon_dp_load_raw() {
+void
+foveon_dp_load_raw() {
     unsigned c, roff[4], row, col, diff;
     ushort huff[512], vpred[2][2], hpred[2];
 
@@ -3353,15 +3957,19 @@ void CLASS foveon_dp_load_raw() {
         for ( row = 0; row < height; row++ ) {
             for ( col = 0; col < width; col++ ) {
                 diff = ljpeg_diff(huff);
-                if ( col < 2 ) hpred[col] = vpred[row & 1][col] += diff;
-                else hpred[col & 1] += diff;
+                if ( col < 2 ) {
+                    hpred[col] = vpred[row & 1][col] += diff;
+                } else {
+                    hpred[col & 1] += diff;
+                }
                 image[row * width + col][c] = hpred[col & 1];
             }
         }
     }
 }
 
-void CLASS foveon_load_camf() {
+void
+foveon_load_camf() {
     unsigned type, wide, high, i, j, row, col, diff;
     ushort huff[258], vpred[2][2] = {{512, 512},
                                      {512, 512}}, hpred[2];
@@ -3379,7 +3987,7 @@ void CLASS foveon_load_camf() {
             wide = high * (INT64) 301593171 >> 24;
             meta_data[i] ^= ((((high << 8) - wide) >> 1) + wide) >> 17;
         }
-    } else
+    } else {
         if ( type == 4 ) {
             free(meta_data);
             meta_data = (char *) malloc(meta_length = wide * high * 3 / 2);
@@ -3399,98 +4007,138 @@ void CLASS foveon_load_camf() {
                     }
                 }
             }
-        } else
+        } else {
             fprintf(stderr, _("%s has unknown CAMF type %d.\n"), ifname, type);
+        }
+    }
 }
 
-const char *CLASS foveon_camf_param(const char *block, const char *param) {
+const char *
+foveon_camf_param(const char *block, const char *param) {
     unsigned idx, num;
     char *pos, *cp, *dp;
 
     for ( idx = 0; idx < meta_length; idx += sget4(pos + 8)) {
         pos = meta_data + idx;
-        if ( strncmp(pos, "CMb", 3)) break;
-        if ( pos[3] != 'P' ) continue;
-        if ( strcmp(block, pos + sget4(pos + 12))) continue;
+        if ( strncmp(pos, "CMb", 3)) {
+            break;
+        }
+        if ( pos[3] != 'P' ) {
+            continue;
+        }
+        if ( strcmp(block, pos + sget4(pos + 12)) ) {
+            continue;
+        }
         cp = pos + sget4(pos + 16);
         num = sget4(cp);
         dp = pos + sget4(cp + 4);
         while ( num-- ) {
             cp += 8;
-            if ( !strcmp(param, dp + sget4(cp)))
+            if ( !strcmp(param, dp + sget4(cp)) ) {
                 return dp + sget4(cp + 4);
+            }
         }
     }
     return 0;
 }
 
-void *CLASS foveon_camf_matrix(unsigned dim[3], const char *name) {
+void *
+foveon_camf_matrix(unsigned dim[3], const char *name) {
     unsigned i, idx, type, ndim, size, *mat;
     char *pos, *cp, *dp;
     double dsize;
 
-    for ( idx = 0; idx < meta_length; idx += sget4(pos + 8)) {
+    for ( idx = 0; idx < meta_length; idx += sget4(pos + 8) ) {
         pos = meta_data + idx;
-        if ( strncmp(pos, "CMb", 3)) break;
-        if ( pos[3] != 'M' ) continue;
-        if ( strcmp(name, pos + sget4(pos + 12))) continue;
+        if ( strncmp(pos, "CMb", 3)) {
+            break;
+        }
+        if ( pos[3] != 'M' ) {
+            continue;
+        }
+        if ( strcmp(name, pos + sget4(pos + 12)) ) {
+            continue;
+        }
         dim[0] = dim[1] = dim[2] = 1;
         cp = pos + sget4(pos + 16);
         type = sget4(cp);
-        if ((ndim = sget4(cp + 4)) > 3 ) break;
+        if ( (ndim = sget4(cp + 4)) > 3 ) {
+            break;
+        }
         dp = pos + sget4(cp + 8);
         for ( i = ndim; i--; ) {
             cp += 12;
             dim[i] = sget4(cp);
         }
-        if ((dsize = (double) dim[0] * dim[1] * dim[2]) > meta_length / 4 ) break;
-        mat = (unsigned *) malloc((size = dsize) * 4);
+        if ( (dsize = (double) dim[0] * dim[1] * dim[2]) > meta_length / 4 ) {
+            break;
+        }
+        mat = (unsigned *)malloc((size = dsize) * 4);
         merror(mat, "foveon_camf_matrix()");
-        for ( i = 0; i < size; i++ )
-            if ( type && type != 6 )
+        for ( i = 0; i < size; i++ ) {
+            if ( type && type != 6 ) {
                 mat[i] = sget4(dp + i * 4);
-            else
+            } else {
                 mat[i] = sget4(dp + i * 2) & 0xffff;
+            }
+        }
         return mat;
     }
     fprintf(stderr, _("%s: \"%s\" matrix not found!\n"), ifname, name);
     return 0;
 }
 
-int CLASS foveon_fixed(void *ptr, int size, const char *name) {
+int
+foveon_fixed(void *ptr, int size, const char *name) {
     void *dp;
     unsigned dim[3];
 
-    if ( !name ) return 0;
+    if ( !name ) {
+        return 0;
+    }
     dp = foveon_camf_matrix(dim, name);
-    if ( !dp ) return 0;
+    if ( !dp ) {
+        return 0;
+    }
     memcpy(ptr, dp, size * 4);
     free(dp);
     return 1;
 }
 
-float CLASS foveon_avg(short *pix, int range[2], float cfilt) {
+float
+foveon_avg(short *pix, int range[2], float cfilt) {
     int i;
     float val, min = FLT_MAX, max = -FLT_MAX, sum = 0;
 
     for ( i = range[0]; i <= range[1]; i++ ) {
         sum += val = pix[i * 4] + (pix[i * 4] - pix[(i - 1) * 4]) * cfilt;
-        if ( min > val ) min = val;
-        if ( max < val ) max = val;
+        if ( min > val ) {
+            min = val;
+        }
+        if ( max < val ) {
+            max = val;
+        }
     }
-    if ( range[1] - range[0] == 1 ) return sum / 2;
+    if ( range[1] - range[0] == 1 ) {
+        return sum / 2;
+    }
     return (sum - min - max) / (range[1] - range[0] - 1);
 }
 
-short *CLASS foveon_make_curve(double max, double mul, double filt) {
+short *
+foveon_make_curve(double max, double mul, double filt) {
     short *curve;
     unsigned i, size;
     double x;
 
-    if ( !filt ) filt = 0.8;
+    if ( !filt ) {
+        filt = 0.8;
+    }
     size = 4 * M_PI * max / filt;
-    if ( size == UINT_MAX) size--;
-    curve = (short *) calloc(size + 1, sizeof *curve);
+    if ( size == UINT_MAX) {
+        size--;
+    }
+    curve = (short *)calloc(size + 1, sizeof *curve);
     merror(curve, "foveon_make_curve()");
     curve[0] = size;
     for ( i = 0; i < size; i++ ) {
@@ -3500,8 +4148,8 @@ short *CLASS foveon_make_curve(double max, double mul, double filt) {
     return curve;
 }
 
-void CLASS foveon_make_curves
-        (short **curvep, float dq[3], float div[3], float filt) {
+void
+foveon_make_curves(short **curvep, float dq[3], float div[3], float filt) {
     double mul[3], max = 0;
     int c;
 
@@ -3518,13 +4166,16 @@ void CLASS foveon_make_curves
 
 #define image ((short (*)[4]) image)
 
-int CLASS foveon_apply_curve(short *curve, int i) {
-    if ( abs(i) >= curve[0] ) return 0;
+int
+foveon_apply_curve(short *curve, int i) {
+    if ( abs(i) >= curve[0] ) {
+        return 0;
+    }
     return i < 0 ? -curve[1 - i] : curve[1 + i];
 }
 
-
-void CLASS foveon_interpolate() {
+void
+foveon_interpolate() {
     static const short hood[] = {-1, -1, -1, 0, -1, 1, 0, -1, 0, 1, 1, -1, 1, 0, 1, 1};
     short *pix, prev[3], *curve[8], (*shrink)[3];
     float cfilt = 0, ddft[3][3][2], ppm[3][3][3];
@@ -3541,8 +4192,9 @@ void CLASS foveon_interpolate() {
     char str[128];
     const char *cp;
 
-    if ( OPTIONS_values->verbose )
+    if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("Foveon interpolation...\n"));
+    }
 
     foveon_load_camf();
     foveon_fixed(dscr, 4, "DarkShieldColRange");
@@ -3554,12 +4206,13 @@ void CLASS foveon_interpolate() {
     foveon_fixed(color_dq, 3,
                  foveon_camf_param("IncludeBlocks", "ColorDQ") ?
                  "ColorDQ" : "ColorDQCamRGB");
-    if ( foveon_camf_param("IncludeBlocks", "ColumnFilter"))
+    if ( foveon_camf_param("IncludeBlocks", "ColumnFilter") ) {
         foveon_fixed(&cfilt, 1, "ColumnFilter");
+    }
 
     memset(ddft, 0, sizeof ddft);
     if ( !foveon_camf_param("IncludeBlocks", "DarkDrift")
-         || !foveon_fixed(ddft[1][0], 12, "DarkDrift"))
+         || !foveon_fixed(ddft[1][0], 12, "DarkDrift") ) {
         for ( i = 0; i < 2; i++ ) {
             foveon_fixed(dstb, 4, i ? "DarkShieldBottom" : "DarkShieldTop");
             for ( row = dstb[1]; row <= dstb[3]; row++ ) {
@@ -3573,8 +4226,9 @@ void CLASS foveon_interpolate() {
                 ddft[i + 1][c][1] /= (dstb[3] - dstb[1] + 1) * (dstb[2] - dstb[0] + 1);
             }
         }
+    }
 
-    if ( !(cp = foveon_camf_param("WhiteBalanceIlluminants", model2))) {
+    if ( !(cp = foveon_camf_param("WhiteBalanceIlluminants", model2)) ) {
         fprintf(stderr, _("%s: Invalid white balance \"%s\"\n"), ifname, model2);
         return;
     }
@@ -3716,13 +4370,14 @@ void CLASS foveon_interpolate() {
     }
 
     memset(total, 0, sizeof total);
-    for ( row = 2; row < height; row += 4 )
+    for ( row = 2; row < height; row += 4 ) {
         for ( col = 2; col < width; col += 4 ) {
             for ( c = 0; c < 3; c++ ) {
                 total[c] += (short) image[row * width + col][c];
             }
             total[3]++;
         }
+    }
     for ( row = 0; row < height; row++ ) {
         for ( c = 0; c < 3; c++ ) {
             black[row][c] += fsum[c] / 2 + total[c] / (total[3] * 100.0);
@@ -3737,7 +4392,9 @@ void CLASS foveon_interpolate() {
         pix = image[row * width];
         memcpy(prev, pix, sizeof prev);
         frow = row / (height - 1.0) * (dim[2] - 1);
-        if ((irow = frow) == dim[2] - 1 ) irow--;
+        if ( (irow = frow) == dim[2] - 1 ) {
+            irow--;
+        }
         frow -= irow;
         for ( i = 0; i < dim[1]; i++ ) {
             for ( c = 0; c < 3; c++ ) {
@@ -3759,13 +4416,17 @@ void CLASS foveon_interpolate() {
                 work[1][2 - c] = ipix[(c + 1) % 3] * ipix[(c + 2) % 3] >> 14;
             }
             for ( c = 0; c < 3; c++ ) {
-                for ( val = i = 0; i < 3; i++ )
-                    for ( j = 0; j < 3; j++ )
+                for ( val = i = 0; i < 3; i++ ) {
+                    for ( j = 0; j < 3; j++ ) {
                         val += ppm[c][i][j] * work[i][j];
+                    }
+                }
                 ipix[c] = floor((ipix[c] + floor(val)) *
                                 (sgrow[col / sgx][c] * (sgx - col % sgx) +
                                  sgrow[col / sgx + 1][c] * (col % sgx)) / sgx / div[c]);
-                if ( ipix[c] > 32000 ) ipix[c] = 32000;
+                if ( ipix[c] > 32000 ) {
+                    ipix[c] = 32000;
+                }
                 pix[c] = ipix[c];
             }
             pix += 4;
@@ -3775,14 +4436,14 @@ void CLASS foveon_interpolate() {
     free(sgrow);
     free(sgain);
 
-    if ((badpix = (unsigned *) foveon_camf_matrix(dim, "BadPixels"))) {
+    if ( (badpix = (unsigned *) foveon_camf_matrix(dim, "BadPixels")) ) {
         for ( i = 0; i < dim[0]; i++ ) {
             col = (badpix[i] >> 8 & 0xfff) - keep[0];
             row = (badpix[i] >> 20) - keep[1];
             if ((unsigned) (row - 1) > height - 3 || (unsigned) (col - 1) > width - 3 )
                 continue;
             memset(fsum, 0, sizeof fsum);
-            for ( sum = j = 0; j < 8; j++ )
+            for ( sum = j = 0; j < 8; j++ ) {
                 if ( badpix[i] & (1 << j)) {
                     for ( c = 0; c < 3; c++ ) {
                         fsum[c] += (short)
@@ -3790,6 +4451,7 @@ void CLASS foveon_interpolate() {
                     }
                     sum++;
                 }
+            }
             if ( sum ) {
                 for ( c = 0; c < 3; c++ ) {
                     image[row * width + col][c] = fsum[c] / sum;
@@ -3799,17 +4461,19 @@ void CLASS foveon_interpolate() {
         free(badpix);
     }
 
-    /* Array for 5x5 Gaussian averaging of red values */
+    // Array for 5x5 Gaussian averaging of red values
     smrow[6] = (int (*)[3]) calloc(width * 5, sizeof **smrow);
     merror(smrow[6], "foveon_interpolate()");
-    for ( i = 0; i < 5; i++ )
+    for ( i = 0; i < 5; i++ ) {
         smrow[i] = smrow[6] + i * width;
+    }
 
-    /* Sharpen the reds against these Gaussian averages */
+    // Sharpen the reds against these Gaussian averages
     for ( smlast = -1, row = 2; row < height - 2; row++ ) {
         while ( smlast < row + 2 ) {
-            for ( i = 0; i < 6; i++ )
+            for ( i = 0; i < 6; i++ ) {
                 smrow[(i + 5) % 6] = smrow[i];
+            }
             pix = image[++smlast * width + 2];
             for ( col = 2; col < width - 2; col++ ) {
                 smrow[4][col][0] =
@@ -3822,30 +4486,40 @@ void CLASS foveon_interpolate() {
             smred = (6 * smrow[2][col][0]
                      + 4 * (smrow[1][col][0] + smrow[3][col][0])
                      + smrow[0][col][0] + smrow[4][col][0] + 8) >> 4;
-            if ( col == 2 )
+            if ( col == 2 ) {
                 smred_p = smred;
+            }
             i = pix[0] + ((pix[0] - ((smred * 7 + smred_p) >> 3)) >> 3);
-            if ( i > 32000 ) i = 32000;
+            if ( i > 32000 ) {
+                i = 32000;
+            }
             pix[0] = i;
             smred_p = smred;
             pix += 4;
         }
     }
 
-    /* Adjust the brighter pixels for better linearity */
+    // Adjust the brighter pixels for better linearity
     min = 0xffff;
     for ( c = 0; c < 3; c++ ) {
         i = satlev[c] / div[c];
-        if ( min > i ) min = i;
+        if ( min > i ) {
+            min = i;
+        }
     }
     limit = min * 9 >> 4;
     for ( pix = image[0]; pix < image[height * width]; pix += 4 ) {
-        if ( pix[0] <= limit || pix[1] <= limit || pix[2] <= limit )
+        if ( pix[0] <= limit || pix[1] <= limit || pix[2] <= limit ) {
             continue;
+        }
         min = max = pix[0];
         for ( c = 1; c < 3; c++ ) {
-            if ( min > pix[c] ) min = pix[c];
-            if ( max < pix[c] ) max = pix[c];
+            if ( min > pix[c] ) {
+                min = pix[c];
+            }
+            if ( max < pix[c] ) {
+                max = pix[c];
+            }
         }
         if ( min >= limit * 2 ) {
             pix[0] = pix[1] = pix[2] = max;
@@ -3866,8 +4540,9 @@ void CLASS foveon_interpolate() {
     */
     for ( smlast = -1, row = 2; row < height - 2; row++ ) {
         while ( smlast < row + 2 ) {
-            for ( i = 0; i < 6; i++ )
+            for ( i = 0; i < 6; i++ ) {
                 smrow[(i + 5) % 6] = smrow[i];
+            }
             pix = image[++smlast * width + 2];
             for ( col = 2; col < width - 2; col++ ) {
                 for ( c = 0; c < 3; c++ ) {
@@ -3892,8 +4567,9 @@ void CLASS foveon_interpolate() {
     }
     for ( smlast = -1, row = 2; row < height - 2; row++ ) {
         while ( smlast < row + 2 ) {
-            for ( i = 0; i < 6; i++ )
+            for ( i = 0; i < 6; i++ ) {
                 smrow[(i + 5) % 6] = smrow[i];
+            }
             pix = image[++smlast * width + 2];
             for ( col = 2; col < width - 2; col++ ) {
                 for ( c = 0; c < 3; c++ ) {
@@ -3906,12 +4582,15 @@ void CLASS foveon_interpolate() {
         pix = image[row * width + 2];
         for ( col = 2; col < width - 2; col++ ) {
             for ( total[3] = 375, sum = 60, c = 0; c < 3; c++ ) {
-                for ( total[c] = i = 0; i < 5; i++ )
+                for ( total[c] = i = 0; i < 5; i++ ) {
                     total[c] += smrow[i][col][c];
+                }
                 total[3] += total[c];
                 sum += pix[c];
             }
-            if ( sum < 0 ) sum = 0;
+            if ( sum < 0 ) {
+                sum = 0;
+            }
             j = total[3] > 375 ? (sum << 16) / total[3] : sum * 174;
             for ( c = 0; c < 3; c++ ) {
                 pix[c] += foveon_apply_curve(curve[6],
@@ -3933,13 +4612,17 @@ void CLASS foveon_interpolate() {
         for ( c = 0; c < 3; c++ ) {
             for ( dsum = i = 0; i < 3; i++ )
                 dsum += trans[c][i] * pix[i];
-            if ( dsum < 0 ) dsum = 0;
-            if ( dsum > 24000 ) dsum = 24000;
+            if ( dsum < 0 ) {
+                dsum = 0;
+            }
+            if ( dsum > 24000 ) {
+                dsum = 24000;
+            }
             ipix[c] = dsum + 0.5;
         }
         for ( c = 0; c < 3; c++ ) {
             pix[c] = ipix[c];
-        };
+        }
     }
 
     // Smooth the image bottom-to-top and save at 1/4 scale
@@ -4014,7 +4697,9 @@ void CLASS foveon_interpolate() {
             sum >>= 3;
             for ( c = 0; c < 3; c++ ) {
                 i = image[row * width + col][c] + ipix[c] - sum;
-                if ( i < 0 ) i = 0;
+                if ( i < 0 ) {
+                    i = 0;
+                }
                 image[row * width + col][c] = i;
             }
         }
@@ -4041,13 +4726,15 @@ void CLASS foveon_interpolate() {
 
 /* RESTRICTED code ends here */
 
-void CLASS crop_masked_pixels() {
+void
+crop_masked_pixels() {
     int row, col;
     unsigned r, c, m, mblack[8], zero, val;
 
-    if ( TIFF_CALLBACK_loadRawData == &CLASS phase_one_load_raw ||
-         TIFF_CALLBACK_loadRawData == &CLASS phase_one_load_raw_c )
+    if ( TIFF_CALLBACK_loadRawData == & phase_one_load_raw ||
+         TIFF_CALLBACK_loadRawData == & phase_one_load_raw_c ) {
         phase_one_correct();
+    }
     if ( fuji_width ) {
         for ( row = 0; row < raw_height - top_margin * 2; row++ ) {
             for ( col = 0; col < fuji_width << !fuji_layout; col++ ) {
@@ -4058,27 +4745,32 @@ void CLASS crop_masked_pixels() {
                     r = fuji_width - 1 + row - (col >> 1);
                     c = row + ((col + 1) >> 1);
                 }
-                if ( r < height && c < width )
+                if ( r < height && c < width ) {
                     BAYER(r, c) = RAW(row + top_margin, col + left_margin);
+                }
             }
         }
     } else {
-        for ( row = 0; row < height; row++ )
-            for ( col = 0; col < width; col++ )
+        for ( row = 0; row < height; row++ ) {
+            for ( col = 0; col < width; col++ ) {
                 BAYER2(row, col) = RAW(row + top_margin, col + left_margin);
+            }
+        }
     }
-    if ( mask[0][3] > 0 ) goto mask_set;
-    if ( TIFF_CALLBACK_loadRawData == &CLASS canon_load_raw ||
-         TIFF_CALLBACK_loadRawData == &CLASS lossless_jpeg_load_raw ) {
+    if ( mask[0][3] > 0 ) {
+        goto mask_set;
+    }
+    if ( TIFF_CALLBACK_loadRawData == &canon_load_raw ||
+         TIFF_CALLBACK_loadRawData == &lossless_jpeg_load_raw ) {
         mask[0][1] = mask[1][1] += 2;
         mask[0][3] -= 2;
         goto sides;
     }
-    if ( TIFF_CALLBACK_loadRawData == &CLASS canon_600_load_raw ||
-         TIFF_CALLBACK_loadRawData == &CLASS sony_load_raw ||
-         (TIFF_CALLBACK_loadRawData == &CLASS eight_bit_load_raw && strncmp(model, "DC2", 3)) ||
-         TIFF_CALLBACK_loadRawData == &CLASS kodak_262_load_raw ||
-         (TIFF_CALLBACK_loadRawData == &CLASS packed_load_raw && (GLOBAL_loadFlags & 256))) {
+    if ( TIFF_CALLBACK_loadRawData == &canon_600_load_raw ||
+         TIFF_CALLBACK_loadRawData == &sony_load_raw ||
+         (TIFF_CALLBACK_loadRawData == &eight_bit_load_raw && strncmp(model, "DC2", 3)) ||
+         TIFF_CALLBACK_loadRawData == &kodak_262_load_raw ||
+         (TIFF_CALLBACK_loadRawData == &packed_load_raw && (GLOBAL_loadFlags & 256))) {
         sides:
         mask[0][0] = mask[1][0] = top_margin;
         mask[0][2] = mask[1][2] = top_margin + height;
@@ -4086,151 +4778,212 @@ void CLASS crop_masked_pixels() {
         mask[1][1] += left_margin + width;
         mask[1][3] += raw_width;
     }
-    if ( TIFF_CALLBACK_loadRawData == &CLASS nokia_load_raw ) {
+    if ( TIFF_CALLBACK_loadRawData == &nokia_load_raw ) {
         mask[0][2] = top_margin;
         mask[0][3] = width;
     }
     mask_set:
     memset(mblack, 0, sizeof mblack);
-    for ( zero = m = 0; m < 8; m++ )
-        for ( row = MAX(mask[m][0], 0); row < MIN(mask[m][2], raw_height); row++ )
+    for ( zero = m = 0; m < 8; m++ ) {
+        for ( row = MAX(mask[m][0], 0); row < MIN(mask[m][2], raw_height); row++ ) {
             for ( col = MAX(mask[m][1], 0); col < MIN(mask[m][3], raw_width); col++ ) {
                 c = FC(row - top_margin, col - left_margin);
                 mblack[c] += val = RAW(row, col);
                 mblack[4 + c]++;
                 zero += !val;
             }
+        }
+    }
     if ( TIFF_CALLBACK_loadRawData == &CLASS canon_600_load_raw && width < raw_width ) {
         black = (mblack[0] + mblack[1] + mblack[2] + mblack[3]) /
                 (mblack[4] + mblack[5] + mblack[6] + mblack[7]) - 4;
         canon_600_correct();
-    } else
+    } else {
         if ( zero < mblack[4] && mblack[5] && mblack[6] && mblack[7] ) {
             for ( c = 0; c < 4; c++ ) {
                 cblack[c] = mblack[c] / mblack[4 + c];
             }
             cblack[4] = cblack[5] = cblack[6] = 0;
         }
+    }
 }
 
-void CLASS remove_zeroes() {
+void
+remove_zeroes() {
     unsigned row, col, tot, n, r, c;
 
-    for ( row = 0; row < height; row++ )
-        for ( col = 0; col < width; col++ )
+    for ( row = 0; row < height; row++ ) {
+        for ( col = 0; col < width; col++ ) {
             if ( BAYER(row, col) == 0 ) {
                 tot = n = 0;
-                for ( r = row - 2; r <= row + 2; r++ )
-                    for ( c = col - 2; c <= col + 2; c++ )
+                for ( r = row - 2; r <= row + 2; r++ ) {
+                    for ( c = col - 2; c <= col + 2; c++ ) {
                         if ( r < height && c < width &&
-                             FC(r, c) == FC(row, col) && BAYER(r, c) )
+                             FC(r, c) == FC(row, col) && BAYER(r, c) ) {
                             tot += (n++, BAYER(r, c));
-                if ( n ) BAYER(row, col) = tot / n;
+                        }
+                    }
+                }
+                if ( n ) {
+                    BAYER(row, col) = tot / n;
+                }
             }
+        }
+    }
 }
 
 /*
-   Seach from the current directory up to the root looking for
-   a ".badpixels" file, and fix those pixels now.
+Seach from the current directory up to the root looking for
+a ".badpixels" file, and fix those pixels now.
  */
-void CLASS bad_pixels(const char *cfname) {
+void
+bad_pixels(const char *cfname) {
     FILE *fp = 0;
     char *fname, *cp, line[128];
     int len, time, row, col, r, c, rad, tot, n, fixed = 0;
 
-    if ( !filters ) return;
-    if ( cfname )
+    if ( !filters ) {
+        return;
+    }
+    if ( cfname ) {
         fp = fopen(cfname, "r");
-    else {
+    } else {
         for ( len = 32;; len *= 2 ) {
-            fname = (char *) malloc(len);
-            if ( !fname ) return;
-            if ( getcwd(fname, len - 16)) break;
+            fname = (char *)malloc(len);
+            if ( !fname ) {
+                return;
+            }
+            if ( getcwd(fname, len - 16) ) {
+                break;
+            }
             free(fname);
-            if ( errno != ERANGE ) return;
+            if ( errno != ERANGE ) {
+                return;
+            }
         }
 #if defined(WIN32) || defined(DJGPP)
-                                                                                                                                if (fname[1] == ':')
-      memmove (fname, fname+2, len-2);
-    for (cp=fname; *cp; cp++)
-      if (*cp == '\\') *cp = '/';
+    memmove (fname, fname+2, len-2);
+    for ( cp = fname; *cp; cp++ ) {
+      if ( *cp == '\\' ) {
+          *cp = '/';
+      }
+    }
 #endif
         cp = fname + strlen(fname);
-        if ( cp[-1] == '/' ) cp--;
+        if ( cp[-1] == '/' ) {
+            cp--;
+        }
         while ( *fname == '/' ) {
             strcpy(cp, "/.badpixels");
-            if ((fp = fopen(fname, "r"))) break;
-            if ( cp == fname ) break;
+            if ( (fp = fopen(fname, "r")) ) {
+                break;
+            }
+            if ( cp == fname ) {
+                break;
+            }
             while ( *--cp != '/' );
         }
         free(fname);
     }
-    if ( !fp ) return;
-    while ( fgets(line, 128, fp)) {
+    if ( !fp ) {
+        return;
+    }
+    while ( fgets(line, 128, fp) ) {
         cp = strchr(line, '#');
-        if ( cp ) *cp = 0;
-        if ( sscanf(line, "%d %d %d", &col, &row, &time) != 3 ) continue;
-        if ((unsigned) col >= width || (unsigned) row >= height ) continue;
-        if ( time > timestamp ) continue;
-        for ( tot = n = 0, rad = 1; rad < 3 && n == 0; rad++ )
-            for ( r = row - rad; r <= row + rad; r++ )
-                for ( c = col - rad; c <= col + rad; c++ )
+        if ( cp ) {
+            *cp = 0;
+        }
+        if ( sscanf(line, "%d %d %d", &col, &row, &time) != 3 ) {
+            continue;
+        }
+        if ( (unsigned) col >= width || (unsigned) row >= height ) {
+            continue;
+        }
+        if ( time > timestamp ) {
+            continue;
+        }
+        for ( tot = n = 0, rad = 1; rad < 3 && n == 0; rad++ ) {
+            for ( r = row - rad; r <= row + rad; r++ ) {
+                for ( c = col - rad; c <= col + rad; c++ ) {
                     if ((unsigned) r < height && (unsigned) c < width &&
                         (r != row || c != col) && fcol(r, c) == fcol(row, col)) {
                         tot += BAYER2(r, c);
                         n++;
                     }
+                }
+            }
+        }
         BAYER2(row, col) = tot / n;
         if ( OPTIONS_values->verbose ) {
-            if ( !fixed++ )
+            if ( !fixed++ ) {
                 fprintf(stderr, _("Fixed dead pixels at:"));
+            }
             fprintf(stderr, " %d,%d", col, row);
         }
     }
-    if ( fixed ) fputc('\n', stderr);
+    if ( fixed ) {
+        fputc('\n', stderr);
+    }
     fclose(fp);
 }
 
-void CLASS subtract(const char *fname) {
+void
+subtract(const char *fname) {
     FILE *fp;
     int dim[3] = {0, 0, 0}, comment = 0, number = 0, error = 0, nd = 0, c, row, col;
     ushort *pixel;
 
-    if ( !(fp = fopen(fname, "rb"))) {
+    if ( !(fp = fopen(fname, "rb")) ) {
         perror(fname);
         return;
     }
-    if ( fgetc(fp) != 'P' || fgetc(fp) != '5' ) error = 1;
-    while ( !error && nd < 3 && (c = fgetc(fp)) != EOF) {
-        if ( c == '#' ) comment = 1;
-        if ( c == '\n' ) comment = 0;
-        if ( comment ) continue;
-        if ( isdigit(c)) number = 1;
+    if ( fgetc(fp) != 'P' || fgetc(fp) != '5' ) {
+        error = 1;
+    }
+    while ( !error && nd < 3 && (c = fgetc(fp)) != EOF ) {
+        if ( c == '#' ) {
+            comment = 1;
+        }
+        if ( c == '\n' ) {
+            comment = 0;
+        }
+        if ( comment ) {
+            continue;
+        }
+        if ( isdigit(c) ) {
+            number = 1;
+        }
         if ( number ) {
-            if ( isdigit(c)) dim[nd] = dim[nd] * 10 + c - '0';
-            else
+            if ( isdigit(c) ) {
+                dim[nd] = dim[nd] * 10 + c - '0';
+            } else {
                 if ( isspace(c)) {
                     number = 0;
                     nd++;
-                } else error = 1;
+                } else {
+                    error = 1;
+                }
+            }
         }
     }
     if ( error || nd < 3 ) {
         fprintf(stderr, _("%s is not a valid PGM file!\n"), fname);
         fclose(fp);
         return;
-    } else
+    } else {
         if ( dim[0] != width || dim[1] != height || dim[2] != 65535 ) {
             fprintf(stderr, _("%s has the wrong dimensions!\n"), fname);
             fclose(fp);
             return;
         }
+    }
     pixel = (ushort *) calloc(width, sizeof *pixel);
     merror(pixel, "subtract()");
     for ( row = 0; row < height; row++ ) {
         fread(pixel, 2, width, fp);
-        for ( col = 0; col < width; col++ )
+        for ( col = 0; col < width; col++ ) {
             BAYER(row, col) = MAX (BAYER(row, col) - ntohs(pixel[col]), 0);
+        }
     }
     free(pixel);
     fclose(fp);
@@ -4238,7 +4991,8 @@ void CLASS subtract(const char *fname) {
     black = 0;
 }
 
-void CLASS gamma_curve(double pwr, double ts, int mode, int imax) {
+void
+gamma_curve(double pwr, double ts, int mode, int imax) {
     int i;
     double g[6], bnd[2] = {0, 0}, r;
 
@@ -4249,196 +5003,240 @@ void CLASS gamma_curve(double pwr, double ts, int mode, int imax) {
     if ( g[1] && (g[1] - 1) * (g[0] - 1) <= 0 ) {
         for ( i = 0; i < 48; i++ ) {
             g[2] = (bnd[0] + bnd[1]) / 2;
-            if ( g[0] ) bnd[(pow(g[2] / g[1], -g[0]) - 1) / g[0] - 1 / g[2] > -1] = g[2];
-            else bnd[g[2] / exp(1 - 1 / g[2]) < g[1]] = g[2];
+            if ( g[0] ) {
+                bnd[(pow(g[2] / g[1], -g[0]) - 1) / g[0] - 1 / g[2] > -1] = g[2];
+            } else {
+                bnd[g[2] / exp(1 - 1 / g[2]) < g[1]] = g[2];
+            }
         }
         g[3] = g[2] / g[1];
-        if ( g[0] ) g[4] = g[2] * (1 / g[0] - 1);
+        if ( g[0] ) {
+            g[4] = g[2] * (1 / g[0] - 1);
+        }
     }
-    if ( g[0] )
+    if ( g[0] ) {
         g[5] = 1 / (g[1] * SQR(g[3]) / 2 - g[4] * (1 - g[3]) +
                     (1 - pow(g[3], 1 + g[0])) * (1 + g[4]) / (1 + g[0])) - 1;
-    else
+    } else {
         g[5] = 1 / (g[1] * SQR(g[3]) / 2 + 1
                     - g[2] - g[3] - g[2] * g[3] * (log(g[3]) - 1)) - 1;
+    }
     if ( !mode-- ) {
         memcpy(OPTIONS_values->gammaParameters, g, sizeof OPTIONS_values->gammaParameters);
         return;
     }
     for ( i = 0; i < 0x10000; i++ ) {
         curve[i] = 0xffff;
-        if ((r = (double) i / imax) < 1 )
+        if ( (r = (double) i / imax) < 1 ) {
             curve[i] = 0x10000 * (mode
                                   ? (r < g[3] ? r * g[1] : (g[0] ? pow(r, g[0]) * (1 + g[4]) - g[4] : log(r) * g[2] +
                                                                                                       1))
                                   : (r < g[2] ? r / g[1] : (g[0] ? pow((r + g[4]) / (1 + g[4]), 1 / g[0]) : exp(
                             (r - 1) / g[2]))));
+        }
     }
 }
 
-void CLASS pseudoinverse(double (*in)[3], double (*out)[3], int size) {
+void
+pseudoinverse(double (*in)[3], double (*out)[3], int size) {
     double work[3][6], num;
     int i, j, k;
 
     for ( i = 0; i < 3; i++ ) {
-        for ( j = 0; j < 6; j++ )
+        for ( j = 0; j < 6; j++ ) {
             work[i][j] = j == i + 3;
-        for ( j = 0; j < 3; j++ )
-            for ( k = 0; k < size; k++ )
+        }
+        for ( j = 0; j < 3; j++ ) {
+            for ( k = 0; k < size; k++ ) {
                 work[i][j] += in[k][i] * in[k][j];
+            }
+        }
     }
     for ( i = 0; i < 3; i++ ) {
         num = work[i][i];
-        for ( j = 0; j < 6; j++ )
+        for ( j = 0; j < 6; j++ ) {
             work[i][j] /= num;
+        }
         for ( k = 0; k < 3; k++ ) {
-            if ( k == i ) continue;
+            if ( k == i ) {
+                continue;
+            }
             num = work[k][i];
-            for ( j = 0; j < 6; j++ )
+            for ( j = 0; j < 6; j++ ) {
                 work[k][j] -= work[i][j] * num;
+            }
         }
     }
-    for ( i = 0; i < size; i++ )
-        for ( j = 0; j < 3; j++ )
-            for ( out[i][j] = k = 0; k < 3; k++ )
+    for ( i = 0; i < size; i++ ) {
+        for ( j = 0; j < 3; j++ ) {
+            for ( out[i][j] = k = 0; k < 3; k++ ) {
                 out[i][j] += work[j][k + 3] * in[i][k];
+            }
+        }
+    }
 }
 
-void CLASS cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3]) {
+void
+cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3]) {
     double cam_rgb[4][3], inverse[4][3], num;
     int i, j, k;
 
-    for ( i = 0; i < colors; i++ )        /* Multiply out XYZ colorspace */
-        for ( j = 0; j < 3; j++ )
-            for ( cam_rgb[i][j] = k = 0; k < 3; k++ )
+    for ( i = 0; i < colors; i++ ) {
+        // Multiply out XYZ colorspace
+        for ( j = 0; j < 3; j++ ) {
+            for ( cam_rgb[i][j] = k = 0; k < 3; k++ ) {
                 cam_rgb[i][j] += cam_xyz[i][k] * xyz_rgb[k][j];
+            }
+        }
+    }
 
-    for ( i = 0; i < colors; i++ ) {        /* Normalize cam_rgb so that */
-        for ( num = j = 0; j < 3; j++ )        /* cam_rgb * (1,1,1) is (1,1,1,1) */
+    for ( i = 0; i < colors; i++ ) {
+        // Normalize cam_rgb so that
+        for ( num = j = 0; j < 3; j++ ) {
+            // cam_rgb * (1,1,1) is (1,1,1,1)
             num += cam_rgb[i][j];
-        for ( j = 0; j < 3; j++ )
+        }
+        for ( j = 0; j < 3; j++ ) {
             cam_rgb[i][j] /= num;
+        }
         pre_mul[i] = 1 / num;
     }
     pseudoinverse(cam_rgb, inverse, colors);
-    for ( i = 0; i < 3; i++ )
-        for ( j = 0; j < colors; j++ )
+    for ( i = 0; i < 3; i++ ) {
+        for ( j = 0; j < colors; j++ ) {
             rgb_cam[i][j] = inverse[j][i];
+        }
+    }
 }
 
 #ifdef COLORCHECK
-                                                                                                                        void CLASS colorcheck()
+void
+colorcheck()
 {
-#define NSQ 24
-// Coordinates of the GretagMacbeth ColorChecker squares
-// width, height, 1st_column, 1st_row
-  int cut[NSQ][4];			// you must set these
-// ColorChecker Chart under 6500-kelvin illumination
-  static const double gmb_xyY[NSQ][3] = {
-    { 0.400, 0.350, 10.1 },		// Dark Skin
-    { 0.377, 0.345, 35.8 },		// Light Skin
-    { 0.247, 0.251, 19.3 },		// Blue Sky
-    { 0.337, 0.422, 13.3 },		// Foliage
-    { 0.265, 0.240, 24.3 },		// Blue Flower
-    { 0.261, 0.343, 43.1 },		// Bluish Green
-    { 0.506, 0.407, 30.1 },		// Orange
-    { 0.211, 0.175, 12.0 },		// Purplish Blue
-    { 0.453, 0.306, 19.8 },		// Moderate Red
-    { 0.285, 0.202, 6.6 },		// Purple
-    { 0.380, 0.489, 44.3 },		// Yellow Green
-    { 0.473, 0.438, 43.1 },		// Orange Yellow
-    { 0.187, 0.129, 6.1 },		// Blue
-    { 0.305, 0.478, 23.4 },		// Green
-    { 0.539, 0.313, 12.0 },		// Red
-    { 0.448, 0.470, 59.1 },		// Yellow
-    { 0.364, 0.233, 19.8 },		// Magenta
-    { 0.196, 0.252, 19.8 },		// Cyan
-    { 0.310, 0.316, 90.0 },		// White
-    { 0.310, 0.316, 59.1 },		// Neutral 8
-    { 0.310, 0.316, 36.2 },		// Neutral 6.5
-    { 0.310, 0.316, 19.8 },		// Neutral 5
-    { 0.310, 0.316, 9.0 },		// Neutral 3.5
-    { 0.310, 0.316, 3.1 } };		// Black
-  double gmb_cam[NSQ][4], gmb_xyz[NSQ][3];
-  double inverse[NSQ][3], cam_xyz[4][3], balance[4], num;
-  int c, i, j, k, sq, row, col, pass, count[4];
+    #define NSQ 24
+    // Coordinates of the GretagMacbeth ColorChecker squares
+    // width, height, 1st_column, 1st_row
+    int cut[NSQ][4];			// you must set these
+    // ColorChecker Chart under 6500-kelvin illumination
+    static const double gmb_xyY[NSQ][3] = {
+        { 0.400, 0.350, 10.1 },		// Dark Skin
+        { 0.377, 0.345, 35.8 },		// Light Skin
+        { 0.247, 0.251, 19.3 },		// Blue Sky
+        { 0.337, 0.422, 13.3 },		// Foliage
+        { 0.265, 0.240, 24.3 },		// Blue Flower
+        { 0.261, 0.343, 43.1 },		// Bluish Green
+        { 0.506, 0.407, 30.1 },		// Orange
+        { 0.211, 0.175, 12.0 },		// Purplish Blue
+        { 0.453, 0.306, 19.8 },		// Moderate Red
+        { 0.285, 0.202, 6.6  },		// Purple
+        { 0.380, 0.489, 44.3 },		// Yellow Green
+        { 0.473, 0.438, 43.1 },		// Orange Yellow
+        { 0.187, 0.129, 6.1  },		// Blue
+        { 0.305, 0.478, 23.4 },		// Green
+        { 0.539, 0.313, 12.0 },		// Red
+        { 0.448, 0.470, 59.1 },		// Yellow
+        { 0.364, 0.233, 19.8 },		// Magenta
+        { 0.196, 0.252, 19.8 },		// Cyan
+        { 0.310, 0.316, 90.0 },		// White
+        { 0.310, 0.316, 59.1 },		// Neutral 8
+        { 0.310, 0.316, 36.2 },		// Neutral 6.5
+        { 0.310, 0.316, 19.8 },		// Neutral 5
+        { 0.310, 0.316, 9.0  },		// Neutral 3.5
+        { 0.310, 0.316, 3.1  }      // Black
+    };
+    double gmb_cam[NSQ][4], gmb_xyz[NSQ][3];
+    double inverse[NSQ][3], cam_xyz[4][3], balance[4], num;
+    int c, i, j, k, sq, row, col, pass, count[4];
 
-  memset (gmb_cam, 0, sizeof gmb_cam);
-  for (sq=0; sq < NSQ; sq++) {
-    for ( c = 0; colors < 3; c++ ) {
-        count[c] = 0;
-    }
-    for   (row=cut[sq][3]; row < cut[sq][3]+cut[sq][1]; row++)
-      for (col=cut[sq][2]; col < cut[sq][2]+cut[sq][0]; col++) {
-	c = FC(row,col);
-	if (c >= colors) c -= 2;
-	gmb_cam[sq][c] += BAYER2(row,col);
-	BAYER2(row,col) = black + (BAYER2(row,col)-black)/2;
-	count[c]++;
-      }
-    for ( c = 0; c < colors; c++ ) {
-        gmb_cam[sq][c] = gmb_cam[sq][c]/count[c] - black;
-    }
-    gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
-    gmb_xyz[sq][1] = gmb_xyY[sq][2];
-    gmb_xyz[sq][2] = gmb_xyY[sq][2] *
-		(1 - gmb_xyY[sq][0] - gmb_xyY[sq][1]) / gmb_xyY[sq][1];
-  }
-  pseudoinverse (gmb_xyz, inverse, NSQ);
-  for (pass=0; pass < 2; pass++) {
-    for (GLOBAL_colorTransformForRaw = i=0; i < colors; i++)
-      for (j=0; j < 3; j++)
-	for (cam_xyz[i][j] = k=0; k < NSQ; k++)
-	  cam_xyz[i][j] += gmb_cam[k][i] * inverse[k][j];
-    cam_xyz_coeff (rgb_cam, cam_xyz);
-    for ( c = 0; c < colors; c++ ) {
-        balance[c] = pre_mul[c] * gmb_cam[20][c];
-    }
-    for (sq=0; sq < NSQ; sq++)
-      for ( c = 0; c < colors; c++ ) {
-        gmb_cam[sq][c] *= balance[c];
-      }
-  }
-  if (OPTIONS_values->verbose) {
-    printf ("    { \"%s %s\", %d,\n\t{", make, model, black);
-    num = 10000 / (cam_xyz[1][0] + cam_xyz[1][1] + cam_xyz[1][2]);
-    for ( c = 0; c < colors; c++ ) {
-        for (j=0; j < 3; j++) {
-            printf ("%c%d", (c | j) ? ',':' ', (int) (cam_xyz[c][j] * num + 0.5));
+    memset (gmb_cam, 0, sizeof gmb_cam);
+    for ( sq = 0; sq < NSQ; sq++ ) {
+        for ( c = 0; colors < 3; c++ ) {
+            count[c] = 0;
         }
+        for ( row = cut[sq][3]; row < cut[sq][3]+cut[sq][1]; row++ ) {
+            for ( col = cut[sq][2]; col < cut[sq][2] + cut[sq][0]; col++ ) {
+                c = FC(row, col);
+                if ( c >= colors ) c -= 2;
+                gmb_cam[sq][c] += BAYER2(row, col);
+                BAYER2(row, col) = black + (BAYER2(row, col) - black) / 2;
+                count[c]++;
+            }
+        }
+        for ( c = 0; c < colors; c++ ) {
+            gmb_cam[sq][c] = gmb_cam[sq][c]/count[c] - black;
+        }
+        gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
+        gmb_xyz[sq][1] = gmb_xyY[sq][2];
+        gmb_xyz[sq][2] = gmb_xyY[sq][2] * (1 - gmb_xyY[sq][0] - gmb_xyY[sq][1]) / gmb_xyY[sq][1];
     }
-    puts (" } },");
-  }
+    pseudoinverse (gmb_xyz, inverse, NSQ);
+    for ( pass = 0; pass < 2; pass++ ) {
+        for ( GLOBAL_colorTransformForRaw = i=0; i < colors; i++ ) {
+            for ( j = 0; j < 3; j++ ) {
+                for ( cam_xyz[i][j] = k = 0; k < NSQ; k++ ) {
+                    cam_xyz[i][j] += gmb_cam[k][i] * inverse[k][j];
+                }
+            }
+            cam_xyz_coeff (rgb_cam, cam_xyz);
+            for ( c = 0; c < colors; c++ ) {
+                balance[c] = pre_mul[c] * gmb_cam[20][c];
+            }
+            for ( sq = 0; sq < NSQ; sq++ ) {
+                for ( c = 0; c < colors; c++ ) {
+                    gmb_cam[sq][c] *= balance[c];
+                }
+            }
+        }
+        if ( OPTIONS_values->verbose ) {
+            printf ("    { \"%s %s\", %d,\n\t{", make, model, black);
+            num = 10000 / (cam_xyz[1][0] + cam_xyz[1][1] + cam_xyz[1][2]);
+            for ( c = 0; c < colors; c++ ) {
+                for ( j = 0; j < 3; j++ ) {
+                    printf ("%c%d", (c | j) ? ',':' ', (int) (cam_xyz[c][j] * num + 0.5));
+                }
+            }
+            puts (" } },");
+        }
 #undef NSQ
 }
 #endif
 
-void CLASS hat_transform(float *temp, float *base, int st, int size, int sc) {
+void
+hat_transform(float *temp, float *base, int st, int size, int sc) {
     int i;
-    for ( i = 0; i < sc; i++ )
+
+    for ( i = 0; i < sc; i++ ) {
         temp[i] = 2 * base[st * i] + base[st * (sc - i)] + base[st * (i + sc)];
-    for ( ; i + sc < size; i++ )
+    }
+    for ( ; i + sc < size; i++ ) {
         temp[i] = 2 * base[st * i] + base[st * (i - sc)] + base[st * (i + sc)];
-    for ( ; i < size; i++ )
+    }
+    for ( ; i < size; i++ ) {
         temp[i] = 2 * base[st * i] + base[st * (i - sc)] + base[st * (2 * size - 2 - (i + sc))];
+    }
 }
 
-void CLASS wavelet_denoise() {
+void
+wavelet_denoise() {
     float *fimg = 0, *temp, thold, mul[2], avg, diff;
     int scale = 1, size, lev, hpass, lpass, row, col, nc, c, i, wlast, blk[2];
     ushort *window[4];
     static const float noise[] =
             {0.8002, 0.2735, 0.1202, 0.0585, 0.0291, 0.0152, 0.0080, 0.0044};
 
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("Wavelet denoising...\n"));
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("Wavelet denoising...\n"));
+    }
 
-    while ( maximum << scale < 0x10000 ) scale++;
+    while ( maximum << scale < 0x10000 ) {
+        scale++;
+    }
     maximum <<= --scale;
     black <<= scale;
     for ( c = 0; c < 4; c++ ) {
         cblack[c] <<= scale;
     }
-    if ((size = iheight * iwidth) < 0x15550000 ) {
+    if ( (size = iheight * iwidth) < 0x15550000 ) {
         fimg = (float *) malloc((size * 3 + iheight + iwidth) * sizeof *fimg);
     }
     merror(fimg, "wavelet_denoise()");
@@ -4447,7 +5245,7 @@ void CLASS wavelet_denoise() {
         nc++;
     }
     for ( c = 0; c < nc; c++ ) {
-        /* Denoise R,G1,B,G3 individually */
+        // Denoise R,G1,B,G3 individually
         for ( i = 0; i < size; i++ ) {
             fimg[i] = 256 * sqrt(image[i][c] << scale);
         }
@@ -4455,41 +5253,55 @@ void CLASS wavelet_denoise() {
             lpass = size * ((lev & 1) + 1);
             for ( row = 0; row < iheight; row++ ) {
                 hat_transform(temp, fimg + hpass + row * iwidth, 1, iwidth, 1 << lev);
-                for ( col = 0; col < iwidth; col++ )
+                for ( col = 0; col < iwidth; col++ ) {
                     fimg[lpass + row * iwidth + col] = temp[col] * 0.25;
+                }
             }
             for ( col = 0; col < iwidth; col++ ) {
                 hat_transform(temp, fimg + lpass + col, iwidth, iheight, 1 << lev);
-                for ( row = 0; row < iheight; row++ )
+                for ( row = 0; row < iheight; row++ ) {
                     fimg[lpass + row * iwidth + col] = temp[row] * 0.25;
+                }
             }
             thold = OPTIONS_values->threshold * noise[lev];
             for ( i = 0; i < size; i++ ) {
                 fimg[hpass + i] -= fimg[lpass + i];
-                if ( fimg[hpass + i] < -thold ) fimg[hpass + i] += thold;
-                else
-                    if ( fimg[hpass + i] > thold ) fimg[hpass + i] -= thold;
-                    else fimg[hpass + i] = 0;
-                if ( hpass ) fimg[i] += fimg[hpass + i];
+                if ( fimg[hpass + i] < -thold ) {
+                    fimg[hpass + i] += thold;
+                } else {
+                    if ( fimg[hpass + i] > thold ) {
+                        fimg[hpass + i] -= thold;
+                    } else {
+                        fimg[hpass + i] = 0;
+                    }
+                }
+                if ( hpass ) {
+                    fimg[i] += fimg[hpass + i];
+                }
             }
             hpass = lpass;
         }
-        for ( i = 0; i < size; i++ )
+        for ( i = 0; i < size; i++ ) {
             image[i][c] = CLIP(SQR(fimg[i] + fimg[lpass + i]) / 0x10000);
+        }
     }
-    if ( filters && colors == 3 ) {  /* pull G1 and G3 closer together */
+    if ( filters && colors == 3 ) {
+        // Pull G1 and G3 closer together
         for ( row = 0; row < 2; row++ ) {
             mul[row] = 0.125 * pre_mul[FC(row + 1, 0) | 1] / pre_mul[FC(row, 0) | 1];
             blk[row] = cblack[FC(row, 0) | 1];
         }
-        for ( i = 0; i < 4; i++ )
+        for ( i = 0; i < 4; i++ ) {
             window[i] = (ushort *) fimg + width * i;
+        }
         for ( wlast = -1, row = 1; row < height - 1; row++ ) {
             while ( wlast < row + 1 ) {
-                for ( wlast++, i = 0; i < 4; i++ )
+                for ( wlast++, i = 0; i < 4; i++ ) {
                     window[(i + 3) & 3] = window[i];
-                for ( col = FC(wlast, 1) & 1; col < width; col += 2 )
+                }
+                for ( col = FC(wlast, 1) & 1; col < width; col += 2 ) {
                     window[2][col] = BAYER(wlast, col);
+                }
             }
             thold = OPTIONS_values->threshold / 512;
             for ( col = (FC(row, 0) & 1) + 1; col < width - 1; col += 2 ) {
@@ -4498,10 +5310,15 @@ void CLASS wavelet_denoise() {
                       * mul[row & 1] + (window[1][col] + blk[row & 1]) * 0.5;
                 avg = avg < 0 ? 0 : sqrt(avg);
                 diff = sqrt(BAYER(row, col)) - avg;
-                if ( diff < -thold ) diff += thold;
-                else
-                    if ( diff > thold ) diff -= thold;
-                    else diff = 0;
+                if ( diff < -thold ) {
+                    diff += thold;
+                } else {
+                    if ( diff > thold ) {
+                        diff -= thold;
+                    } else {
+                        diff = 0;
+                    }
+                }
                 BAYER(row, col) = CLIP(SQR(avg + diff) + 0.5);
             }
         }
@@ -4509,7 +5326,8 @@ void CLASS wavelet_denoise() {
     free(fimg);
 }
 
-void CLASS scale_colors() {
+void
+scale_colors() {
     unsigned bottom, right, size, row, col, ur, uc, i, x, y, c, sum[8];
     int val, dark, sat;
     double dsum[8], dmin, dmax;
@@ -4539,7 +5357,9 @@ void CLASS scale_colors() {
                             if ( val > maximum - 25 ) {
                                 goto skip_block;
                             }
-                            if ((val -= cblack[c]) < 0 ) val = 0;
+                            if ( (val -= cblack[c]) < 0 ) {
+                                val = 0;
+                            }
                             sum[c] += val;
                             sum[c + 4]++;
                             if ( filters ) {
@@ -4565,8 +5385,9 @@ void CLASS scale_colors() {
         for ( row = 0; row < 8; row++ )
             for ( col = 0; col < 8; col++ ) {
                 c = FC(row, col);
-                if ((val = white[row][col] - cblack[c]) > 0 )
+                if ( (val = white[row][col] - cblack[c]) > 0 ) {
                     sum[c] += val;
+                }
                 sum[c + 4]++;
             }
         if ( sum[0] && sum[1] && sum[2] && sum[3] ) {
@@ -4581,19 +5402,29 @@ void CLASS scale_colors() {
             }
         }
     }
-    if ( pre_mul[1] == 0 ) pre_mul[1] = 1;
-    if ( pre_mul[3] == 0 ) pre_mul[3] = colors < 4 ? pre_mul[1] : 1;
+    if ( pre_mul[1] == 0 ) {
+        pre_mul[1] = 1;
+    }
+    if ( pre_mul[3] == 0 ) {
+        pre_mul[3] = colors < 4 ? pre_mul[1] : 1;
+    }
     dark = black;
     sat = maximum;
-    if ( OPTIONS_values->threshold ) wavelet_denoise();
+    if ( OPTIONS_values->threshold ) {
+        wavelet_denoise();
+    }
     maximum -= black;
     for ( dmin = DBL_MAX, dmax = c = 0; c < 4; c++ ) {
-        if ( dmin > pre_mul[c] )
+        if ( dmin > pre_mul[c] ) {
             dmin = pre_mul[c];
-        if ( dmax < pre_mul[c] )
+        }
+        if ( dmax < pre_mul[c] ) {
             dmax = pre_mul[c];
+        }
     }
-    if ( !OPTIONS_values->highlight ) dmax = dmin;
+    if ( !OPTIONS_values->highlight ) {
+        dmax = dmin;
+    }
     for ( c = 0; c < 4; c++ ) {
         scale_mul[c] = (pre_mul[c] /= dmax) * 65535.0 / maximum;
     }
@@ -4614,31 +5445,42 @@ void CLASS scale_colors() {
     }
     size = iheight * iwidth;
     for ( i = 0; i < size * 4; i++ ) {
-        if ( !(val = ((ushort *) image)[i])) continue;
-        if ( cblack[4] && cblack[5] )
+        if ( !(val = ((ushort *) image)[i]) ) {
+            continue;
+        }
+        if ( cblack[4] && cblack[5] ) {
             val -= cblack[6 + i / 4 / iwidth % cblack[4] * cblack[5] +
                           i / 4 % iwidth % cblack[5]];
+        }
         val -= cblack[i & 3];
         val *= scale_mul[i & 3];
-        ((ushort *) image)[i] = CLIP(val);
+        ((ushort *)image)[i] = CLIP(val);
     }
-    if ((OPTIONS_values->chromaticAberrationCorrection[0] != 1 ||
+    if ( (OPTIONS_values->chromaticAberrationCorrection[0] != 1 ||
          OPTIONS_values->chromaticAberrationCorrection[2] != 1) && colors == 3 ) {
-        if ( OPTIONS_values->verbose )
+        if ( OPTIONS_values->verbose ) {
             fprintf(stderr, _("Correcting chromatic aberration...\n"));
+        }
         for ( c = 0; c < 4; c += 2 ) {
-            if ( OPTIONS_values->chromaticAberrationCorrection[c] == 1 ) continue;
-            img = (ushort *) malloc(size * sizeof *img);
+            if ( OPTIONS_values->chromaticAberrationCorrection[c] == 1 ) {
+                continue;
+            }
+            img = (ushort *)malloc(size * sizeof *img);
             merror(img, "scale_colors()");
-            for ( i = 0; i < size; i++ )
+            for ( i = 0; i < size; i++ ) {
                 img[i] = image[i][c];
+            }
             for ( row = 0; row < iheight; row++ ) {
                 ur = fr = (row - iheight * 0.5) * OPTIONS_values->chromaticAberrationCorrection[c] + iheight * 0.5;
-                if ( ur > iheight - 2 ) continue;
+                if ( ur > iheight - 2 ) {
+                    continue;
+                }
                 fr -= ur;
                 for ( col = 0; col < iwidth; col++ ) {
                     uc = fc = (col - iwidth * 0.5) * OPTIONS_values->chromaticAberrationCorrection[c] + iwidth * 0.5;
-                    if ( uc > iwidth - 2 ) continue;
+                    if ( uc > iwidth - 2 ) {
+                        continue;
+                    }
                     fc -= uc;
                     pix = img + ur * iwidth + uc;
                     image[row * iwidth + col][c] =
@@ -4651,7 +5493,8 @@ void CLASS scale_colors() {
     }
 }
 
-void CLASS pre_interpolate() {
+void
+pre_interpolate() {
     ushort (*img)[4];
     int row, col, c;
 
@@ -4660,26 +5503,32 @@ void CLASS pre_interpolate() {
             height = iheight;
             width = iwidth;
             if ( filters == 9 ) {
-                for ( row = 0; row < 3; row++ )
-                    for ( col = 1; col < 4; col++ )
-                        if ( !(image[row * width + col][0] | image[row * width + col][2]))
+                for ( row = 0; row < 3; row++ ) {
+                    for ( col = 1; col < 4; col++ ) {
+                        if ( !(image[row * width + col][0] | image[row * width + col][2])) {
                             goto break2;
+                        }
+                    }
+                }
                 break2:
-                for ( ; row < height; row += 3 )
+                for ( ; row < height; row += 3 ) {
                     for ( col = (col - 1) % 3 + 1; col < width - 1; col += 3 ) {
                         img = image + row * width + col;
-                        for ( c = 0; c < 3; c += 2 )
+                        for ( c = 0; c < 3; c += 2 ) {
                             img[0][c] = (img[-1][c] + img[1][c]) >> 1;
+                        }
                     }
+                }
             }
         } else {
             img = (ushort (*)[4]) calloc(height, width * sizeof *img);
             merror(img, "pre_interpolate()");
-            for ( row = 0; row < height; row++ )
+            for ( row = 0; row < height; row++ ) {
                 for ( col = 0; col < width; col++ ) {
                     c = fcol(row, col);
                     img[row * width + col][c] = image[(row >> 1) * iwidth + (col >> 1)][c];
                 }
+            }
             free(image);
             image = img;
             shrink = 0;
@@ -4687,32 +5536,41 @@ void CLASS pre_interpolate() {
     }
     if ( filters > 1000 && colors == 3 ) {
         mix_green = OPTIONS_values->fourColorRgb ^ OPTIONS_values->halfSizePreInterpolation;
-        if ( OPTIONS_values->fourColorRgb | OPTIONS_values->halfSizePreInterpolation ) colors++;
-        else {
-            for ( row = FC(1, 0) >> 1; row < height; row += 2 )
-                for ( col = FC(row, 1) & 1; col < width; col += 2 )
+        if ( OPTIONS_values->fourColorRgb | OPTIONS_values->halfSizePreInterpolation ) {
+            colors++;
+        } else {
+            for ( row = FC(1, 0) >> 1; row < height; row += 2 ) {
+                for ( col = FC(row, 1) & 1; col < width; col += 2 ) {
                     image[row * width + col][1] = image[row * width + col][3];
+                }
+            }
             filters &= ~((filters & 0x55555555) << 1);
         }
     }
-    if ( OPTIONS_values->halfSizePreInterpolation ) filters = 0;
+    if ( OPTIONS_values->halfSizePreInterpolation ) {
+        filters = 0;
+    }
 }
 
-void CLASS border_interpolate(int border) {
+void
+border_interpolate(int border) {
     unsigned row, col, y, x, f, c, sum[8];
 
-    for ( row = 0; row < height; row++ )
+    for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
-            if ( col == border && row >= border && row < height - border )
+            if ( col == border && row >= border && row < height - border ) {
                 col = width - border;
+            }
             memset(sum, 0, sizeof sum);
-            for ( y = row - 1; y != row + 2; y++ )
-                for ( x = col - 1; x != col + 2; x++ )
+            for ( y = row - 1; y != row + 2; y++ ) {
+                for ( x = col - 1; x != col + 2; x++ ) {
                     if ( y < height && x < width ) {
                         f = fcol(y, x);
                         sum[f] += image[y * width + x][f];
                         sum[f + 4]++;
                     }
+                }
+            }
             f = fcol(row, col);
             for ( c = 0; c < colors; c++ ) {
                 if ( c != f && sum[c + 4] ) {
@@ -4720,22 +5578,28 @@ void CLASS border_interpolate(int border) {
                 }
             }
         }
+    }
 }
 
-void CLASS lin_interpolate() {
+void
+lin_interpolate() {
     int code[16][16][32], size = 16, *ip, sum[4];
     int f, c, i, x, y, row, col, shift, color;
     ushort *pix;
 
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("Bilinear interpolation...\n"));
-    if ( filters == 9 ) size = 6;
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("Bilinear interpolation...\n"));
+    }
+    if ( filters == 9 ) {
+        size = 6;
+    }
     border_interpolate(1);
-    for ( row = 0; row < size; row++ )
+    for ( row = 0; row < size; row++ ) {
         for ( col = 0; col < size; col++ ) {
             ip = code[row][col] + 1;
             f = fcol(row, col);
             memset(sum, 0, sizeof sum);
-            for ( y = -1; y <= 1; y++ )
+            for ( y = -1; y <= 1; y++ ) {
                 for ( x = -1; x <= 1; x++ ) {
                     shift = (y == 0) + (x == 0);
                     color = fcol(row + y, col + x);
@@ -4745,6 +5609,7 @@ void CLASS lin_interpolate() {
                     *ip++ = color;
                     sum[color] += 1 << shift;
                 }
+            }
             code[row][col][0] = (ip - code[row][col]) / 3;
             for ( c = 0; c < colors; c++ ) {
                 if ( c != f ) {
@@ -4753,6 +5618,7 @@ void CLASS lin_interpolate() {
                 }
             }
         }
+    }
     for ( row = 1; row < height - 1; row++ ) {
         for ( col = 1; col < width - 1; col++ ) {
             pix = image[row * width + col];
@@ -4778,7 +5644,8 @@ described in http://scien.stanford.edu/pages/labsite/1999/psych221/projects/99/t
 I've extended the basic idea to work with non-Bayer filter arrays.
 Gradients are numbered clockwise from NW=0 to W=7.
 */
-void CLASS vng_interpolate() {
+void
+vng_interpolate() {
     static const signed char *cp, terms[] = {
             -2, -2, +0, -1, 0, 0x01, -2, -2, +0, +0, 1, 0x01, -2, -1, -1, +0, 0, 0x01,
             -2, -1, +0, -1, 0, 0x02, -2, -1, +0, +0, 0, 0x03, -2, -1, +0, +1, 1, 0x01,
@@ -4809,13 +5676,20 @@ void CLASS vng_interpolate() {
     int g, diff, thold, num, c;
 
     lin_interpolate();
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("VNG interpolation...\n"));
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("VNG interpolation...\n"));
+    }
 
-    if ( filters == 1 ) prow = pcol = 16;
-    if ( filters == 9 ) prow = pcol = 6;
-    ip = (int *) calloc(prow * pcol, 1280);
+    if ( filters == 1 ) {
+        prow = pcol = 16;
+    }
+    if ( filters == 9 ) {
+        prow = pcol = 6;
+    }
+    ip = (int *)calloc(prow * pcol, 1280);
     merror(ip, "vng_interpolate()");
-    for ( row = 0; row < prow; row++ )        /* Precalculate for VNG */
+    for ( row = 0; row < prow; row++ ) {
+        // Precalculate for VNG
         for ( col = 0; col < pcol; col++ ) {
             code[row][col] = ip;
             for ( cp = terms, t = 0; t < 64; t++ ) {
@@ -4826,14 +5700,21 @@ void CLASS vng_interpolate() {
                 weight = *cp++;
                 grads = *cp++;
                 color = fcol(row + y1, col + x1);
-                if ( fcol(row + y2, col + x2) != color ) continue;
+                if ( fcol(row + y2, col + x2) != color ) {
+                    continue;
+                }
                 diag = (fcol(row, col + 1) == color && fcol(row + 1, col) == color) ? 2 : 1;
-                if ( abs(y1 - y2) == diag && abs(x1 - x2) == diag ) continue;
+                if ( abs(y1 - y2) == diag && abs(x1 - x2) == diag ) {
+                    continue;
+                }
                 *ip++ = (y1 * width + x1) * 4 + color;
                 *ip++ = (y2 * width + x2) * 4 + color;
                 *ip++ = weight;
-                for ( g = 0; g < 8; g++ )
-                    if ( grads & 1 << g ) *ip++ = g;
+                for ( g = 0; g < 8; g++ ) {
+                    if ( grads & 1 << g ) {
+                        *ip++ = g;
+                    }
+                }
                 *ip++ = -1;
             }
             *ip++ = INT_MAX;
@@ -4842,35 +5723,47 @@ void CLASS vng_interpolate() {
                 x = *cp++;
                 *ip++ = (y * width + x) * 4;
                 color = fcol(row, col);
-                if ( fcol(row + y, col + x) != color && fcol(row + y * 2, col + x * 2) == color )
+                if ( fcol(row + y, col + x) != color && fcol(row + y * 2, col + x * 2) == color ) {
                     *ip++ = (y * width + x) * 8 + color;
-                else
+                } else {
                     *ip++ = 0;
+                }
             }
         }
+    }
     brow[4] = (ushort (*)[4]) calloc(width * 3, sizeof **brow);
     merror(brow[4], "vng_interpolate()");
-    for ( row = 0; row < 3; row++ )
+    for ( row = 0; row < 3; row++ ) {
         brow[row] = brow[4] + row * width;
-    for ( row = 2; row < height - 2; row++ ) {        /* Do VNG interpolation */
+    }
+    for ( row = 2; row < height - 2; row++ ) {
+        // Do VNG interpolation
         for ( col = 2; col < width - 2; col++ ) {
             pix = image[row * width + col];
             ip = code[row % prow][col % pcol];
             memset(gval, 0, sizeof gval);
-            while ((g = ip[0]) != INT_MAX ) {        /* Calculate gradients */
+            while ((g = ip[0]) != INT_MAX ) {
+                // Calculate gradients
                 diff = ABS(pix[g] - pix[ip[1]]) << ip[2];
                 gval[ip[3]] += diff;
                 ip += 5;
-                if ((g = ip[-1]) == -1 ) continue;
+                if ( (g = ip[-1]) == -1 ) {
+                    continue;
+                }
                 gval[g] += diff;
-                while ((g = *ip++) != -1 )
+                while ( (g = *ip++) != -1 ) {
                     gval[g] += diff;
+                }
             }
             ip++;
             gmin = gmax = gval[0]; // Choose a threshold
             for ( g = 1; g < 8; g++ ) {
-                if ( gmin > gval[g] ) gmin = gval[g];
-                if ( gmax < gval[g] ) gmax = gval[g];
+                if ( gmin > gval[g] ) {
+                    gmin = gval[g];
+                }
+                if ( gmax < gval[g] ) {
+                    gmax = gval[g];
+                }
             }
             if ( gmax == 0 ) {
                 memcpy(brow[2][col], pix, sizeof *image);
@@ -4895,15 +5788,19 @@ void CLASS vng_interpolate() {
             for ( c = 0; c < colors; c++ ) {
                 // Save to buffer
                 t = pix[color];
-                if ( c != color )
+                if ( c != color ) {
                     t += (sum[c] - sum[color]) / num;
+                }
                 brow[2][col][c] = CLIP(t);
             }
         }
-        if ( row > 3 )                /* Write buffer to image */
+        if ( row > 3 ) {
+            // Write buffer to image
             memcpy(image[(row - 2) * width + 2], brow[0] + 2, (width - 4) * sizeof *image);
-        for ( g = 0; g < 4; g++ )
+        }
+        for ( g = 0; g < 4; g++ ) {
             brow[(g - 1) & 3] = brow[g];
+        }
     }
     memcpy(image[(row - 2) * width + 2], brow[0] + 2, (width - 4) * sizeof *image);
     memcpy(image[(row - 1) * width + 2], brow[1] + 2, (width - 4) * sizeof *image);
@@ -4912,18 +5809,21 @@ void CLASS vng_interpolate() {
 }
 
 /*
-   Patterned Pixel Grouping Interpolation by Alain Desbiolles
+Patterned Pixel Grouping Interpolation by Alain Desbiolles
 */
-void CLASS ppg_interpolate() {
+void
+ppg_interpolate() {
     int dir[5] = {1, width, -1, -width, 1};
     int row, col, diff[2], guess[2], c, d, i;
     ushort (*pix)[4];
 
     border_interpolate(3);
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("PPG interpolation...\n"));
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("PPG interpolation...\n"));
+    }
 
-/*  Fill in the green layer with gradients and pattern recognition: */
-    for ( row = 3; row < height - 3; row++ )
+    // Fill in the green layer with gradients and pattern recognition:
+    for ( row = 3; row < height - 3; row++ ) {
         for ( col = 3 + (FC(row, 3) & 1), c = FC(row, col); col < width - 3; col += 2 ) {
             pix = image + row * width + col;
             for ( i = 0; (d = dir[i]) > 0; i++ ) {
@@ -4938,16 +5838,21 @@ void CLASS ppg_interpolate() {
             d = dir[i = diff[0] > diff[1]];
             pix[0][1] = ULIM(guess[i] >> 2, pix[d][1], pix[-d][1]);
         }
-/*  Calculate red and blue for each green pixel:		*/
-    for ( row = 1; row < height - 1; row++ )
+    }
+
+    // Calculate red and blue for each green pixel:
+    for ( row = 1; row < height - 1; row++ ) {
         for ( col = 1 + (FC(row, 2) & 1), c = FC(row, col + 1); col < width - 1; col += 2 ) {
             pix = image + row * width + col;
-            for ( i = 0; (d = dir[i]) > 0; c = 2 - c, i++ )
+            for ( i = 0; (d = dir[i]) > 0; c = 2 - c, i++ ) {
                 pix[0][c] = CLIP((pix[-d][c] + pix[d][c] + 2 * pix[0][1]
                                   - pix[-d][1] - pix[d][1]) >> 1);
+            }
         }
-/*  Calculate blue for red pixels and vice versa:		*/
-    for ( row = 1; row < height - 1; row++ )
+    }
+
+    // Calculate blue for red pixels and vice versa:
+    for ( row = 1; row < height - 1; row++ ) {
         for ( col = 1 + (FC(row, 1) & 1), c = 2 - FC(row, col); col < width - 1; col += 2 ) {
             pix = image + row * width + col;
             for ( i = 0; (d = dir[i] + dir[i + 1]) > 0; i++ ) {
@@ -4957,14 +5862,17 @@ void CLASS ppg_interpolate() {
                 guess[i] = pix[-d][c] + pix[d][c] + 2 * pix[0][1]
                            - pix[-d][1] - pix[d][1];
             }
-            if ( diff[0] != diff[1] )
+            if ( diff[0] != diff[1] ) {
                 pix[0][c] = CLIP(guess[diff[0] > diff[1]] >> 1);
-            else
+            } else {
                 pix[0][c] = CLIP((guess[0] + guess[1]) >> 2);
+            }
         }
+    }
 }
 
-void CLASS cielab(ushort rgb[3], short lab[3]) {
+void
+cielab(ushort rgb[3], short lab[3]) {
     int c, i, j, k;
     float r, xyz[3];
     static float cbrt[0x10000], xyz_cam[3][4];
@@ -4974,10 +5882,13 @@ void CLASS cielab(ushort rgb[3], short lab[3]) {
             r = i / 65535.0;
             cbrt[i] = r > 0.008856 ? pow(r, 1 / 3.0) : 7.787 * r + 16 / 116.0;
         }
-        for ( i = 0; i < 3; i++ )
-            for ( j = 0; j < colors; j++ )
-                for ( xyz_cam[i][j] = k = 0; k < 3; k++ )
+        for ( i = 0; i < 3; i++ ) {
+            for ( j = 0; j < colors; j++ ) {
+                for ( xyz_cam[i][j] = k = 0; k < 3; k++ ) {
                     xyz_cam[i][j] += xyz_rgb[i][k] * rgb_cam[k][j] / d65_white[i];
+                }
+            }
+        }
         return;
     }
     xyz[0] = xyz[1] = xyz[2] = 0.5;
@@ -5000,7 +5911,8 @@ void CLASS cielab(ushort rgb[3], short lab[3]) {
 /*
 Frank Markesteijn's algorithm for Fuji X-Trans sensors
 */
-void CLASS xtrans_interpolate(int passes) {
+void
+xtrans_interpolate(int passes) {
     int c, d, f, g, h, i, v, ng, row, col, top, left, mrow, mcol;
     int val, ndir, pass, hm[8], avg[4], color[3][8];
     static const short orth[12] = {1, 0, 0, 1, -1, 0, 0, -1, 1, 0, 0, 1},
@@ -5014,8 +5926,9 @@ void CLASS xtrans_interpolate(int passes) {
     float (*drv)[TS][TS], diff[6], tr;
     char (*homo)[TS][TS], *buffer;
 
-    if ( OPTIONS_values->verbose )
+    if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("%d-pass X-Trans interpolation...\n"), passes);
+    }
 
     cielab(0, 0);
     ndir = 4 << (passes > 1);
@@ -5060,13 +5973,17 @@ void CLASS xtrans_interpolate(int passes) {
             if ( !max ) {
                 for ( c = 0; c < 6; c++ ) {
                     val = pix[hex[c]][1];
-                    if ( min > val ) min = val;
-                    if ( max < val ) max = val;
+                    if ( min > val ) {
+                        min = val;
+                    }
+                    if ( max < val ) {
+                        max = val;
+                    }
                 }
             }
             pix[0][1] = min;
             pix[0][3] = max;
-            switch ((row - sgrow) % 3 ) {
+            switch ( (row - sgrow) % 3 ) {
                 case 1:
                     if ( row < height - 3 ) {
                         row++;
@@ -5074,7 +5991,7 @@ void CLASS xtrans_interpolate(int passes) {
                     }
                     break;
                 case 2:
-                    if ((min = ~(max = 0)) && (col += 2) < width - 3 && row > 2 ) {
+                    if ( (min = ~(max = 0)) && (col += 2) < width - 3 && row > 2 ) {
                         row--;
                     }
             }
@@ -5097,7 +6014,9 @@ void CLASS xtrans_interpolate(int passes) {
             // Interpolate green horizontally, vertically, and along both diagonals:
             for ( row = top; row < mrow; row++ ) {
                 for ( col = left; col < mcol; col++ ) {
-                    if ((f = fcol(row, col)) == 1 ) continue;
+                    if ( (f = fcol(row, col)) == 1 ) {
+                        continue;
+                    }
                     pix = image + row * width + col;
                     hex = allhex[row % 3][col % 3][0];
                     color[1][0] = 174 * (pix[hex[1]][1] + pix[hex[0]][1]) -
@@ -5119,12 +6038,13 @@ void CLASS xtrans_interpolate(int passes) {
             }
 
             for ( pass = 0; pass < passes; pass++ ) {
-                if ( pass == 1 )
+                if ( pass == 1 ) {
                     memcpy(rgb += 4, buffer, 4 * sizeof *rgb);
+                }
 
                 // Recalculate green from interpolated values of closer pixels:
                 if ( pass ) {
-                    for ( row = top + 2; row < mrow - 2; row++ )
+                    for ( row = top + 2; row < mrow - 2; row++ ) {
                         for ( col = left + 2; col < mcol - 2; col++ ) {
                             if ((f = fcol(row, col)) == 1 ) continue;
                             pix = image + row * width + col;
@@ -5136,6 +6056,7 @@ void CLASS xtrans_interpolate(int passes) {
                                 rix[0][1] = LIM(val / 3, pix[0][1], pix[0][3]);
                             }
                         }
+                    }
                 }
 
                 // Interpolate red and blue values for solitary green pixels:
@@ -5148,9 +6069,10 @@ void CLASS xtrans_interpolate(int passes) {
                             for ( c = 0; c < 2; c++, h ^= 2 ) {
                                 g = 2 * rix[0][1] - rix[i << c][1] - rix[-i << c][1];
                                 color[h][d] = g + rix[i << c][h] + rix[-i << c][h];
-                                if ( d > 1 )
+                                if ( d > 1 ) {
                                     diff[d] += SQR (rix[i << c][1] - rix[-i << c][1]
                                                     - rix[i << c][h] + rix[-i << c][h]) + SQR(g);
+                                }
                             }
                             if ( d > 1 && (d & 1) ) {
                                 if ( diff[d - 1] < diff[d] ) {
@@ -5171,7 +6093,9 @@ void CLASS xtrans_interpolate(int passes) {
                 // Interpolate red for blue pixels and vice versa:
                 for ( row = top + 3; row < mrow - 3; row++ )
                     for ( col = left + 3; col < mcol - 3; col++ ) {
-                        if ((f = 2 - fcol(row, col)) == 1 ) continue;
+                        if ( (f = 2 - fcol(row, col)) == 1 ) {
+                            continue;
+                        }
                         rix = &rgb[0][row - top][col - left];
                         c = (row - sgrow) % 3 ? TS : 1;
                         h = 3 * (c ^ TS ^ 1);
@@ -5185,25 +6109,31 @@ void CLASS xtrans_interpolate(int passes) {
                     }
 
                 // Fill in red and blue for 2x2 blocks of green:
-                for ( row = top + 2; row < mrow - 2; row++ )
-                    if ((row - sgrow) % 3 )
-                        for ( col = left + 2; col < mcol - 2; col++ )
+                for ( row = top + 2; row < mrow - 2; row++ ) {
+                    if ((row - sgrow) % 3 ) {
+                        for ( col = left + 2; col < mcol - 2; col++ ) {
                             if ((col - sgcol) % 3 ) {
                                 rix = &rgb[0][row - top][col - left];
                                 hex = allhex[row % 3][col % 3][1];
-                                for ( d = 0; d < ndir; d += 2, rix += TS * TS )
+                                for ( d = 0; d < ndir; d += 2, rix += TS * TS ) {
                                     if ( hex[d] + hex[d + 1] ) {
                                         g = 3 * rix[0][1] - 2 * rix[hex[d]][1] - rix[hex[d + 1]][1];
-                                        for ( c = 0; c < 4; c += 2 )
+                                        for ( c = 0; c < 4; c += 2 ) {
                                             rix[0][c] =
                                                     CLIP((g + 2 * rix[hex[d]][c] + rix[hex[d + 1]][c]) / 3);
+                                        }
                                     } else {
                                         g = 2 * rix[0][1] - rix[hex[d]][1] - rix[hex[d + 1]][1];
-                                        for ( c = 0; c < 4; c += 2 )
+                                        for ( c = 0; c < 4; c += 2 ) {
                                             rix[0][c] =
                                                     CLIP((g + rix[hex[d]][c] + rix[hex[d + 1]][c]) / 2);
+                                        }
                                     }
+                                }
                             }
+                        }
+                    }
+                }
             }
             rgb = (ushort (*)[TS][TS][3]) buffer;
             mrow -= top;
@@ -5211,10 +6141,12 @@ void CLASS xtrans_interpolate(int passes) {
 
             // Convert to CIELab and differentiate in all directions:
             for ( d = 0; d < ndir; d++ ) {
-                for ( row = 2; row < mrow - 2; row++ )
-                    for ( col = 2; col < mcol - 2; col++ )
+                for ( row = 2; row < mrow - 2; row++ ) {
+                    for ( col = 2; col < mcol - 2; col++ ) {
                         cielab(rgb[d][row][col], lab[row][col]);
-                for ( f = dir[d & 3], row = 3; row < mrow - 3; row++ )
+                    }
+                }
+                for ( f = dir[d & 3], row = 3; row < mrow - 3; row++ ) {
                     for ( col = 3; col < mcol - 3; col++ ) {
                         lix = &lab[row][col];
                         g = 2 * lix[0][0] - lix[f][0] - lix[-f][0];
@@ -5222,38 +6154,60 @@ void CLASS xtrans_interpolate(int passes) {
                                            + SQR((2 * lix[0][1] - lix[f][1] - lix[-f][1] + g * 500 / 232))
                                            + SQR((2 * lix[0][2] - lix[f][2] - lix[-f][2] - g * 500 / 580));
                     }
+                }
             }
 
             // Build homogeneity maps from the derivatives:
             memset(homo, 0, ndir * TS * TS);
-            for ( row = 4; row < mrow - 4; row++ )
+            for ( row = 4; row < mrow - 4; row++ ) {
                 for ( col = 4; col < mcol - 4; col++ ) {
-                    for ( tr = FLT_MAX, d = 0; d < ndir; d++ )
-                        if ( tr > drv[d][row][col] )
+                    for ( tr = FLT_MAX, d = 0; d < ndir; d++ ) {
+                        if ( tr > drv[d][row][col] ) {
                             tr = drv[d][row][col];
+                        }
+                    }
                     tr *= 8;
-                    for ( d = 0; d < ndir; d++ )
-                        for ( v = -1; v <= 1; v++ )
-                            for ( h = -1; h <= 1; h++ )
-                                if ( drv[d][row + v][col + h] <= tr )
+                    for ( d = 0; d < ndir; d++ ) {
+                        for ( v = -1; v <= 1; v++ ) {
+                            for ( h = -1; h <= 1; h++ ) {
+                                if ( drv[d][row + v][col + h] <= tr ) {
                                     homo[d][row][col]++;
+                                }
+                            }
+                        }
+                    }
                 }
+            }
 
             // Average the most homogenous pixels for the final result:
-            if ( height - top < TS + 4 ) mrow = height - top + 2;
-            if ( width - left < TS + 4 ) mcol = width - left + 2;
+            if ( height - top < TS + 4 ) {
+                mrow = height - top + 2;
+            }
+            if ( width - left < TS + 4 ) {
+                mcol = width - left + 2;
+            }
             for ( row = MIN(top, 8); row < mrow - 8; row++ ) {
                 for ( col = MIN(left, 8); col < mcol - 8; col++ ) {
-                    for ( d = 0; d < ndir; d++ )
-                        for ( hm[d] = 0, v = -2; v <= 2; v++ )
-                            for ( h = -2; h <= 2; h++ )
+                    for ( d = 0; d < ndir; d++ ) {
+                        for ( hm[d] = 0, v = -2; v <= 2; v++ ) {
+                            for ( h = -2; h <= 2; h++ ) {
                                 hm[d] += homo[d][row + v][col + h];
-                    for ( d = 0; d < ndir - 4; d++ )
-                        if ( hm[d] < hm[d + 4] ) hm[d] = 0;
-                        else
-                            if ( hm[d] > hm[d + 4] ) hm[d + 4] = 0;
-                    for ( max = hm[0], d = 1; d < ndir; d++ )
-                        if ( max < hm[d] ) max = hm[d];
+                            }
+                        }
+                    }
+
+                    for ( d = 0; d < ndir - 4; d++ ) {
+                        if ( hm[d] < hm[d + 4] ) {
+                            hm[d] = 0;
+                        } else if ( hm[d] > hm[d + 4] ) {
+                            hm[d + 4] = 0;
+                        }
+                    }
+                    for ( max = hm[0], d = 1; d < ndir; d++ ) {
+                        if ( max < hm[d] ) {
+                            max = hm[d];
+                        }
+                    }
                     max -= max >> 3;
                     memset(avg, 0, sizeof avg);
                     for ( d = 0; d < ndir; d++ ) {
@@ -5278,10 +6232,11 @@ void CLASS xtrans_interpolate(int passes) {
 #undef fcol
 
 /*
-   Adaptive Homogeneity-Directed interpolation is based on
-   the work of Keigo Hirakawa, Thomas Parks, and Paul Lee.
- */
-void CLASS ahd_interpolate() {
+Adaptive Homogeneity-Directed interpolation is based on
+the work of Keigo Hirakawa, Thomas Parks, and Paul Lee.
+*/
+void
+ahd_interpolate() {
     int i, j, top, left, row, col, tr, tc, c, d, val, hm[2];
     static const int dir[4] = {-1, 1, -TS, TS};
     unsigned ldiff[2][4], abdiff[2][4], leps, abeps;
@@ -5289,17 +6244,19 @@ void CLASS ahd_interpolate() {
     short (*lab)[TS][TS][3], (*lix)[3];
     char (*homo)[TS][TS], *buffer;
 
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("AHD interpolation...\n"));
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("AHD interpolation...\n"));
+    }
 
     cielab(0, 0);
     border_interpolate(5);
-    buffer = (char *) malloc(26 * TS * TS);
+    buffer = (char *)malloc(26 * TS * TS);
     merror(buffer, "ahd_interpolate()");
     rgb = (ushort (*)[TS][TS][3]) buffer;
     lab = (short (*)[TS][TS][3]) (buffer + 12 * TS * TS);
     homo = (char (*)[TS][TS]) (buffer + 24 * TS * TS);
 
-    for ( top = 2; top < height - 5; top += TS - 6 )
+    for ( top = 2; top < height - 5; top += TS - 6 ) {
         for ( left = 2; left < width - 5; left += TS - 6 ) {
             // Interpolate green horizontally and vertically:
             for ( row = top; row < top + TS && row < height - 2; row++ ) {
@@ -5314,6 +6271,7 @@ void CLASS ahd_interpolate() {
                     rgb[1][row - top][col - left][1] = ULIM(val, pix[-width][1], pix[width][1]);
                 }
             }
+
             // Interpolate red and blue, and convert to CIELab:
             for ( d = 0; d < 2; d++ ) {
                 for ( row = top + 1; row < top + TS - 1 && row < height - 3; row++ ) {
@@ -5321,7 +6279,7 @@ void CLASS ahd_interpolate() {
                         pix = image + row * width + col;
                         rix = &rgb[d][row - top][col - left];
                         lix = &lab[d][row - top][col - left];
-                        if ((c = 2 - FC(row, col)) == 1 ) {
+                        if ( (c = 2 - FC(row, col)) == 1 ) {
                             c = FC(row + 1, col);
                             val = pix[0][1] + ((pix[-1][2 - c] + pix[1][2 - c]
                                                 - rix[-1][1] - rix[1][1]) >> 1);
@@ -5340,6 +6298,7 @@ void CLASS ahd_interpolate() {
                     }
                 }
             }
+
             // Build homogeneity maps from the CIELab images:
             memset(homo, 0, 2 * TS * TS);
             for ( row = top + 2; row < top + TS - 2 && row < height - 4; row++ ) {
@@ -5358,40 +6317,48 @@ void CLASS ahd_interpolate() {
                                MAX(ldiff[1][2], ldiff[1][3]));
                     abeps = MIN(MAX(abdiff[0][0], abdiff[0][1]),
                                 MAX(abdiff[1][2], abdiff[1][3]));
-                    for ( d = 0; d < 2; d++ )
-                        for ( i = 0; i < 4; i++ )
-                            if ( ldiff[d][i] <= leps && abdiff[d][i] <= abeps )
+                    for ( d = 0; d < 2; d++ ) {
+                        for ( i = 0; i < 4; i++ ) {
+                            if ( ldiff[d][i] <= leps && abdiff[d][i] <= abeps ) {
                                 homo[d][tr][tc]++;
+                            }
+                        }
+                    }
                 }
             }
+
             // Combine the most homogenous pixels for the final result:
             for ( row = top + 3; row < top + TS - 3 && row < height - 5; row++ ) {
                 tr = row - top;
                 for ( col = left + 3; col < left + TS - 3 && col < width - 5; col++ ) {
                     tc = col - left;
-                    for ( d = 0; d < 2; d++ )
-                        for ( hm[d] = 0, i = tr - 1; i <= tr + 1; i++ )
-                            for ( j = tc - 1; j <= tc + 1; j++ )
+                    for ( d = 0; d < 2; d++ ) {
+                        for ( hm[d] = 0, i = tr - 1; i <= tr + 1; i++ ) {
+                            for ( j = tc - 1; j <= tc + 1; j++ ) {
                                 hm[d] += homo[d][i][j];
+                            }
+                        }
+                    }
                     if ( hm[0] != hm[1] ) {
                         for ( c = 0; c < 3; c++ ) {
                             image[row * width + col][c] = rgb[hm[1] > hm[0]][tr][tc][c];
                         }
                     } else {
                         for ( c = 0; c < 3; c++ ) {
-                            image[row * width + col][c] =
-                                    (rgb[0][tr][tc][c] + rgb[1][tr][tc][c]) >> 1;
+                            image[row * width + col][c] = (rgb[0][tr][tc][c] + rgb[1][tr][tc][c]) >> 1;
                         }
                     }
                 }
             }
         }
+    }
     free(buffer);
 }
 
 #undef TS
 
-void CLASS median_filter() {
+void
+median_filter() {
     ushort (*pix)[4];
     int pass, c, i, j, k, med[9];
     static const uchar opt[] =    /* Optimal 9-element median search */
@@ -5399,25 +6366,35 @@ void CLASS median_filter() {
              0, 3, 5, 8, 4, 7, 3, 6, 1, 4, 2, 5, 4, 7, 4, 2, 6, 4, 4, 2};
 
     for ( pass = 1; pass <= OPTIONS_values->med_passes; pass++ ) {
-        if ( OPTIONS_values->verbose )
+        if ( OPTIONS_values->verbose ) {
             fprintf(stderr, _("Median filter pass %d...\n"), pass);
+        }
         for ( c = 0; c < 3; c += 2 ) {
-            for ( pix = image; pix < image + width * height; pix++ )
+            for ( pix = image; pix < image + width * height; pix++ ) {
                 pix[0][3] = pix[0][c];
+            }
             for ( pix = image + width; pix < image + width * (height - 1); pix++ ) {
-                if ((pix - image + 1) % width < 2 ) continue;
-                for ( k = 0, i = -width; i <= width; i += width )
-                    for ( j = i - 1; j <= i + 1; j++ )
+                if ( (pix - image + 1) % width < 2 ) {
+                    continue;
+                }
+                for ( k = 0, i = -width; i <= width; i += width ) {
+                    for ( j = i - 1; j <= i + 1; j++ ) {
                         med[k++] = pix[j][3] - pix[j][1];
-                for ( i = 0; i < sizeof opt; i += 2 )
-                    if ( med[opt[i]] > med[opt[i + 1]] ) SWAP (med[opt[i]], med[opt[i + 1]]);
+                    }
+                }
+                for ( i = 0; i < sizeof opt; i += 2 ) {
+                    if ( med[opt[i]] > med[opt[i + 1]] ) {
+                        SWAP (med[opt[i]], med[opt[i + 1]]);
+                    }
+                }
                 pix[0][c] = CLIP(med[4] + pix[0][1]);
             }
         }
     }
 }
 
-void CLASS blend_highlights() {
+void
+blend_highlights() {
     int clip = INT_MAX, row, col, c, i, j;
     static const float trans[2][4][4] =
             {{{1, 1, 1},    {1.7320508, -1.7320508, 0},     {-1, -1, 2}},
@@ -5479,7 +6456,8 @@ void CLASS blend_highlights() {
 
 #define SCALE (4 >> shrink)
 
-void CLASS recover_highlights() {
+void
+recover_highlights() {
     float *map, sum, wgt, grow;
     int hsat[4], count, spread, change, val, i;
     unsigned high, wide, mrow, mcol, row, col, kc, c, d, y, x;
@@ -5494,17 +6472,20 @@ void CLASS recover_highlights() {
              {1,  -1},
              {0,  -1}};
 
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("Rebuilding highlights...\n"));
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("Rebuilding highlights...\n"));
+    }
 
     grow = pow(2, 4 - OPTIONS_values->highlight);
     for ( c = 0; c < colors; c++ ) {
         hsat[c] = 32000 * pre_mul[c];
     }
-    for ( kc = 0, c = 1; c < colors; c++ )
+    for ( kc = 0, c = 1; c < colors; c++ ) {
         if ( pre_mul[kc] < pre_mul[c] ) kc = c;
+    }
     high = height / SCALE;
     wide = width / SCALE;
-    map = (float *) calloc(high, wide * sizeof *map);
+    map = (float *)calloc(high, wide * sizeof *map);
     merror(map, "recover_highlights()");
     for ( c = 0; c < colors; c++ ) {
         if ( c != kc ) {
@@ -5530,7 +6511,9 @@ void CLASS recover_highlights() {
             for ( spread = 32 / grow; spread--; ) {
                 for ( mrow = 0; mrow < high; mrow++ ) {
                     for ( mcol = 0; mcol < wide; mcol++ ) {
-                        if ( map[mrow * wide + mcol] ) continue;
+                        if ( map[mrow * wide + mcol] ) {
+                            continue;
+                        }
                         sum = count = 0;
                         for ( d = 0; d < 8; d++ ) {
                             y = mrow + dir[d][0];
@@ -5540,8 +6523,9 @@ void CLASS recover_highlights() {
                                 count += 1 + (d & 1);
                             }
                         }
-                        if ( count > 3 )
+                        if ( count > 3 ) {
                             map[mrow * wide + mcol] = -(sum + grow) / (count + grow);
+                        }
                     }
                 }
                 for ( change = i = 0; i < high * wide; i++ ) {
@@ -5561,14 +6545,17 @@ void CLASS recover_highlights() {
             }
             for ( mrow = 0; mrow < high; mrow++ ) {
                 for ( mcol = 0; mcol < wide; mcol++ ) {
-                    for ( row = mrow * SCALE; row < (mrow + 1) * SCALE; row++ )
+                    for ( row = mrow * SCALE; row < (mrow + 1) * SCALE; row++ ) {
                         for ( col = mcol * SCALE; col < (mcol + 1) * SCALE; col++ ) {
                             pixel = image[row * width + col];
                             if ( pixel[c] / hsat[c] > 1 ) {
                                 val = pixel[kc] * map[mrow * wide + mcol];
-                                if ( pixel[c] < val ) pixel[c] = CLIP(val);
+                                if ( pixel[c] < val ) {
+                                    pixel[c] = CLIP(val);
+                                }
                             }
                         }
+                    }
                 }
             }
         }
@@ -5578,24 +6565,31 @@ void CLASS recover_highlights() {
 
 #undef SCALE
 
-void CLASS tiff_get(unsigned base,
-                    unsigned *tag, unsigned *type, unsigned *len, unsigned *save) {
+void
+tiff_get(unsigned base, unsigned *tag, unsigned *type, unsigned *len, unsigned *save) {
     *tag = get2();
     *type = get2();
     *len = get4();
     *save = ftell(ifp) + 4;
-    if ( *len * ("11124811248484"[*type < 14 ? *type : 0] - '0') > 4 )
+
+    if ( *len * ("11124811248484"[*type < 14 ? *type : 0] - '0') > 4 ) {
         fseek(ifp, get4() + base, SEEK_SET);
+    }
 }
 
-void CLASS parse_thumb_note(int base, unsigned toff, unsigned tlen) {
+void
+parse_thumb_note(int base, unsigned toff, unsigned tlen) {
     unsigned entries, tag, type, len, save;
 
     entries = get2();
     while ( entries-- ) {
         tiff_get(base, &tag, &type, &len, &save);
-        if ( tag == toff ) thumb_offset = get4() + base;
-        if ( tag == tlen ) thumb_length = get4();
+        if ( tag == toff ) {
+            thumb_offset = get4() + base;
+        }
+        if ( tag == tlen ) {
+            thumb_length = get4();
+        }
         fseek(ifp, save, SEEK_SET);
     }
 }
@@ -5642,17 +6636,21 @@ void CLASS parse_makernote(int base, int uptag) {
     short morder, sorder = GLOBAL_endianOrder;
     char buf[10];
     // The MakerNote might have its own TIFF header (possibly with its own byte-order!), or it might just be a table.
-    if ( !strcmp(make, "Nokia")) return;
+    if ( !strcmp(make, "Nokia") ) {
+        return;
+    }
     fread(buf, 1, 10, ifp);
-    if ( !strncmp(buf, "KDK", 3) ||    /* these aren't TIFF tables */
+    if ( !strncmp(buf, "KDK", 3) || // these aren't TIFF tables
          !strncmp(buf, "VER", 3) ||
          !strncmp(buf, "IIII", 4) ||
-         !strncmp(buf, "MMMM", 4))
+         !strncmp(buf, "MMMM", 4) ) {
         return;
-    if ( !strncmp(buf, "KC", 2) ||    /* Konica KD-400Z, KD-510Z */
-         !strncmp(buf, "MLY", 3)) {    /* Minolta DiMAGE G series */
+    }
+
+    if ( !strncmp(buf, "KC", 2) ||  // Konica KD-400Z, KD-510Z
+         !strncmp(buf, "MLY", 3)) { // Minolta DiMAGE G series
         GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-        while ((i = ftell(ifp)) < data_offset && i < 16384 ) {
+        while ( (i = ftell(ifp)) < data_offset && i < 16384 ) {
             wb[0] = wb[2];
             wb[2] = wb[1];
             wb[1] = wb[3];
@@ -5666,66 +6664,85 @@ void CLASS parse_makernote(int base, int uptag) {
         }
         goto quit;
     }
+
     if ( !strcmp(buf, "Nikon")) {
         base = ftell(ifp);
         GLOBAL_endianOrder = get2();
-        if ( get2() != 42 ) goto quit;
+        if ( get2() != 42 ) {
+            goto quit;
+        }
         offset = get4();
         fseek(ifp, offset - 8, SEEK_CUR);
-    } else
+    } else {
         if ( !strcmp(buf, "OLYMPUS") ||
              !strcmp(buf, "PENTAX ")) {
             base = ftell(ifp) - 10;
             fseek(ifp, -2, SEEK_CUR);
             GLOBAL_endianOrder = get2();
             if ( buf[0] == 'O' ) get2();
-        } else
+        } else {
             if ( !strncmp(buf, "SONY", 4) ||
                  !strcmp(buf, "Panasonic")) {
                 goto nf;
-            } else
+            } else {
                 if ( !strncmp(buf, "FUJIFILM", 8)) {
                     base = ftell(ifp) - 10;
                     nf:
                     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
                     fseek(ifp, 2, SEEK_CUR);
-                } else
+                } else {
                     if ( !strcmp(buf, "OLYMP") ||
                          !strcmp(buf, "LEICA") ||
                          !strcmp(buf, "Ricoh") ||
-                         !strcmp(buf, "EPSON"))
+                         !strcmp(buf, "EPSON")) {
                         fseek(ifp, -2, SEEK_CUR);
-                    else
+                    } else {
                         if ( !strcmp(buf, "AOC") ||
-                             !strcmp(buf, "QVC"))
+                             !strcmp(buf, "QVC")) {
                             fseek(ifp, -4, SEEK_CUR);
-                        else {
+                        } else {
                             fseek(ifp, -10, SEEK_CUR);
-                            if ( !strncmp(make, "SAMSUNG", 7))
+                            if ( !strncmp(make, "SAMSUNG", 7)) {
                                 base = ftell(ifp);
+                            }
                         }
+                    }
+                }
+            }
+        }
+    }
+
     entries = get2();
-    if ( entries > 1000 ) return;
+    if ( entries > 1000 ) {
+        return;
+    }
     morder = GLOBAL_endianOrder;
     while ( entries-- ) {
         GLOBAL_endianOrder = morder;
         tiff_get(base, &tag, &type, &len, &save);
         tag |= uptag << 16;
-        if ( tag == 2 && strstr(make, "NIKON") && !iso_speed )
+
+        if ( tag == 2 && strstr(make, "NIKON") && !iso_speed ) {
             iso_speed = (get2(), get2());
+        }
+
         if ( tag == 4 && len > 26 && len < 35 ) {
-            if ((i = (get4(), get2())) != 0x7fff && !iso_speed )
+            if ( (i = (get4(), get2())) != 0x7fff && !iso_speed ) {
                 iso_speed = 50 * pow(2, i / 32.0 - 4);
-            if ((i = (get2(), get2())) != 0x7fff && !aperture )
+            }
+            if ( (i = (get2(), get2())) != 0x7fff && !aperture ) {
                 aperture = pow(2, i / 64.0);
-            if ((i = get2()) != 0xffff && !shutter )
+            }
+            if ( (i = get2()) != 0xffff && !shutter ) {
                 shutter = pow(2, (short) i / -32.0);
+            }
             wbi = (get2(), get2());
             shot_order = (get2(), get2());
         }
-        if ((tag == 4 || tag == 0x114) && !strncmp(make, "KONICA", 6)) {
+
+        if ( (tag == 4 || tag == 0x114) && !strncmp(make, "KONICA", 6) ) {
             fseek(ifp, tag == 4 ? 140 : 160, SEEK_CUR);
-            switch ( get2()) {
+            switch ( get2() ) {
                 case 72:
                     GLOBAL_flipsMask = 0;
                     break;
@@ -5737,52 +6754,78 @@ void CLASS parse_makernote(int base, int uptag) {
                     break;
             }
         }
-        if ( tag == 7 && type == 2 && len > 20 )
+
+        if ( tag == 7 && type == 2 && len > 20 ) {
             fgets(model2, 64, ifp);
-        if ( tag == 8 && type == 4 )
+        }
+
+        if ( tag == 8 && type == 4 ) {
             shot_order = get4();
-        if ( tag == 9 && !strcmp(make, "Canon"))
+        }
+
+        if ( tag == 9 && !strcmp(make, "Canon") ) {
             fread(artist, 64, 1, ifp);
+        }
+
         if ( tag == 0xc && len == 4 ) {
             for ( c = 0; c < 3; c++ ) {
                 cam_mul[(c << 1 | c >> 1) & 3] = getreal(type);
             }
         }
+
         if ( tag == 0xd && type == 7 && get2() == 0xaaaa ) {
-            for ( c = i = 2; (ushort) c != 0xbbbb && i < len; i++ )
+            for ( c = i = 2; (ushort) c != 0xbbbb && i < len; i++ ) {
                 c = c << 8 | fgetc(ifp);
-            while ((i += 4) < len - 5 )
-                if ( get4() == 257 && (i = len) && (c = (get4(), fgetc(ifp))) < 3 )
+            }
+            while ( (i += 4) < len - 5 ) {
+                if ( get4() == 257 && (i = len) && (c = (get4(), fgetc(ifp))) < 3 ) {
                     GLOBAL_flipsMask = "065"[c] - '0';
+                }
+            }
         }
-        if ( tag == 0x10 && type == 4 )
+
+        if ( tag == 0x10 && type == 4 ) {
             unique_id = get4();
+        }
+
         if ( tag == 0x11 && is_raw && !strncmp(make, "NIKON", 5)) {
             fseek(ifp, get4() + base, SEEK_SET);
             parse_tiff_ifd(base);
         }
+
         if ( tag == 0x14 && type == 7 ) {
             if ( len == 2560 ) {
                 fseek(ifp, 1248, SEEK_CUR);
                 goto get2_256;
             }
             fread(buf, 1, 10, ifp);
-            if ( !strncmp(buf, "NRW ", 4)) {
+            if ( !strncmp(buf, "NRW ", 4) ) {
                 fseek(ifp, strcmp(buf + 4, "0100") ? 46 : 1546, SEEK_CUR);
                 cam_mul[0] = get4() << 2;
                 cam_mul[1] = get4() + get4();
                 cam_mul[2] = get4() << 2;
             }
         }
-        if ( tag == 0x15 && type == 2 && is_raw )
+
+        if ( tag == 0x15 && type == 2 && is_raw ) {
             fread(model, 64, 1, ifp);
-        if ( strstr(make, "PENTAX")) {
-            if ( tag == 0x1b ) tag = 0x1018;
-            if ( tag == 0x1c ) tag = 0x1017;
         }
-        if ( tag == 0x1d )
-            while ((c = fgetc(ifp)) && c != EOF)
+
+        if ( strstr(make, "PENTAX") ) {
+            if ( tag == 0x1b ) {
+                tag = 0x1018;
+            }
+            if ( tag == 0x1c ) {
+                tag = 0x1017;
+            }
+        }
+
+        if ( tag == 0x1d ) {
+            while ((c = fgetc(ifp)) && c != EOF) {
                 serial = serial * 10 + (isdigit(c) ? c - '0' : c % 10);
+            }
+        }
+
         if ( tag == 0x29 && type == 1 ) {
             c = wbi < 18 ? "012347800000005896"[wbi] - '0' : 0;
             fseek(ifp, 8 + c * 32, SEEK_CUR);
@@ -5790,11 +6833,13 @@ void CLASS parse_makernote(int base, int uptag) {
                 cam_mul[c ^ (c >> 1) ^ 1] = get4();
             }
         }
+
         if ( tag == 0x3d && type == 3 && len == 4 ) {
             for ( c = 0; c < 4; c++ ) {
                 cblack[c ^ c >> 1] = get2() >> (14 - tiff_bps);
             }
         }
+
         if ( tag == 0x81 && type == 4 ) {
             data_offset = get4();
             fseek(ifp, data_offset + 41, SEEK_SET);
@@ -5802,21 +6847,30 @@ void CLASS parse_makernote(int base, int uptag) {
             raw_width = get2();
             filters = 0x61616161;
         }
-        if ((tag == 0x81 && type == 7) ||
-            (tag == 0x100 && type == 7) ||
-            (tag == 0x280 && type == 1)) {
+
+        if ( (tag == 0x81 && type == 7) ||
+             (tag == 0x100 && type == 7) ||
+             (tag == 0x280 && type == 1) ) {
             thumb_offset = ftell(ifp);
             thumb_length = len;
         }
-        if ( tag == 0x88 && type == 4 && (thumb_offset = get4()))
+
+        if ( tag == 0x88 && type == 4 && (thumb_offset = get4()) ) {
             thumb_offset += base;
-        if ( tag == 0x89 && type == 4 )
+        }
+
+        if ( tag == 0x89 && type == 4 ) {
             thumb_length = get4();
-        if ( tag == 0x8c || tag == 0x96 )
+        }
+
+        if ( tag == 0x8c || tag == 0x96 ) {
             meta_offset = ftell(ifp);
+        }
+
         if ( tag == 0x97 ) {
-            for ( i = 0; i < 4; i++ )
+            for ( i = 0; i < 4; i++ ) {
                 ver97 = ver97 * 10 + fgetc(ifp) - '0';
+            }
             switch ( ver97 ) {
                 case 100:
                     fseek(ifp, 68, SEEK_CUR);
@@ -5837,10 +6891,13 @@ void CLASS parse_makernote(int base, int uptag) {
                     }
             }
             if ( ver97 >= 200 ) {
-                if ( ver97 != 205 ) fseek(ifp, 280, SEEK_CUR);
+                if ( ver97 != 205 ) {
+                    fseek(ifp, 280, SEEK_CUR);
+                }
                 fread(buf97, 324, 1, ifp);
             }
         }
+
         if ( tag == 0xa1 && type == 7 ) {
             GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
             fseek(ifp, 140, SEEK_CUR);
@@ -5848,70 +6905,88 @@ void CLASS parse_makernote(int base, int uptag) {
                 cam_mul[c] = get4();
             }
         }
+
         if ( tag == 0xa4 && type == 3 ) {
             fseek(ifp, wbi * 48, SEEK_CUR);
             for ( c = 0; c < 3; c++ ) {
                 cam_mul[c] = get2();
             }
         }
+
         if ( tag == 0xa7 && (unsigned) (ver97 - 200) < 17 ) {
             ci = xlat[0][serial & 0xff];
             cj = xlat[1][fgetc(ifp) ^ fgetc(ifp) ^ fgetc(ifp) ^ fgetc(ifp)];
             ck = 0x60;
-            for ( i = 0; i < 324; i++ )
+            for ( i = 0; i < 324; i++ ) {
                 buf97[i] ^= (cj += ci * ck++);
+            }
             i = "66666>666;6A;:;55"[ver97 - 200] - '0';
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1) ^ (i & 1)] =
-                        sget2(buf97 + (i & -2) + c * 2);
+                cam_mul[c ^ (c >> 1) ^ (i & 1)] = sget2(buf97 + (i & -2) + c * 2);
             }
         }
+
         if ( tag == 0x200 && len == 3 ) {
             shot_order = (get4(), get4());
         }
+
         if ( tag == 0x200 && len == 4 ) {
             for ( c = 0; c < 4; c++ ) {
                 cblack[c ^ c >> 1] = get2();
             }
         }
+
         if ( tag == 0x201 && len == 4 ) {
             for ( c = 0; c < 4; c++ ) {
                 cam_mul[c ^ (c >> 1)] = get2();
             }
         }
+
         if ( tag == 0x220 && type == 7 ) {
             meta_offset = ftell(ifp);
         }
+
         if ( tag == 0x401 && type == 4 && len == 4 ) {
             for ( c = 0; c < 4; c++ ) {
                 cblack[c ^ c >> 1] = get4();
             }
         }
-        if ( tag == 0xe01 ) {        /* Nikon Capture Note */
+
+        if ( tag == 0xe01 ) {
+            // Nikon Capture Note
             GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
             fseek(ifp, 22, SEEK_CUR);
             for ( offset = 22; offset + 22 < len; offset += 22 + i ) {
                 tag = get4();
                 fseek(ifp, 14, SEEK_CUR);
                 i = get4() - 4;
-                if ( tag == 0x76a43207 ) GLOBAL_flipsMask = get2();
-                else fseek(ifp, i, SEEK_CUR);
+                if ( tag == 0x76a43207 ) {
+                    GLOBAL_flipsMask = get2();
+                } else {
+                    fseek(ifp, i, SEEK_CUR);
+                }
             }
         }
+
         if ( tag == 0xe80 && len == 256 && type == 7 ) {
             fseek(ifp, 48, SEEK_CUR);
             cam_mul[0] = get2() * 508 * 1.078 / 0x10000;
             cam_mul[2] = get2() * 382 * 1.173 / 0x10000;
         }
+
         if ( tag == 0xf00 && type == 7 ) {
-            if ( len == 614 )
+            if ( len == 614 ) {
                 fseek(ifp, 176, SEEK_CUR);
-            else
-                if ( len == 734 || len == 1502 )
+            } else {
+                if ( len == 734 || len == 1502 ) {
                     fseek(ifp, 148, SEEK_CUR);
-                else goto next;
+                } else {
+                    goto next;
+                }
+            }
             goto get2_256;
         }
+
         if ( (tag == 0x1011 && len == 9) || tag == 0x20400200 ) {
             for ( i = 0; i < 3; i++ ) {
                 for ( c = 0; c < 3; c++ ) {
@@ -5919,36 +6994,45 @@ void CLASS parse_makernote(int base, int uptag) {
                 }
             }
         }
-        if ((tag == 0x1012 || tag == 0x20400600) && len == 4 ) {
+
+        if ( (tag == 0x1012 || tag == 0x20400600) && len == 4 ) {
             for ( c = 0; c < 4; c++ ) {
                 cblack[c ^ c >> 1] = get2();
             }
         }
+
         if ( tag == 0x1017 || tag == 0x20400100 ) {
             cam_mul[0] = get2() / 256.0;
         }
+
         if ( tag == 0x1018 || tag == 0x20400100 ) {
             cam_mul[2] = get2() / 256.0;
         }
+
         if ( tag == 0x2011 && len == 2 ) {
             get2_256:
             GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
             cam_mul[0] = get2() / 256.0;
             cam_mul[2] = get2() / 256.0;
         }
+
         if ( (tag | 0x70) == 0x2070 && (type == 4 || type == 13) ) {
             fseek(ifp, get4() + base, SEEK_SET);
         }
+
         if ( tag == 0x2020 && !strncmp(buf, "OLYMP", 5) ) {
             parse_thumb_note(base, 257, 258);
         }
+
         if ( tag == 0x2040 ) {
             parse_makernote(base, 0x2040);
         }
+
         if ( tag == 0xb028 ) {
             fseek(ifp, get4() + base, SEEK_SET);
             parse_thumb_note(base, 136, 137);
         }
+
         if ( tag == 0x4001 && len > 500 ) {
             i = len == 582 ? 50 : len == 653 ? 68 : len == 5120 ? 142 : 126;
             fseek(ifp, i, SEEK_CUR);
@@ -5965,24 +7049,29 @@ void CLASS parse_makernote(int base, int uptag) {
                 }
             }
         }
+
         if ( tag == 0x4021 && get4() && get4()) {
             for ( c = 0; c < 4; c++ ) {
                 cam_mul[c] = 1024;
             }
         }
+
         if ( tag == 0xa021 ) {
             for ( c = 0; c < 4; c++ ) {
                 cam_mul[c ^ (c >> 1)] = get4();
             }
         }
+
         if ( tag == 0xa028 ) {
             for ( c = 0; c < 4; c++ ) {
                 cam_mul[c ^ (c >> 1)] -= get4();
             }
         }
+
         if ( tag == 0xb001 ) {
             unique_id = get2();
         }
+
         next:
         fseek(ifp, save, SEEK_SET);
     }
@@ -5991,31 +7080,38 @@ void CLASS parse_makernote(int base, int uptag) {
 }
 
 /*
-   Since the TIFF DateTime string has no timezone information,
-   assume that the camera's clock was set to Universal Time.
- */
-void CLASS get_timestamp(int reversed) {
+Since the TIFF DateTime string has no timezone information,
+assume that the camera's clock was set to Universal Time.
+*/
+void
+get_timestamp(int reversed) {
     struct tm t;
     char str[20];
     int i;
 
     str[19] = 0;
-    if ( reversed )
-        for ( i = 19; i--; ) str[i] = fgetc(ifp);
-    else
+    if ( reversed ) {
+        for ( i = 19; i--; ) {
+            str[i] = fgetc(ifp);
+        }
+    } else {
         fread(str, 19, 1, ifp);
+    }
     memset(&t, 0, sizeof t);
     if ( sscanf(str, "%d:%d:%d %d:%d:%d", &t.tm_year, &t.tm_mon,
-                &t.tm_mday, &t.tm_hour, &t.tm_min, &t.tm_sec) != 6 )
+                &t.tm_mday, &t.tm_hour, &t.tm_min, &t.tm_sec) != 6 ) {
         return;
+    }
     t.tm_year -= 1900;
     t.tm_mon -= 1;
     t.tm_isdst = -1;
-    if ( mktime(&t) > 0 )
+    if ( mktime(&t) > 0 ) {
         timestamp = mktime(&t);
+    }
 }
 
-void CLASS parse_exif(int base) {
+void
+parse_exif(int base) {
     unsigned kodak, entries, tag, type, len, save, c;
     double expo;
 
@@ -6039,9 +7135,10 @@ void CLASS parse_exif(int base) {
                 get_timestamp(0);
                 break;
             case 37377:
-                if ((expo = -getreal(type)) < 128 )
+                if ( (expo = -getreal(type)) < 128 ) {
                     tiff_ifd[tiff_nifds - 1].shutter =
                     shutter = pow(2, expo);
+                }
                 break;
             case 37378:
                 aperture = pow(2, getreal(type) / 2);
@@ -6053,21 +7150,28 @@ void CLASS parse_exif(int base) {
                 parse_makernote(base, 0);
                 break;
             case 40962:
-                if ( kodak ) raw_width = get4();
+                if ( kodak ) {
+                    raw_width = get4();
+                }
                 break;
             case 40963:
-                if ( kodak ) raw_height = get4();
+                if ( kodak ) {
+                    raw_height = get4();
+                }
                 break;
             case 41730:
-                if ( get4() == 0x20002 )
-                    for ( exif_cfa = c = 0; c < 8; c += 2 )
+                if ( get4() == 0x20002 ) {
+                    for ( exif_cfa = c = 0; c < 8; c += 2 ) {
                         exif_cfa |= fgetc(ifp) * 0x01010101 << c;
+                    }
+                }
         }
         fseek(ifp, save, SEEK_SET);
     }
 }
 
-void CLASS parse_gps(int base) {
+void
+parse_gps(int base) {
     unsigned entries, tag, type, len, save, c;
 
     entries = get2();
@@ -6099,20 +7203,25 @@ void CLASS parse_gps(int base) {
     }
 }
 
-void CLASS romm_coeff(float romm_cam[3][3]) {
+void
+romm_coeff(float romm_cam[3][3]) {
     static const float rgb_romm[3][3] =    /* ROMM == Kodak ProPhoto */
             {{2.034193,  -0.727420, -0.306766},
              {-0.228811, 1.231729,  -0.002922},
              {-0.008565, -0.153273, 1.161839}};
     int i, j, k;
 
-    for ( i = 0; i < 3; i++ )
-        for ( j = 0; j < 3; j++ )
-            for ( cmatrix[i][j] = k = 0; k < 3; k++ )
+    for ( i = 0; i < 3; i++ ) {
+        for ( j = 0; j < 3; j++ ) {
+            for ( cmatrix[i][j] = k = 0; k < 3; k++ ) {
                 cmatrix[i][j] += rgb_romm[i][k] * romm_cam[k][j];
+            }
+        }
+    }
 }
 
-void CLASS parse_mos(int offset) {
+void
+parse_mos(int offset) {
     char data[40];
     int skip, from, i, c, neut[4], planes = 0, frot = 0;
     static const char *mod[] =
@@ -6125,47 +7234,65 @@ void CLASS parse_mos(int offset) {
 
     fseek(ifp, offset, SEEK_SET);
     while ( 1 ) {
-        if ( get4() != 0x504b5453 ) break;
+        if ( get4() != 0x504b5453 ) {
+            break;
+        }
         get4();
         fread(data, 1, 40, ifp);
         skip = get4();
         from = ftell(ifp);
-        if ( !strcmp(data, "JPEG_preview_data")) {
+
+        if ( !strcmp(data, "JPEG_preview_data") ) {
             thumb_offset = from;
             thumb_length = skip;
         }
-        if ( !strcmp(data, "icc_camera_profile")) {
+
+        if ( !strcmp(data, "icc_camera_profile") ) {
             profile_offset = from;
             profile_length = skip;
         }
-        if ( !strcmp(data, "ShootObj_back_type")) {
+
+        if ( !strcmp(data, "ShootObj_back_type") ) {
             fscanf(ifp, "%d", &i);
-            if ((unsigned) i < sizeof mod / sizeof(*mod))
+            if ( (unsigned) i < sizeof mod / sizeof(*mod) ) {
                 strcpy(model, mod[i]);
+            }
         }
-        if ( !strcmp(data, "icc_camera_to_tone_matrix")) {
-            for ( i = 0; i < 9; i++ )
+
+        if ( !strcmp(data, "icc_camera_to_tone_matrix") ) {
+            for ( i = 0; i < 9; i++ ) {
                 ((float *) romm_cam)[i] = int_to_float(get4());
+            }
             romm_coeff(romm_cam);
         }
-        if ( !strcmp(data, "CaptProf_color_matrix")) {
-            for ( i = 0; i < 9; i++ )
+
+        if ( !strcmp(data, "CaptProf_color_matrix") ) {
+            for ( i = 0; i < 9; i++ ) {
                 fscanf(ifp, "%f", (float *) romm_cam + i);
+            }
             romm_coeff(romm_cam);
         }
-        if ( !strcmp(data, "CaptProf_number_of_planes"))
+
+        if ( !strcmp(data, "CaptProf_number_of_planes") ) {
             fscanf(ifp, "%d", &planes);
-        if ( !strcmp(data, "CaptProf_raw_data_rotation"))
+        }
+
+        if ( !strcmp(data, "CaptProf_raw_data_rotation") ) {
             fscanf(ifp, "%d", &GLOBAL_flipsMask);
-        if ( !strcmp(data, "CaptProf_mosaic_pattern"))
+        }
+
+        if ( !strcmp(data, "CaptProf_mosaic_pattern") ) {
             for ( c = 0; c < 4; c++ ) {
                 fscanf(ifp, "%d", &i);
                 if ( i == 1 ) frot = c ^ (c >> 1);
             }
-        if ( !strcmp(data, "ImgProf_rotation_angle")) {
+        }
+
+        if ( !strcmp(data, "ImgProf_rotation_angle") ) {
             fscanf(ifp, "%d", &i);
             GLOBAL_flipsMask = i - GLOBAL_flipsMask;
         }
+
         if ( !strcmp(data, "NeutObj_neutrals") && !cam_mul[0] ) {
             for ( c = 0; c < 4; c++ ) {
                 fscanf(ifp, "%d", neut + c);
@@ -6174,81 +7301,113 @@ void CLASS parse_mos(int offset) {
                 cam_mul[c] = (float) neut[0] / neut[c + 1];
             }
         }
-        if ( !strcmp(data, "Rows_data"))
+
+        if ( !strcmp(data, "Rows_data") ) {
             GLOBAL_loadFlags = get4();
+        }
         parse_mos(from);
         fseek(ifp, skip + from, SEEK_SET);
     }
-    if ( planes )
+
+    if ( planes ) {
         filters = (planes == 1) * 0x01010101 *
-                  (uchar) "\x94\x61\x16\x49"[(GLOBAL_flipsMask / 90 + frot) & 3];
+                  (uchar)"\x94\x61\x16\x49"[(GLOBAL_flipsMask / 90 + frot) & 3];
+    }
 }
 
-void CLASS linear_table(unsigned len) {
+void
+linear_table(unsigned len) {
     int i;
-    if ( len > 0x1000 ) len = 0x1000;
+
+    if ( len > 0x1000 ) {
+        len = 0x1000;
+    }
     read_shorts(curve, len);
-    for ( i = len; i < 0x1000; i++ )
+    for ( i = len; i < 0x1000; i++ ) {
         curve[i] = curve[i - 1];
+    }
     maximum = curve[0xfff];
 }
 
-void CLASS parse_kodak_ifd(int base) {
+void
+parse_kodak_ifd(int base) {
     unsigned entries, tag, type, len, save;
     int i, c, wbi = -2, wbtemp = 6500;
     float mul[3] = {1, 1, 1}, num;
     static const int wbtag[] = {64037, 64040, 64039, 64041, -1, -1, 64042};
 
     entries = get2();
-    if ( entries > 1024 ) return;
+    if ( entries > 1024 ) {
+        return;
+    }
+
     while ( entries-- ) {
         tiff_get(base, &tag, &type, &len, &save);
-        if ( tag == 1020 ) wbi = getint(type);
-        if ( tag == 1021 && len == 72 ) {        /* WB set in software */
+
+        if ( tag == 1020 ) {
+            wbi = getint(type);
+        }
+
+        if ( tag == 1021 && len == 72 ) {
+            // WB set in software
             fseek(ifp, 40, SEEK_CUR);
             for ( c = 0; c < 4; c++ ) {
                 cam_mul[c] = 2048.0 / get2();
             }
             wbi = -2;
         }
-        if ( tag == 2118 ) wbtemp = getint(type);
+
+        if ( tag == 2118 ) {
+            wbtemp = getint(type);
+        }
+
         if ( tag == 2120 + wbi && wbi >= 0 ) {
             for ( c = 0; c < 3; c++ ) {
                 cam_mul[c] = 2048.0 / getreal(type);
             }
         }
+
         if ( tag == 2130 + wbi ) {
             for ( c = 0; c < 3; c++ ) {
                 mul[c] = getreal(type);
             }
         }
+
         if ( tag == 2140 + wbi && wbi >= 0 ) {
             for ( c = 0; c < 3; c++ ) {
-                for ( num = i = 0; i < 4; i++ )
+                for ( num = i = 0; i < 4; i++ ) {
                     num += getreal(type) * pow(wbtemp / 100.0, i);
+                }
                 cam_mul[c] = 2048 / (num * mul[c]);
             }
         }
+
         if ( tag == 2317 ) {
             linear_table(len);
         }
+
         if ( tag == 6020 ) {
             iso_speed = getint(type);
         }
+
         if ( tag == 64013 ) {
             wbi = fgetc(ifp);
         }
+
         if ( (unsigned) wbi < 7 && tag == wbtag[wbi] ) {
             for ( c = 0; c < 3; c++ ) {
                 cam_mul[c] = get4();
             }
         }
+
         if ( tag == 64019 ) {
             width = getint(type);
         }
+
         if ( tag == 64020 ) {
             height = (getint(type) + 1) & -2;
         }
+
         fseek(ifp, save, SEEK_SET);
     }
 }
@@ -6269,14 +7428,19 @@ int CLASS parse_tiff_ifd(int base) {
     struct jhead jh;
     FILE *sfp;
 
-    if ( tiff_nifds >= sizeof tiff_ifd / sizeof tiff_ifd[0] )
+    if ( tiff_nifds >= sizeof tiff_ifd / sizeof tiff_ifd[0] ) {
         return 1;
+    }
     ifd = tiff_nifds++;
-    for ( j = 0; j < 4; j++ )
-        for ( i = 0; i < 4; i++ )
+    for ( j = 0; j < 4; j++ ) {
+        for ( i = 0; i < 4; i++ ) {
             cc[j][i] = i == j;
+        }
+    }
     entries = get2();
-    if ( entries > 512 ) return 1;
+    if ( entries > 512 ) {
+        return 1;
+    }
     while ( entries-- ) {
         tiff_get(base, &tag, &type, &len, &save);
         switch ( tag ) {
@@ -6290,7 +7454,9 @@ int CLASS parse_tiff_ifd(int base) {
                 width += get2();
                 break;
             case 9:
-                if ((i = get2())) filters = i;
+                if ( (i = get2()) ) {
+                    filters = i;
+                }
                 break;
             case 17:
             case 18:
@@ -6330,66 +7496,83 @@ int CLASS parse_tiff_ifd(int base) {
                 thumb_offset = ftell(ifp) - 2;
                 thumb_length = len;
                 break;
-            case 61440:            /* Fuji HS10 table */
+            case 61440:
+                // Fuji HS10 table
                 fseek(ifp, get4() + base, SEEK_SET);
                 parse_tiff_ifd(base);
                 break;
             case 2:
             case 256:
-            case 61441:    /* ImageWidth */
+            case 61441:
+                // ImageWidth
                 tiff_ifd[ifd].width = getint(type);
                 break;
             case 3:
             case 257:
-            case 61442:    /* ImageHeight */
+            case 61442:
+                // ImageHeight
                 tiff_ifd[ifd].height = getint(type);
                 break;
-            case 258:                /* BitsPerSample */
+            case 258:
+                // BitsPerSample
             case 61443:
                 tiff_ifd[ifd].samples = len & 7;
-                if ((tiff_ifd[ifd].bps = getint(type)) > 32 )
+                if ( (tiff_ifd[ifd].bps = getint(type)) > 32 ) {
                     tiff_ifd[ifd].bps = 8;
-                if ( tiff_bps < tiff_ifd[ifd].bps )
+                }
+                if ( tiff_bps < tiff_ifd[ifd].bps ) {
                     tiff_bps = tiff_ifd[ifd].bps;
+                }
                 break;
             case 61446:
                 raw_height = 0;
                 GLOBAL_loadFlags = get4() ? 24 : 80;
                 break;
-            case 259:                /* Compression */
+            case 259:
+                // Compression
                 tiff_ifd[ifd].comp = getint(type);
                 break;
-            case 262:                /* PhotometricInterpretation */
+            case 262:
+                // PhotometricInterpretation
                 tiff_ifd[ifd].phint = get2();
                 break;
-            case 270:                /* ImageDescription */
+            case 270:
+                // ImageDescription
                 fread(desc, 512, 1, ifp);
                 break;
-            case 271:                /* Make */
+            case 271:
+                // Make
                 fgets(make, 64, ifp);
                 break;
-            case 272:                /* Model */
+            case 272:
+                // Model
                 fgets(model, 64, ifp);
                 break;
-            case 280:                /* Panasonic RW2 offset */
-                if ( type != 4 ) break;
-                TIFF_CALLBACK_loadRawData = &CLASS panasonic_load_raw;
+            case 280:
+                // Panasonic RW2 offset
+                if ( type != 4 ) {
+                    break;
+                }
+                TIFF_CALLBACK_loadRawData = & panasonic_load_raw;
                 GLOBAL_loadFlags = 0x2008;
-            case 273:                /* StripOffset */
-            case 513:                /* JpegIFOffset */
+            case 273:
+                // StripOffset
+            case 513:
+                // JpegIFOffset
             case 61447:
                 tiff_ifd[ifd].offset = get4() + base;
                 if ( !tiff_ifd[ifd].bps && tiff_ifd[ifd].offset > 0 ) {
                     fseek(ifp, tiff_ifd[ifd].offset, SEEK_SET);
-                    if ( ljpeg_start(&jh, 1)) {
+                    if ( ljpeg_start(&jh, 1) ) {
                         tiff_ifd[ifd].comp = 6;
                         tiff_ifd[ifd].width = jh.wide;
                         tiff_ifd[ifd].height = jh.high;
                         tiff_ifd[ifd].bps = jh.bits;
                         tiff_ifd[ifd].samples = jh.clrs;
-                        if ( !(jh.sraw || (jh.clrs & 1)))
+                        if ( !(jh.sraw || (jh.clrs & 1)) ) {
                             tiff_ifd[ifd].width *= jh.clrs;
-                        if ((tiff_ifd[ifd].width > 4 * tiff_ifd[ifd].height) & ~jh.clrs ) {
+                        }
+                        if ( (tiff_ifd[ifd].width > 4 * tiff_ifd[ifd].height) & ~jh.clrs ) {
                             tiff_ifd[ifd].width /= 2;
                             tiff_ifd[ifd].height *= 2;
                         }
@@ -6399,13 +7582,16 @@ int CLASS parse_tiff_ifd(int base) {
                     }
                 }
                 break;
-            case 274:                /* Orientation */
+            case 274:
+                // Orientation
                 tiff_ifd[ifd].flip = "50132467"[get2() & 7] - '0';
                 break;
-            case 277:                /* SamplesPerPixel */
+            case 277:
+                // SamplesPerPixel
                 tiff_ifd[ifd].samples = getint(type) & 7;
                 break;
-            case 279:                /* StripByteCounts */
+            case 279:
+                //StripByteCounts
             case 514:
             case 61448:
                 tiff_ifd[ifd].bytes = get4();
@@ -6416,7 +7602,8 @@ int CLASS parse_tiff_ifd(int base) {
                 }
                 break;
             case 305:
-            case 11:        /* Software */
+            case 11:
+                // Software
                 fgets(software, 64, ifp);
                 if ( !strncmp(software, "Adobe", 5) ||
                      !strncmp(software, "dcraw", 5) ||
@@ -6426,28 +7613,35 @@ int CLASS parse_tiff_ifd(int base) {
                      !strcmp(software, "Digital Photo Professional"))
                     is_raw = 0;
                 break;
-            case 306:                /* DateTime */
+            case 306:
+                // DateTime
                 get_timestamp(0);
                 break;
-            case 315:                /* Artist */
+            case 315:
+                // Artist
                 fread(artist, 64, 1, ifp);
                 break;
-            case 322:                /* TileWidth */
+            case 322:
+                // TileWidth
                 tiff_ifd[ifd].tile_width = getint(type);
                 break;
-            case 323:                /* TileLength */
+            case 323:
+                // TileLength
                 tiff_ifd[ifd].tile_length = getint(type);
                 break;
-            case 324:                /* TileOffsets */
+            case 324:
+                // TileOffsets
                 tiff_ifd[ifd].offset = len > 1 ? ftell(ifp) : get4();
-                if ( len == 1 )
+                if ( len == 1 ) {
                     tiff_ifd[ifd].tile_width = tiff_ifd[ifd].tile_length = 0;
+                }
                 if ( len == 4 ) {
                     TIFF_CALLBACK_loadRawData = &CLASS sinar_4shot_load_raw;
                     is_raw = 5;
                 }
                 break;
-            case 330:                /* SubIFDs */
+            case 330:
+                // SubIFDs
                 if ( !strcmp(model, "DSLR-A100") && tiff_ifd[ifd].width == 3872 ) {
                     TIFF_CALLBACK_loadRawData = &CLASS sony_arw_load_raw;
                     data_offset = get4() + base;
@@ -6457,7 +7651,9 @@ int CLASS parse_tiff_ifd(int base) {
                 while ( len-- ) {
                     i = ftell(ifp);
                     fseek(ifp, get4() + base, SEEK_SET);
-                    if ( parse_tiff_ifd(base)) break;
+                    if ( parse_tiff_ifd(base) ) {
+                        break;
+                    }
                     fseek(ifp, i + 4, SEEK_SET);
                 }
                 break;
@@ -6469,9 +7665,11 @@ int CLASS parse_tiff_ifd(int base) {
                 for ( c = 0; c < 4; c++ ) {
                     sony_curve[c + 1] = get2() >> 2 & 0xfff;
                 }
-                for ( i = 0; i < 5; i++ )
-                    for ( j = sony_curve[i] + 1; j <= sony_curve[i + 1]; j++ )
+                for ( i = 0; i < 5; i++ ) {
+                    for ( j = sony_curve[i] + 1; j <= sony_curve[i + 1]; j++ ) {
                         curve[j] = curve[j - 1] + (1 << i);
+                    }
+                }
                 break;
             case 29184:
                 sony_offset = get4();
@@ -6498,22 +7696,29 @@ int CLASS parse_tiff_ifd(int base) {
                 i = (cam_mul[1] == 1024 && cam_mul[2] == 1024) << 1;
                 SWAP (cam_mul[i], cam_mul[i + 1])
                 break;
-            case 33405:            /* Model2 */
+            case 33405:
+                // Model2
                 fgets(model2, 64, ifp);
                 break;
-            case 33421:            /* CFARepeatPatternDim */
-                if ( get2() == 6 && get2() == 6 )
+            case 33421:
+                // CFARepeatPatternDim
+                if ( get2() == 6 && get2() == 6 ) {
                     filters = 9;
+                }
                 break;
-            case 33422:            /* CFAPattern */
+            case 33422:
+                // CFAPattern
                 if ( filters == 9 ) {
                     for ( c = 0; c < 36; c++ ) {
                         ((char *) xtrans)[c] = fgetc(ifp) & 3;
                     }
                     break;
                 }
-            case 64777:            /* Kodak P-series */
-                if ((plen = len) > 16 ) plen = 16;
+            case 64777:
+                // Kodak P-series
+                if ( (plen = len) > 16 ) {
+                    plen = 16;
+                }
                 fread(cfa_pat, 1, plen, ifp);
                 for ( colors = cfa = i = 0; i < plen && colors < 4; i++ ) {
                     colors += !(cfa & (1 << cfa_pat[i]));
@@ -6531,18 +7736,22 @@ int CLASS parse_tiff_ifd(int base) {
                 fseek(ifp, get4() + base, SEEK_SET);
                 parse_kodak_ifd(base);
                 break;
-            case 33434:            /* ExposureTime */
+            case 33434:
+                // ExposureTime
                 tiff_ifd[ifd].shutter = shutter = getreal(type);
                 break;
-            case 33437:            /* FNumber */
+            case 33437:
+                // FNumber
                 aperture = getreal(type);
                 break;
-            case 34306:            /* Leaf white balance */
+            case 34306:
+                // Leaf white balance
                 for ( c = 0; c < 4; c++ ) {
                     cam_mul[c ^ 1] = 4096.0 / get2();
                 }
                 break;
-            case 34307:            /* Leaf CatchLight color matrix */
+            case 34307:
+                // Leaf CatchLight color matrix
                 fread(software, 1, 7, ifp);
                 if ( strncmp(software, "MATRIX", 6)) break;
                 colors = 4;
@@ -6562,34 +7771,43 @@ int CLASS parse_tiff_ifd(int base) {
                     }
                 }
                 break;
-            case 34310:            /* Leaf metadata */
+            case 34310:
+                // Leaf metadata
                 parse_mos(ftell(ifp));
             case 34303:
                 strcpy(make, "Leaf");
                 break;
-            case 34665:            /* EXIF tag */
+            case 34665:
+                // EXIF tag
                 fseek(ifp, get4() + base, SEEK_SET);
                 parse_exif(base);
                 break;
-            case 34853:            /* GPSInfo tag */
+            case 34853:
+                // GPSInfo tag
                 fseek(ifp, get4() + base, SEEK_SET);
                 parse_gps(base);
                 break;
-            case 34675:            /* InterColorProfile */
-            case 50831:            /* AsShotICCProfile */
+            case 34675:
+                // InterColorProfile
+            case 50831:
+                // AsShotICCProfile
                 profile_offset = ftell(ifp);
                 profile_length = len;
                 break;
-            case 37122:            /* CompressedBitsPerPixel */
+            case 37122:
+                // CompressedBitsPerPixel
                 kodak_cbpp = get4();
                 break;
-            case 37386:            /* FocalLength */
+            case 37386:
+                // FocalLength
                 focal_len = getreal(type);
                 break;
-            case 37393:            /* ImageNumber */
+            case 37393:
+                // ImageNumber
                 shot_order = getint(type);
                 break;
-            case 37400:            /* old Kodak KDC tag */
+            case 37400:
+                // Old Kodak KDC tag
                 for ( GLOBAL_colorTransformForRaw = i = 0; i < 3; i++ ) {
                     getreal(type);
                     for ( c = 0; c < 3; c++ ) {
@@ -6611,13 +7829,16 @@ int CLASS parse_tiff_ifd(int base) {
                         break;
                 }
                 break;
-            case 46275:            /* Imacon tags */
+            case 46275:
+                // Imacon tags
                 strcpy(make, "Imacon");
                 data_offset = ftell(ifp);
                 ima_len = len;
                 break;
             case 46279:
-                if ( !ima_len ) break;
+                if ( !ima_len ) {
+                    break;
+                }
                 fseek(ifp, 38, SEEK_CUR);
             case 46274:
                 fseek(ifp, 40, SEEK_CUR);
@@ -6639,7 +7860,9 @@ int CLASS parse_tiff_ifd(int base) {
                 fseek(ifp, 114, SEEK_CUR);
                 GLOBAL_flipsMask = (get2() >> 7) * 90;
                 if ( width * height * 6 == ima_len ) {
-                    if ( GLOBAL_flipsMask % 180 == 90 ) SWAP(width, height);
+                    if ( GLOBAL_flipsMask % 180 == 90 ) {
+                        SWAP(width, height);
+                    }
                     raw_width = width;
                     raw_height = height;
                     left_margin = top_margin = filters = GLOBAL_flipsMask = 0;
@@ -6647,24 +7870,34 @@ int CLASS parse_tiff_ifd(int base) {
                 snprintf(model, 64, "Ixpress %d-Mp", height * width / 1000000);
                 TIFF_CALLBACK_loadRawData = &CLASS imacon_full_load_raw;
                 if ( filters ) {
-                    if ( left_margin & 1 ) filters = 0x61616161;
+                    if ( left_margin & 1 ) {
+                        filters = 0x61616161;
+                    }
                     TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
                 }
                 maximum = 0xffff;
                 break;
-            case 50454:            /* Sinar tag */
+            case 50454:
+                // Sinar tag
             case 50455:
-                if ( !(cbuf = (char *) malloc(len))) break;
+                if ( !(cbuf = (char *) malloc(len)) ) {
+                    break;
+                }
                 fread(cbuf, 1, len, ifp);
-                for ( cp = cbuf - 1; cp && cp < cbuf + len; cp = strchr(cp, '\n'))
-                    if ( !strncmp(++cp, "Neutral ", 8))
+                for ( cp = cbuf - 1; cp && cp < cbuf + len; cp = strchr(cp, '\n') ) {
+                    if ( !strncmp(++cp, "Neutral ", 8)) {
                         sscanf(cp + 8, "%f %f %f", cam_mul, cam_mul + 1, cam_mul + 2);
+                    }
+                }
                 free(cbuf);
                 break;
             case 50458:
-                if ( !make[0] ) strcpy(make, "Hasselblad");
+                if ( !make[0] ) {
+                    strcpy(make, "Hasselblad");
+                }
                 break;
-            case 50459:            /* Hasselblad tag */
+            case 50459:
+                // Hasselblad tag
                 i = GLOBAL_endianOrder;
                 j = ftell(ifp);
                 c = tiff_nifds;
@@ -6675,24 +7908,35 @@ int CLASS parse_tiff_ifd(int base) {
                 tiff_nifds = c;
                 GLOBAL_endianOrder = i;
                 break;
-            case 50706:            /* DNGVersion */
+            case 50706:
+                // DNGVersion
                 for ( c = 0; c < 4; c++ ) {
                     GLOBAL_dngVersion = (GLOBAL_dngVersion << 8) + fgetc(ifp);
                 }
-                if ( !make[0] ) strcpy(make, "DNG");
+                if ( !make[0] ) {
+                    strcpy(make, "DNG");
+                }
                 is_raw = 1;
                 break;
-            case 50708:            /* UniqueCameraModel */
-                if ( model[0] ) break;
+            case 50708:
+                // UniqueCameraModel
+                if ( model[0] ) {
+                    break;
+                }
                 fgets(make, 64, ifp);
-                if ((cp = strchr(make, ' '))) {
+                if ( (cp = strchr(make, ' ')) ) {
                     strcpy(model, cp + 1);
                     *cp = 0;
                 }
                 break;
-            case 50710:            /* CFAPlaneColor */
-                if ( filters == 9 ) break;
-                if ( len > 4 ) len = 4;
+            case 50710:
+                // CFAPlaneColor
+                if ( filters == 9 ) {
+                    break;
+                }
+                if ( len > 4 ) {
+                    len = 4;
+                }
                 colors = len;
                 fread(cfa_pc, 1, colors, ifp);
             guess_cfa_pc:
@@ -6700,48 +7944,63 @@ int CLASS parse_tiff_ifd(int base) {
                     tab[cfa_pc[c]] = c;
                 }
                 GLOBAL_bayerPatternLabels[c] = 0;
-                for ( i = 16; i--; )
+                for ( i = 16; i--; ) {
                     filters = filters << 2 | tab[cfa_pat[i % plen]];
+                }
                 filters -= !filters;
                 break;
-            case 50711:            /* CFALayout */
-                if ( get2() == 2 ) fuji_width = 1;
+            case 50711:
+                // CFALayout
+                if ( get2() == 2 ) {
+                    fuji_width = 1;
+                }
                 break;
             case 291:
-            case 50712:            /* LinearizationTable */
+            case 50712:
+                // LinearizationTable
                 linear_table(len);
                 break;
-            case 50713:            /* BlackLevelRepeatDim */
+            case 50713:
+                // BlackLevelRepeatDim
                 cblack[4] = get2();
                 cblack[5] = get2();
-                if ( cblack[4] * cblack[5] > sizeof cblack / sizeof *cblack - 6 )
+                if ( cblack[4] * cblack[5] > sizeof cblack / sizeof *cblack - 6 ) {
                     cblack[4] = cblack[5] = 1;
+                }
                 break;
             case 61450:
                 cblack[4] = cblack[5] = MIN(sqrt(len), 64);
             case 50714:            /* BlackLevel */
-                if ( !(cblack[4] * cblack[5]))
+                if ( !(cblack[4] * cblack[5]) ) {
                     cblack[4] = cblack[5] = 1;
+                }
                 for ( c = 0; c < cblack[4] * cblack[5]; c++ ) {
                     cblack[6 + c] = getreal(type);
                 }
                 black = 0;
                 break;
-            case 50715:            /* BlackLevelDeltaH */
-            case 50716:            /* BlackLevelDeltaV */
-                for ( num = i = 0; i < (len & 0xffff); i++ )
+            case 50715:
+                // BlackLevelDeltaH
+            case 50716:
+                // BlackLevelDeltaV
+                for ( num = i = 0; i < (len & 0xffff); i++ ) {
                     num += getreal(type);
+                }
                 black += num / len + 0.5;
                 break;
-            case 50717:            /* WhiteLevel */
+            case 50717:
+                // WhiteLevel
                 maximum = getint(type);
                 break;
-            case 50718:            /* DefaultScale */
+            case 50718:
+                // DefaultScale
                 pixel_aspect = getreal(type);
                 pixel_aspect /= getreal(type);
                 break;
-            case 50721:            /* ColorMatrix1 */
-            case 50722:            /* ColorMatrix2 */
+            case 50721:
+                // ColorMatrix1
+            case 50722:
+                // ColorMatrix2
                 for ( c = 0; c < colors; c++ ) {
                     for ( j = 0; j < 3; j++ ) {
                         cm[c][j] = getreal(type);
@@ -6749,25 +8008,30 @@ int CLASS parse_tiff_ifd(int base) {
                 }
                 use_cm = 1;
                 break;
-            case 50723:            /* CameraCalibration1 */
-            case 50724:            /* CameraCalibration2 */
+            case 50723:
+                // CameraCalibration1
+            case 50724:
+                // CameraCalibration2
                 for ( i = 0; i < colors; i++ ) {
                     for ( c = 0; c < colors; c++ ) {
                         cc[i][c] = getreal(type);
                     }
                 }
                 break;
-            case 50727:            /* AnalogBalance */
+            case 50727:
+                // AnalogBalance
                 for ( c = 0; c < colors; c++ ) {
                     ab[c] = getreal(type);
                 }
                 break;
-            case 50728:            /* AsShotNeutral */
+            case 50728:
+                // AsShotNeutral
                 for ( c = 0; c < colors; c++ ) {
                     asn[c] = getreal(type);
                 }
                 break;
-            case 50729:            /* AsShotWhiteXY */
+            case 50729:
+                // AsShotWhiteXY
                 xyz[0] = getreal(type);
                 xyz[1] = getreal(type);
                 xyz[2] = 1 - xyz[0] - xyz[1];
@@ -6775,8 +8039,11 @@ int CLASS parse_tiff_ifd(int base) {
                     xyz[c] /= d65_white[c];
                 };
                 break;
-            case 50740:            /* DNGPrivateData */
-                if ( GLOBAL_dngVersion ) break;
+            case 50740:
+                // DNGPrivateData
+                if ( GLOBAL_dngVersion ) {
+                    break;
+                }
                 parse_minolta(j = get4() + base);
                 fseek(ifp, j, SEEK_SET);
                 parse_tiff_ifd(base);
@@ -6784,22 +8051,29 @@ int CLASS parse_tiff_ifd(int base) {
             case 50752:
                 read_shorts(cr2_slice, 3);
                 break;
-            case 50829:            /* ActiveArea */
+            case 50829:
+                // ActiveArea
                 top_margin = getint(type);
                 left_margin = getint(type);
                 height = getint(type) - top_margin;
                 width = getint(type) - left_margin;
                 break;
-            case 50830:            /* MaskedAreas */
-                for ( i = 0; i < len && i < 32; i++ )
+            case 50830:
+                // MaskedAreas
+                for ( i = 0; i < len && i < 32; i++ ) {
                     ((int *) mask)[i] = getint(type);
+                }
                 black = 0;
                 break;
-            case 51009:            /* OpcodeList2 */
+            case 51009:
+                // OpcodeList2
                 meta_offset = ftell(ifp);
                 break;
-            case 64772:            /* Kodak P-series */
-                if ( len < 13 ) break;
+            case 64772:
+                // Kodak P-series
+                if ( len < 13 ) {
+                    break;
+                }
                 fseek(ifp, 16, SEEK_CUR);
                 data_offset = get4();
                 fseek(ifp, 28, SEEK_CUR);
@@ -6807,16 +8081,19 @@ int CLASS parse_tiff_ifd(int base) {
                 TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
                 break;
             case 65026:
-                if ( type == 2 ) fgets(model2, 64, ifp);
+                if ( type == 2 ) {
+                    fgets(model2, 64, ifp);
+                }
         }
         fseek(ifp, save, SEEK_SET);
     }
-    if ( sony_length && (buf = (unsigned *) malloc(sony_length))) {
+
+    if ( sony_length && (buf = (unsigned *) malloc(sony_length)) ) {
         fseek(ifp, sony_offset, SEEK_SET);
         fread(buf, sony_length, 1, ifp);
         sony_decrypt(buf, sony_length / 4, 1, sony_key);
         sfp = ifp;
-        if ((ifp = tmpfile())) {
+        if ( (ifp = tmpfile()) ) {
             fwrite(buf, sony_length, 1, ifp);
             fseek(ifp, 0, SEEK_SET);
             parse_tiff_ifd(-sony_offset);
@@ -6854,21 +8131,27 @@ int CLASS parse_tiff_ifd(int base) {
     return 0;
 }
 
-int CLASS parse_tiff(int base) {
+int
+parse_tiff(int base) {
     int doff;
 
     fseek(ifp, base, SEEK_SET);
     GLOBAL_endianOrder = get2();
-    if ( GLOBAL_endianOrder != LITTLE_ENDIAN_ORDER && GLOBAL_endianOrder != BIG_ENDIAN_ORDER ) return 0;
+    if ( GLOBAL_endianOrder != LITTLE_ENDIAN_ORDER && GLOBAL_endianOrder != BIG_ENDIAN_ORDER ) {
+        return 0;
+    }
     get2();
-    while ((doff = get4())) {
+    while ( (doff = get4()) ) {
         fseek(ifp, doff + base, SEEK_SET);
-        if ( parse_tiff_ifd(base)) break;
+        if ( parse_tiff_ifd(base)) {
+            break;
+        }
     }
     return 1;
 }
 
-void CLASS apply_tiff() {
+void
+apply_tiff() {
     int max_samp = 0, ties = 0, os, ns, raw = -1, thm = -1, i;
     struct jhead jh;
 
@@ -6882,14 +8165,18 @@ void CLASS apply_tiff() {
         }
     }
     for ( i = tiff_nifds; i--; ) {
-        if ( tiff_ifd[i].shutter )
+        if ( tiff_ifd[i].shutter ) {
             shutter = tiff_ifd[i].shutter;
+        }
         tiff_ifd[i].shutter = shutter;
     }
     for ( i = 0; i < tiff_nifds; i++ ) {
-        if ( max_samp < tiff_ifd[i].samples )
+        if ( max_samp < tiff_ifd[i].samples ) {
             max_samp = tiff_ifd[i].samples;
-        if ( max_samp > 3 ) max_samp = 3;
+        }
+        if ( max_samp > 3 ) {
+            max_samp = 3;
+        }
         os = raw_width * raw_height;
         ns = tiff_ifd[i].width * tiff_ifd[i].height;
         if ( tiff_bps ) {
@@ -6913,12 +8200,21 @@ void CLASS apply_tiff() {
             raw = i;
         }
     }
-    if ( is_raw == 1 && ties ) is_raw = ties;
-    if ( !tile_width ) tile_width = INT_MAX;
-    if ( !tile_length ) tile_length = INT_MAX;
-    for ( i = tiff_nifds; i--; )
-        if ( tiff_ifd[i].flip ) cameraFlip = tiff_ifd[i].flip;
-    if ( raw >= 0 && !TIFF_CALLBACK_loadRawData )
+    if ( is_raw == 1 && ties ) {
+        is_raw = ties;
+    }
+    if ( !tile_width ) {
+        tile_width = INT_MAX;
+    }
+    if ( !tile_length ) {
+        tile_length = INT_MAX;
+    }
+    for ( i = tiff_nifds; i--; ) {
+        if ( tiff_ifd[i].flip ) {
+            cameraFlip = tiff_ifd[i].flip;
+        }
+    }
+    if ( raw >= 0 && !TIFF_CALLBACK_loadRawData ) {
         switch ( tiff_compress ) {
             case 32767:
                 if ( tiff_ifd[raw].bytes == raw_width * raw_height ) {
@@ -6941,11 +8237,13 @@ void CLASS apply_tiff() {
             case 0:
             case 1:
                 if ( !strncmp(make, "OLYMPUS", 7) &&
-                     tiff_ifd[raw].bytes * 2 == raw_width * raw_height * 3 )
+                     tiff_ifd[raw].bytes * 2 == raw_width * raw_height * 3 ) {
                     GLOBAL_loadFlags = 24;
+                }
                 if ( !strcmp(make, "SONY") && tiff_bps < 14 &&
-                     tiff_ifd[raw].bytes == raw_width * raw_height * 2 )
+                     tiff_ifd[raw].bytes == raw_width * raw_height * 2 ) {
                     tiff_bps = 14;
+                }
                 if ( tiff_ifd[raw].bytes * 5 == raw_width * raw_height * 8 ) {
                     GLOBAL_loadFlags = 81;
                     tiff_bps = 12;
@@ -6953,55 +8251,62 @@ void CLASS apply_tiff() {
             slr:
                 switch ( tiff_bps ) {
                     case 8:
-                        TIFF_CALLBACK_loadRawData = &CLASS eight_bit_load_raw;
+                        TIFF_CALLBACK_loadRawData = &eight_bit_load_raw;
                         break;
                     case 12:
                         if ( tiff_ifd[raw].phint == 2 )
                             GLOBAL_loadFlags = 6;
-                        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+                        TIFF_CALLBACK_loadRawData = &packed_load_raw;
                         break;
                     case 14:
-                        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+                        TIFF_CALLBACK_loadRawData = &packed_load_raw;
                         if ( tiff_ifd[raw].bytes * 4 == raw_width * raw_height * 7 ) break;
                         GLOBAL_loadFlags = 0;
                     case 16:
-                        TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
+                        TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
                         if ( !strncmp(make, "OLYMPUS", 7) &&
                              tiff_ifd[raw].bytes * 7 > raw_width * raw_height )
-                            TIFF_CALLBACK_loadRawData = &CLASS olympus_load_raw;
+                            TIFF_CALLBACK_loadRawData = &olympus_load_raw;
                 }
-                if ( filters == 9 && tiff_ifd[raw].bytes * 8 < raw_width * raw_height * tiff_bps )
-                    TIFF_CALLBACK_loadRawData = &CLASS fuji_xtrans_load_raw;
+                if ( filters == 9 && tiff_ifd[raw].bytes * 8 < raw_width * raw_height * tiff_bps ) {
+                    TIFF_CALLBACK_loadRawData = &fuji_xtrans_load_raw;
+                }
                 break;
             case 6:
             case 7:
             case 99:
-                TIFF_CALLBACK_loadRawData = &CLASS lossless_jpeg_load_raw;
+                TIFF_CALLBACK_loadRawData = &lossless_jpeg_load_raw;
                 break;
             case 262:
-                TIFF_CALLBACK_loadRawData = &CLASS kodak_262_load_raw;
+                TIFF_CALLBACK_loadRawData = &kodak_262_load_raw;
                 break;
             case 34713:
                 if ((raw_width + 9) / 10 * 16 * raw_height == tiff_ifd[raw].bytes ) {
-                    TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+                    TIFF_CALLBACK_loadRawData = &packed_load_raw;
                     GLOBAL_loadFlags = 1;
-                } else
+                } else {
                     if ( raw_width * raw_height * 3 == tiff_ifd[raw].bytes * 2 ) {
-                        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                        if ( model[0] == 'N' ) GLOBAL_loadFlags = 80;
-                    } else
+                        TIFF_CALLBACK_loadRawData = &packed_load_raw;
+                        if ( model[0] == 'N' ) {
+                            GLOBAL_loadFlags = 80;
+                        }
+                    } else {
                         if ( raw_width * raw_height * 3 == tiff_ifd[raw].bytes ) {
-                            TIFF_CALLBACK_loadRawData = &CLASS nikon_yuv_load_raw;
+                            TIFF_CALLBACK_loadRawData = &nikon_yuv_load_raw;
                             gamma_curve(1 / 2.4, 12.92, 1, 4095);
                             memset(cblack, 0, sizeof cblack);
                             filters = 0;
-                        } else
+                        } else {
                             if ( raw_width * raw_height * 2 == tiff_ifd[raw].bytes ) {
                                 TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
                                 GLOBAL_loadFlags = 4;
                                 GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-                            } else
+                            } else {
                                 TIFF_CALLBACK_loadRawData = &CLASS nikon_load_raw;
+                            }
+                        }
+                    }
+                }
                 break;
             case 65535:
                 TIFF_CALLBACK_loadRawData = &CLASS pentax_load_raw;
@@ -7025,13 +8330,17 @@ void CLASS apply_tiff() {
             default:
                 is_raw = 0;
         }
-    if ( !GLOBAL_dngVersion )
+    }
+    if ( !GLOBAL_dngVersion ) {
         if ((tiff_samples == 3 && tiff_ifd[raw].bytes && tiff_bps != 14 &&
              (tiff_compress & -16) != 32768)
             || (tiff_bps == 8 && strncmp(make, "Phase", 5) &&
-                !strcasestr(make, "Kodak") && !strstr(model2, "DEBUG RAW")))
+                !strcasestr(make, "Kodak") && !strstr(model2, "DEBUG RAW"))) {
             is_raw = 0;
-    for ( i = 0; i < tiff_nifds; i++ )
+        }
+    }
+
+    for ( i = 0; i < tiff_nifds; i++ ) {
         if ( i != raw && tiff_ifd[i].samples == max_samp &&
              tiff_ifd[i].width * tiff_ifd[i].height / (SQR(tiff_ifd[i].bps) + 1) >
              thumb_width * thumb_height / (SQR(thumb_misc) + 1)
@@ -7043,6 +8352,8 @@ void CLASS apply_tiff() {
             thumb_misc = tiff_ifd[i].bps;
             thm = i;
         }
+    }
+
     if ( thm >= 0 ) {
         thumb_misc |= tiff_ifd[thm].samples << 5;
         switch ( tiff_ifd[thm].comp ) {
@@ -7050,13 +8361,15 @@ void CLASS apply_tiff() {
                 write_thumb = &CLASS layer_thumb;
                 break;
             case 1:
-                if ( tiff_ifd[thm].bps <= 8 )
+                if ( tiff_ifd[thm].bps <= 8 ) {
                     write_thumb = &CLASS ppm_thumb;
-                else
-                    if ( !strcmp(make, "Imacon"))
+                } else {
+                    if ( !strcmp(make, "Imacon") ) {
                         write_thumb = &CLASS ppm16_thumb;
-                    else
+                    } else {
                         CALLBACK_loadThumbnailRawData = &CLASS kodak_thumb_load_raw;
+                    }
+                }
                 break;
             case 65000:
                 CALLBACK_loadThumbnailRawData = tiff_ifd[thm].phint == 6 ?
@@ -7065,32 +8378,39 @@ void CLASS apply_tiff() {
     }
 }
 
-void CLASS parse_minolta(int base) {
+void
+parse_minolta(int base) {
     int save, tag, len, offset, high = 0, wide = 0, i, c;
     short sorder = GLOBAL_endianOrder;
 
     fseek(ifp, base, SEEK_SET);
-    if ( fgetc(ifp) || fgetc(ifp) - 'M' || fgetc(ifp) - 'R' ) return;
+    if ( fgetc(ifp) || fgetc(ifp) - 'M' || fgetc(ifp) - 'R' ) {
+        return;
+    }
     GLOBAL_endianOrder = fgetc(ifp) * 0x101;
     offset = base + get4() + 8;
-    while ((save = ftell(ifp)) < offset ) {
-        for ( tag = i = 0; i < 4; i++ )
+    while ( (save = ftell(ifp)) < offset ) {
+        for ( tag = i = 0; i < 4; i++ ) {
             tag = tag << 8 | fgetc(ifp);
+        }
         len = get4();
         switch ( tag ) {
-            case 0x505244:                /* PRD */
+            case 0x505244:
+                // PRD
                 fseek(ifp, 8, SEEK_CUR);
                 high = get2();
                 wide = get2();
                 break;
-            case 0x574247:                /* WBG */
+            case 0x574247:
+                // WBG
                 get4();
                 i = strcmp(model, "DiMAGE A200") ? 0 : 3;
                 for ( c = 0; c < 4; c++ ) {
                     cam_mul[c ^ (c >> 1) ^ i] = get2();
                 };
                 break;
-            case 0x545457:                /* TTW */
+            case 0x545457:
+                // TTW
                 parse_tiff(ftell(ifp));
                 data_offset = offset;
         }
@@ -7102,33 +8422,40 @@ void CLASS parse_minolta(int base) {
 }
 
 /*
-   Many cameras have a "debug mode" that writes JPEG and raw
-   at the same time.  The raw file has no header, so try to
-   to open the matching JPEG file and read its metadata.
- */
-void CLASS parse_external_jpeg() {
+Many cameras have a "debug mode" that writes JPEG and raw
+at the same time.  The raw file has no header, so try to
+to open the matching JPEG file and read its metadata.
+*/
+void
+parse_external_jpeg() {
     const char *file, *ext;
     char *jname, *jfile, *jext;
     FILE *save = ifp;
 
     ext = strrchr(ifname, '.');
     file = strrchr(ifname, '/');
-    if ( !file ) file = strrchr(ifname, '\\');
-    if ( !file ) file = ifname - 1;
+    if ( !file ) {
+        file = strrchr(ifname, '\\');
+    }
+    if ( !file ) {
+        file = ifname - 1;
+    }
     file++;
-    if ( !ext || strlen(ext) != 4 || ext - file != 8 ) return;
+    if ( !ext || strlen(ext) != 4 || ext - file != 8 ) {
+        return;
+    }
     jname = (char *) malloc(strlen(ifname) + 1);
     merror(jname, "parse_external_jpeg()");
     strcpy(jname, ifname);
     jfile = file - ifname + jname;
     jext = ext - ifname + jname;
-    if ( strcasecmp(ext, ".jpg")) {
+    if ( strcasecmp(ext, ".jpg") ) {
         strcpy(jext, isupper(ext[1]) ? ".JPG" : ".jpg");
         if ( isdigit(*file)) {
             memcpy(jfile, file + 4, 4);
             memcpy(jfile + 4, file, 4);
         }
-    } else
+    } else {
         while ( isdigit(*--jext)) {
             if ( *jext != '9' ) {
                 (*jext)++;
@@ -7136,35 +8463,43 @@ void CLASS parse_external_jpeg() {
             }
             *jext = '0';
         }
-    if ( strcmp(jname, ifname)) {
-        if ((ifp = fopen(jname, "rb"))) {
-            if ( OPTIONS_values->verbose )
+    }
+    if ( strcmp(jname, ifname) ) {
+        if ( (ifp = fopen(jname, "rb")) ) {
+            if ( OPTIONS_values->verbose ) {
                 fprintf(stderr, _("Reading metadata from %s ...\n"), jname);
+            }
             parse_tiff(12);
             thumb_offset = 0;
             is_raw = 1;
             fclose(ifp);
         }
     }
-    if ( !timestamp )
+    if ( !timestamp ) {
         fprintf(stderr, _("Failed to read metadata from %s\n"), jname);
+    }
     free(jname);
     ifp = save;
 }
 
 /*
-   CIFF block 0x1030 contains an 8x8 white sample.
-   Load this into white[][] for use in scale_colors().
- */
-void CLASS ciff_block_1030() {
+CIFF block 0x1030 contains an 8x8 white sample.
+Load this into white[][] for use in scale_colors().
+*/
+void
+ciff_block_1030() {
     static const ushort key[] = {0x410, 0x45f3};
     int i, bpp, row, col, vbits = 0;
     unsigned long bitbuf = 0;
 
-    if ((get2(), get4()) != 0x80008 || !get4()) return;
+    if ( (get2(), get4()) != 0x80008 || !get4() ) {
+        return;
+    }
     bpp = get2();
-    if ( bpp != 10 && bpp != 12 ) return;
-    for ( i = row = 0; row < 8; row++ )
+    if ( bpp != 10 && bpp != 12 ) {
+        return;
+    }
+    for ( i = row = 0; row < 8; row++ ) {
         for ( col = 0; col < 8; col++ ) {
             if ( vbits < bpp ) {
                 bitbuf = bitbuf << 16 | (get2() ^ key[i++ & 1]);
@@ -7172,12 +8507,14 @@ void CLASS ciff_block_1030() {
             }
             white[row][col] = bitbuf >> (vbits -= bpp) & ~(-1 << bpp);
         }
+    }
 }
 
 /*
-   Parse a CIFF file, better known as Canon CRW format.
- */
-void CLASS parse_ciff(int offset, int length, int depth) {
+Parse a CIFF file, better known as Canon CRW format.
+*/
+void
+parse_ciff(int offset, int length, int depth) {
     int tboff, nrecs, c, type, len, save, wbi = -1;
     ushort key[] = {0x410, 0x45f3};
 
@@ -7185,72 +8522,98 @@ void CLASS parse_ciff(int offset, int length, int depth) {
     tboff = get4() + offset;
     fseek(ifp, tboff, SEEK_SET);
     nrecs = get2();
-    if ((nrecs | depth) > 127 ) return;
+    if ( (nrecs | depth) > 127 ) {
+        return;
+    }
+
     while ( nrecs-- ) {
         type = get2();
         len = get4();
         save = ftell(ifp) + 4;
         fseek(ifp, offset + get4(), SEEK_SET);
-        if ((((type >> 8) + 8) | 8) == 0x38 )
-            parse_ciff(ftell(ifp), len, depth + 1); /* Parse a sub-table */
-        if ( type == 0x0810 )
+
+        if ( (((type >> 8) + 8) | 8) == 0x38 ) {
+            // Parse a sub-table
+            parse_ciff(ftell(ifp), len, depth + 1);
+        }
+
+        if ( type == 0x0810 ) {
             fread(artist, 64, 1, ifp);
+        }
+
         if ( type == 0x080a ) {
             fread(make, 64, 1, ifp);
             fseek(ifp, strlen(make) - 63, SEEK_CUR);
             fread(model, 64, 1, ifp);
         }
+
         if ( type == 0x1810 ) {
             width = get4();
             height = get4();
             pixel_aspect = int_to_float(get4());
             GLOBAL_flipsMask = get4();
         }
-        if ( type == 0x1835 )            /* Get the decoder table */
+
+        if ( type == 0x1835 ) {
+            // Get the decoder table
             tiff_compress = get4();
+        }
+
         if ( type == 0x2007 ) {
             thumb_offset = ftell(ifp);
             thumb_length = len;
         }
+
         if ( type == 0x1818 ) {
             shutter = pow(2, -int_to_float((get4(), get4())));
             aperture = pow(2, int_to_float(get4()) / 2);
         }
+
         if ( type == 0x102a ) {
             iso_speed = pow(2, (get4(), get2()) / 32.0 - 4) * 50;
             aperture = pow(2, (get2(), (short) get2()) / 64.0);
             shutter = pow(2, -((short) get2()) / 32.0);
             wbi = (get2(), get2());
-            if ( wbi > 17 ) wbi = 0;
+            if ( wbi > 17 ) {
+                wbi = 0;
+            }
             fseek(ifp, 32, SEEK_CUR);
-            if ( shutter > 1e6 ) shutter = get2() / 10.0;
+            if ( shutter > 1e6 ) {
+                shutter = get2() / 10.0;
+            }
         }
+
         if ( type == 0x102c ) {
-            if ( get2() > 512 ) {        /* Pro90, G1 */
+            if ( get2() > 512 ) {
+                // Pro90, G1
                 fseek(ifp, 118, SEEK_CUR);
                 for ( c = 0; c < 4; c++ ) {
                     cam_mul[c ^ 2] = get2();
                 }
-            } else {                /* G2, S30, S40 */
+            } else {
+                // G2, S30, S40
                 fseek(ifp, 98, SEEK_CUR);
                 for ( c = 0; c < 4; c++ ) {
                     cam_mul[c ^ (c >> 1) ^ 1] = get2();
                 }
             }
         }
+
         if ( type == 0x0032 ) {
-            if ( len == 768 ) {            /* EOS D30 */
+            if ( len == 768 ) {
+                // EOS D30
                 fseek(ifp, 72, SEEK_CUR);
                 for ( c = 0; c < 4; c++ ) {
                     cam_mul[c ^ (c >> 1)] = 1024.0 / get2();
                 }
                 if ( !wbi ) {
-                    cam_mul[0] = -1;    /* use my auto white balance */
+                    // use my auto white balance
+                    cam_mul[0] = -1;
                 }
             } else {
                 if ( !cam_mul[0] ) {
                     if ( get2() == key[0] ) {
-                        /* Pro1, G6, S60, S70 */
+                        // Pro1, G6, S60, S70
                         c = (strstr(model, "Pro1") ?
                              "012346000000000000" : "01345:000000006008")[wbi] - '0' + 2;
                     } else {                /* G3, G5, S45, S50 */
@@ -7267,7 +8630,9 @@ void CLASS parse_ciff(int offset, int length, int depth) {
                 }
             }
         }
-        if ( type == 0x10a9 ) {        /* D60, 10D, 300D, and clones */
+
+        if ( type == 0x10a9 ) {
+            // D60, 10D, 300D, and clones
             if ( len > 66 ) {
                 wbi = "0134567028"[wbi] - '0';
             }
@@ -7276,47 +8641,59 @@ void CLASS parse_ciff(int offset, int length, int depth) {
                 cam_mul[c ^ (c >> 1)] = get2();
             }
         }
+
         if ( type == 0x1030 && (0x18040 >> wbi & 1) ) {
-            ciff_block_1030();        /* all that don't have 0x10a9 */
+            // All that don't have 0x10a9
+            ciff_block_1030();
         }
+
         if ( type == 0x1031 ) {
             raw_width = (get2(), get2());
             raw_height = get2();
         }
+
         if ( type == 0x5029 ) {
             focal_len = len >> 16;
             if ( (len & 0xffff) == 2 ) {
                 focal_len /= 32;
             }
         }
+
         if ( type == 0x5813 ) {
             flash_used = int_to_float(len);
         }
+
         if ( type == 0x5814 ) {
             canon_ev = int_to_float(len);
         }
+
         if ( type == 0x5817 ) {
             shot_order = len;
         }
+
         if ( type == 0x5834 ) {
             unique_id = len;
         }
+
         if ( type == 0x580e ) {
             timestamp = len;
         }
+
         if ( type == 0x180e ) {
             timestamp = get4();
         }
+
 #ifdef LOCALTIME
     if ( (type | 0x4000) == 0x580e ) {
-      timestamp = mktime (gmtime (&timestamp));
+        timestamp = mktime (gmtime (&timestamp));
     }
 #endif
         fseek(ifp, save, SEEK_SET);
     }
 }
 
-void CLASS parse_rollei() {
+void
+parse_rollei() {
     char line[128], *val;
     struct tm t;
 
@@ -7324,37 +8701,54 @@ void CLASS parse_rollei() {
     memset(&t, 0, sizeof t);
     do {
         fgets(line, 128, ifp);
-        if ((val = strchr(line, '=')))
+        if ( (val = strchr(line, '=')) ) {
             *val++ = 0;
-        else
+        } else {
             val = line + strlen(line);
-        if ( !strcmp(line, "DAT"))
+        }
+
+        if ( !strcmp(line, "DAT") ) {
             sscanf(val, "%d.%d.%d", &t.tm_mday, &t.tm_mon, &t.tm_year);
-        if ( !strcmp(line, "TIM"))
+        }
+
+        if ( !strcmp(line, "TIM") ) {
             sscanf(val, "%d:%d:%d", &t.tm_hour, &t.tm_min, &t.tm_sec);
-        if ( !strcmp(line, "HDR"))
+        }
+
+        if ( !strcmp(line, "HDR") ) {
             thumb_offset = atoi(val);
-        if ( !strcmp(line, "X  "))
+        }
+
+        if ( !strcmp(line, "X  ") ) {
             raw_width = atoi(val);
-        if ( !strcmp(line, "Y  "))
+        }
+
+        if ( !strcmp(line, "Y  ") ) {
             raw_height = atoi(val);
-        if ( !strcmp(line, "TX "))
+        }
+
+        if ( !strcmp(line, "TX ") ) {
             thumb_width = atoi(val);
-        if ( !strcmp(line, "TY "))
+        }
+
+        if ( !strcmp(line, "TY ") ) {
             thumb_height = atoi(val);
+        }
     }
-    while ( strncmp(line, "EOHD", 4));
+    while ( strncmp(line, "EOHD", 4) );
     data_offset = thumb_offset + thumb_width * thumb_height * 2;
     t.tm_year -= 1900;
     t.tm_mon -= 1;
-    if ( mktime(&t) > 0 )
+    if ( mktime(&t) > 0 ) {
         timestamp = mktime(&t);
+    }
     strcpy(make, "Rollei");
     strcpy(model, "d530flex");
-    write_thumb = &CLASS rollei_thumb;
+    write_thumb = & rollei_thumb;
 }
 
-void CLASS parse_sinar_ia() {
+void
+parse_sinar_ia() {
     int entries, off;
     char str[8], *cp;
 
@@ -7366,27 +8760,34 @@ void CLASS parse_sinar_ia() {
         off = get4();
         get4();
         fread(str, 8, 1, ifp);
-        if ( !strcmp(str, "META")) meta_offset = off;
-        if ( !strcmp(str, "THUMB")) thumb_offset = off;
-        if ( !strcmp(str, "RAW0")) data_offset = off;
+        if ( !strcmp(str, "META") ) {
+            meta_offset = off;
+        }
+        if ( !strcmp(str, "THUMB") ) {
+            thumb_offset = off;
+        }
+        if ( !strcmp(str, "RAW0") ) {
+            data_offset = off;
+        }
     }
     fseek(ifp, meta_offset + 20, SEEK_SET);
     fread(make, 64, 1, ifp);
     make[63] = 0;
-    if ((cp = strchr(make, ' '))) {
+    if ( (cp = strchr(make, ' ')) ) {
         strcpy(model, cp + 1);
         *cp = 0;
     }
     raw_width = get2();
     raw_height = get2();
-    TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
+    TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
     thumb_width = (get4(), get2());
     thumb_height = get2();
-    write_thumb = &CLASS ppm_thumb;
+    write_thumb = &ppm_thumb;
     maximum = 0x3fff;
 }
 
-void CLASS parse_phase_one(int base) {
+void
+parse_phase_one(int base) {
     unsigned entries, tag, type, len, data, save, i, c;
     float romm_cam[3][3];
     char *cp;
@@ -7394,7 +8795,10 @@ void CLASS parse_phase_one(int base) {
     memset(&ph1, 0, sizeof ph1);
     fseek(ifp, base, SEEK_SET);
     GLOBAL_endianOrder = get4() & 0xffff;
-    if ( get4() >> 8 != 0x526177 ) return;        /* "Raw" */
+    if ( get4() >> 8 != 0x526177 ) {
+        // "Raw"
+        return;
+    }
     fseek(ifp, get4() + base, SEEK_SET);
     entries = get4();
     get4();
@@ -7410,8 +8814,9 @@ void CLASS parse_phase_one(int base) {
                 GLOBAL_flipsMask = "0653"[data & 3] - '0';
                 break;
             case 0x106:
-                for ( i = 0; i < 9; i++ )
+                for ( i = 0; i < 9; i++ ) {
                     ((float *) romm_cam)[i] = getreal(11);
+                }
                 romm_coeff(romm_cam);
                 break;
             case 0x107:
@@ -7477,15 +8882,19 @@ void CLASS parse_phase_one(int base) {
             case 0x301:
                 model[63] = 0;
                 fread(model, 1, 63, ifp);
-                if ((cp = strstr(model, " camera"))) *cp = 0;
+                if ( (cp = strstr(model, " camera")) ) {
+                    *cp = 0;
+                }
         }
         fseek(ifp, save, SEEK_SET);
     }
-    TIFF_CALLBACK_loadRawData = ph1.format < 3 ?
-                                &CLASS phase_one_load_raw : &CLASS phase_one_load_raw_c;
+
+    TIFF_CALLBACK_loadRawData = ph1.format < 3 ? &phase_one_load_raw : &phase_one_load_raw_c;
     maximum = 0xffff;
     strcpy(make, "Phase One");
-    if ( model[0] ) return;
+    if ( model[0] ) {
+        return;
+    }
     switch ( raw_height ) {
         case 2060:
             strcpy(model, "LightPhase");
@@ -7502,12 +8911,15 @@ void CLASS parse_phase_one(int base) {
     }
 }
 
-void CLASS parse_fuji(int offset) {
+void
+parse_fuji(int offset) {
     unsigned entries, tag, len, save, c;
 
     fseek(ifp, offset, SEEK_SET);
     entries = get4();
-    if ( entries > 255 ) return;
+    if ( entries > 255 ) {
+        return;
+    }
     while ( entries-- ) {
         tag = get2();
         len = get2();
@@ -7518,7 +8930,9 @@ void CLASS parse_fuji(int offset) {
         } else {
             if ( tag == 0x121 ) {
                 height = get2();
-                if ((width = get2()) == 4284 ) width += 3;
+                if ( (width = get2()) == 4284 ) {
+                    width += 3;
+                }
             } else {
                 if ( tag == 0x130 ) {
                     fuji_layout = fgetc(ifp) >> 7;
@@ -7558,7 +8972,9 @@ int CLASS parse_jpeg(int offset) {
     int len, save, hlen, mark;
 
     fseek(ifp, offset, SEEK_SET);
-    if ( fgetc(ifp) != 0xff || fgetc(ifp) != 0xd8 ) return 0;
+    if ( fgetc(ifp) != 0xff || fgetc(ifp) != 0xd8 ) {
+        return 0;
+    }
 
     while ( fgetc(ifp) == 0xff && (mark = fgetc(ifp)) != 0xda ) {
         GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
@@ -7571,15 +8987,20 @@ int CLASS parse_jpeg(int offset) {
         }
         GLOBAL_endianOrder = get2();
         hlen = get4();
-        if ( get4() == 0x48454150 )        /* "HEAP" */
+        if ( get4() == 0x48454150 ) {
+            // "HEAP"
             parse_ciff(save + hlen, len - hlen, 0);
-        if ( parse_tiff(save + 6)) apply_tiff();
+        }
+        if ( parse_tiff(save + 6)) {
+            apply_tiff();
+        }
         fseek(ifp, save + len, SEEK_SET);
     }
     return 1;
 }
 
-void CLASS parse_riff() {
+void
+parse_riff() {
     unsigned i, size, end;
     char tag[4], date[64], month[64];
     static const char mon[12][4] =
@@ -7590,11 +9011,12 @@ void CLASS parse_riff() {
     fread(tag, 4, 1, ifp);
     size = get4();
     end = ftell(ifp) + size;
-    if ( !memcmp(tag, "RIFF", 4) || !memcmp(tag, "LIST", 4)) {
+    if ( !memcmp(tag, "RIFF", 4) || !memcmp(tag, "LIST", 4) ) {
         get4();
-        while ( ftell(ifp) + 7 < end && !feof(ifp))
+        while ( ftell(ifp) + 7 < end && !feof(ifp) ) {
             parse_riff();
-    } else
+        }
+    } else {
         if ( !memcmp(tag, "nctg", 4)) {
             while ( ftell(ifp) + 7 < end ) {
                 i = get2();
@@ -7603,7 +9025,7 @@ void CLASS parse_riff() {
                     get_timestamp(0);
                 else fseek(ifp, size, SEEK_CUR);
             }
-        } else
+        } else {
             if ( !memcmp(tag, "IDIT", 4) && size < 64 ) {
                 fread(date, 64, 1, ifp);
                 date[size] = 0;
@@ -7613,31 +9035,44 @@ void CLASS parse_riff() {
                     for ( i = 0; i < 12 && strcasecmp(mon[i], month); i++ );
                     t.tm_mon = i;
                     t.tm_year -= 1900;
-                    if ( mktime(&t) > 0 )
+                    if ( mktime(&t) > 0 ) {
                         timestamp = mktime(&t);
+                    }
                 }
-            } else
+            } else {
                 fseek(ifp, size, SEEK_CUR);
+            }
+        }
+    }
 }
 
-void CLASS parse_crx(int end) {
+void
+parse_crx(int end) {
     unsigned i, save, size, tag, base;
     static int index = 0, wide, high, off, len;
 
     GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
     while ( ftell(ifp) + 7 < end ) {
         save = ftell(ifp);
-        if ((size = get4()) < 8 ) break;
-        switch ( tag = get4()) {
-            case 0x6d6f6f76:                /* moov */
-            case 0x7472616b:                /* trak */
-            case 0x6d646961:                /* mdia */
-            case 0x6d696e66:                /* minf */
-            case 0x7374626c:                /* stbl */
+        if ( (size = get4()) < 8 ) {
+            break;
+        }
+        switch ( tag = get4() ) {
+            case 0x6d6f6f76:
+                // moov
+            case 0x7472616b:
+                // trak
+            case 0x6d646961:
+                // mdia
+            case 0x6d696e66:
+                // minf
+            case 0x7374626c:
+                // stbl
                 parse_crx(save + size);
                 break;
-            case 0x75756964:                /* uuid */
-                switch ( i = get4()) {
+            case 0x75756964:
+                // uuid
+                switch ( i = get4() ) {
                     case 0xeaf42b5e:
                         fseek(ifp, 8, SEEK_CUR);
                     case 0x85c0b687:
@@ -7645,8 +9080,10 @@ void CLASS parse_crx(int end) {
                         parse_crx(save + size);
                 }
                 break;
-            case 0x434d5431:                /* CMT1 */
-            case 0x434d5432:                /* CMT2 */
+            case 0x434d5431:
+                // CMT1
+            case 0x434d5432:
+                // CMT2
                 base = ftell(ifp);
                 GLOBAL_endianOrder = get2();
                 fseek(ifp, 6, SEEK_CUR);
@@ -7657,21 +9094,25 @@ void CLASS parse_crx(int end) {
                 }
                 GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
                 break;
-            case 0x746b6864:                /* tkhd */
+            case 0x746b6864:
+                // tkhd
                 fseek(ifp, 12, SEEK_CUR);
                 index = get4();
                 fseek(ifp, 58, SEEK_CUR);
                 wide = get4();
                 high = get4();
                 break;
-            case 0x7374737a:                /* stsz */
+            case 0x7374737a:
+                // stsz
                 len = (get4(), get4());
                 break;
-            case 0x636f3634:                /* co64 */
+            case 0x636f3634:
+                // co64
                 fseek(ifp, 12, SEEK_CUR);
                 off = get4();
                 switch ( index ) {
-                    case 1:            /* 1 = full size, 2 = 27% size */
+                    case 1:
+                        // 1 = full size, 2 = 27% size
                         thumb_width = wide;
                         thumb_height = high;
                         thumb_length = len;
@@ -7681,54 +9122,71 @@ void CLASS parse_crx(int end) {
                         raw_width = wide;
                         raw_height = high;
                         data_offset = off;
-                        TIFF_CALLBACK_loadRawData = &CLASS canon_crx_load_raw;
+                        TIFF_CALLBACK_loadRawData = &canon_crx_load_raw;
                 }
                 break;
-            case 0x50525657:                /* PRVW */
+            case 0x50525657:
+                // PRVW
                 fseek(ifp, 6, SEEK_CUR);
         }
         fseek(ifp, save + size, SEEK_SET);
     }
 }
 
-void CLASS parse_qt(int end) {
+void
+parse_qt(int end) {
     unsigned save, size;
     char tag[4];
 
     GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
     while ( ftell(ifp) + 7 < end ) {
         save = ftell(ifp);
-        if ((size = get4()) < 8 ) return;
+        if ( (size = get4()) < 8 ) {
+            return;
+        }
         fread(tag, 4, 1, ifp);
         if ( !memcmp(tag, "moov", 4) ||
              !memcmp(tag, "udta", 4) ||
-             !memcmp(tag, "CNTH", 4))
+             !memcmp(tag, "CNTH", 4) ) {
             parse_qt(save + size);
-        if ( !memcmp(tag, "CNDA", 4))
+        }
+        if ( !memcmp(tag, "CNDA", 4) ) {
             parse_jpeg(ftell(ifp));
+        }
         fseek(ifp, save + size, SEEK_SET);
     }
 }
 
-void CLASS parse_smal(int offset, int fsize) {
+void
+parse_smal(int offset, int fsize) {
     int ver;
 
     fseek(ifp, offset + 2, SEEK_SET);
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
     ver = fgetc(ifp);
-    if ( ver == 6 )
+    if ( ver == 6 ) {
         fseek(ifp, 5, SEEK_CUR);
-    if ( get4() != fsize ) return;
-    if ( ver > 6 ) data_offset = get4();
+    }
+    if ( get4() != fsize ) {
+        return;
+    }
+    if ( ver > 6 ) {
+        data_offset = get4();
+    }
     raw_height = height = get2();
     raw_width = width = get2();
     strcpy(make, "SMaL");
     snprintf(model, 64, "v%d %dx%d", ver, width, height);
-    if ( ver == 6 ) TIFF_CALLBACK_loadRawData = &CLASS smal_v6_load_raw;
-    if ( ver == 9 ) TIFF_CALLBACK_loadRawData = &CLASS smal_v9_load_raw;
+    if ( ver == 6 ) {
+        TIFF_CALLBACK_loadRawData = &CLASS smal_v6_load_raw;
+    }
+    if ( ver == 9 ) {
+        TIFF_CALLBACK_loadRawData = &CLASS smal_v9_load_raw;
+    }
 }
 
-void CLASS parse_cine() {
+void
+parse_cine() {
     unsigned off_head, off_setup, off_image, i;
 
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
@@ -7740,22 +9198,24 @@ void CLASS parse_cine() {
     off_setup = get4();
     off_image = get4();
     timestamp = get4();
-    if ((i = get4())) timestamp = i;
+    if ( (i = get4()) ) {
+        timestamp = i;
+    }
     fseek(ifp, off_head + 4, SEEK_SET);
     raw_width = get4();
     raw_height = get4();
-    switch ( get2(), get2()) {
+    switch ( get2(), get2() ) {
         case 8:
-            TIFF_CALLBACK_loadRawData = &CLASS eight_bit_load_raw;
+            TIFF_CALLBACK_loadRawData = &eight_bit_load_raw;
             break;
         case 16:
-            TIFF_CALLBACK_loadRawData = &CLASS  unpacked_load_raw;
+            TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
     }
     fseek(ifp, off_setup + 792, SEEK_SET);
     strcpy(make, "CINE");
     snprintf(model, 64, "%d", get4());
     fseek(ifp, 12, SEEK_CUR);
-    switch ((i = get4()) & 0xffffff ) {
+    switch ( (i = get4()) & 0xffffff ) {
         case 3:
             filters = 0x94949494;
             break;
@@ -7766,7 +9226,7 @@ void CLASS parse_cine() {
             is_raw = 0;
     }
     fseek(ifp, 72, SEEK_CUR);
-    switch ((get4() + 3600) % 360 ) {
+    switch ( (get4() + 3600) % 360 ) {
         case 270:
             GLOBAL_flipsMask = 4;
             break;
@@ -7785,13 +9245,15 @@ void CLASS parse_cine() {
     fseek(ifp, 668, SEEK_CUR);
     shutter = get4() / 1000000000.0;
     fseek(ifp, off_image, SEEK_SET);
-    if ( OPTIONS_values->shotSelect < is_raw )
+    if ( OPTIONS_values->shotSelect < is_raw ) {
         fseek(ifp, OPTIONS_values->shotSelect * 8, SEEK_CUR);
+    }
     data_offset = (INT64) get4() + 8;
     data_offset += (INT64) get4() << 32;
 }
 
-void CLASS parse_redcine() {
+void
+parse_redcine() {
     unsigned i, len, rdvo;
 
     GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
@@ -7804,10 +9266,12 @@ void CLASS parse_redcine() {
     if ( get4() != i || get4() != 0x52454f42 ) {
         fprintf(stderr, _("%s: Tail is missing, parsing from head...\n"), ifname);
         fseek(ifp, 0, SEEK_SET);
-        while ((len = get4()) != EOF) {
-            if ( get4() == 0x52454456 )
-                if ( is_raw++ == OPTIONS_values->shotSelect )
+        while ( (len = get4()) != EOF ) {
+            if ( get4() == 0x52454456 ) {
+                if ( is_raw++ == OPTIONS_values->shotSelect ) {
                     data_offset = ftello(ifp) - 8;
+                }
+            }
             fseek(ifp, len - 8, SEEK_CUR);
         }
     } else {
@@ -7819,16 +9283,21 @@ void CLASS parse_redcine() {
     }
 }
 
-char *CLASS foveon_gets(int offset, char *str, int len) {
+char *
+foveon_gets(int offset, char *str, int len) {
     int i;
     fseek(ifp, offset, SEEK_SET);
-    for ( i = 0; i < len - 1; i++ )
-        if ((str[i] = get2()) == 0 ) break;
+    for ( i = 0; i < len - 1; i++ ) {
+        if ( (str[i] = get2()) == 0 ) {
+            break;
+        }
+    }
     str[i] = 0;
     return str;
 }
 
-void CLASS parse_foveon() {
+void
+parse_foveon() {
     int entries, img = 0, off, len, tag, save, i, wide, high, pent, poff[256][2];
     char name[64], value[64];
 
@@ -7837,7 +9306,10 @@ void CLASS parse_foveon() {
     GLOBAL_flipsMask = get4();
     fseek(ifp, -4, SEEK_END);
     fseek(ifp, get4(), SEEK_SET);
-    if ( get4() != 0x64434553 ) return;    /* SECd */
+    if ( get4() != 0x64434553 ) {
+        // SECd
+        return;
+    }
     entries = (get4(), get4());
     while ( entries-- ) {
         off = get4();
@@ -7845,10 +9317,14 @@ void CLASS parse_foveon() {
         tag = get4();
         save = ftell(ifp);
         fseek(ifp, off, SEEK_SET);
-        if ( get4() != (0x20434553 | (tag << 24))) return;
+        if ( get4() != (0x20434553 | (tag << 24))) {
+            return;
+        }
         switch ( tag ) {
-            case 0x47414d49:            /* IMAG */
-            case 0x32414d49:            /* IMA2 */
+            case 0x47414d49:
+                // IMAG
+            case 0x32414d49:
+                // IMA2
                 fseek(ifp, 8, SEEK_CUR);
                 pent = get4();
                 wide = get4();
@@ -7885,39 +9361,52 @@ void CLASS parse_foveon() {
                     write_thumb = &CLASS foveon_thumb;
                 }
                 break;
-            case 0x464d4143:            /* CAMF */
+            case 0x464d4143:
+                // CAMF
                 meta_offset = off + 8;
                 meta_length = len - 28;
                 break;
-            case 0x504f5250:            /* PROP */
+            case 0x504f5250:
+                // PROP
                 pent = (get4(), get4());
                 fseek(ifp, 12, SEEK_CUR);
                 off += pent * 8 + 24;
-                if ((unsigned) pent > 256 ) pent = 256;
-                for ( i = 0; i < pent * 2; i++ )
+                if ( (unsigned) pent > 256 ) {
+                    pent = 256;
+                }
+                for ( i = 0; i < pent * 2; i++ ) {
                     ((int *) poff)[i] = off + get4() * 2;
+                }
                 for ( i = 0; i < pent; i++ ) {
                     foveon_gets(poff[i][0], name, 64);
                     foveon_gets(poff[i][1], value, 64);
-                    if ( !strcmp(name, "ISO"))
+                    if ( !strcmp(name, "ISO") ) {
                         iso_speed = atoi(value);
-                    if ( !strcmp(name, "CAMMANUF"))
+                    }
+                    if ( !strcmp(name, "CAMMANUF") ) {
                         strcpy(make, value);
-                    if ( !strcmp(name, "CAMMODEL"))
+                    }
+                    if ( !strcmp(name, "CAMMODEL") ) {
                         strcpy(model, value);
-                    if ( !strcmp(name, "WB_DESC"))
+                    }
+                    if ( !strcmp(name, "WB_DESC") ) {
                         strcpy(model2, value);
-                    if ( !strcmp(name, "TIME"))
+                    }
+                    if ( !strcmp(name, "TIME") ) {
                         timestamp = atoi(value);
-                    if ( !strcmp(name, "EXPTIME"))
+                    }
+                    if ( !strcmp(name, "EXPTIME") ) {
                         shutter = atoi(value) / 1000000.0;
-                    if ( !strcmp(name, "APERTURE"))
+                    }
+                    if ( !strcmp(name, "APERTURE") ) {
                         aperture = atof(value);
-                    if ( !strcmp(name, "FLENGTH"))
+                    }
+                    if ( !strcmp(name, "FLENGTH") ) {
                         focal_len = atof(value);
+                    }
                 }
 #ifdef LOCALTIME
-                timestamp = mktime (gmtime (&timestamp));
+                timestamp = mktime(gmtime(&timestamp));
 #endif
         }
         fseek(ifp, save, SEEK_SET);
@@ -7925,9 +9414,10 @@ void CLASS parse_foveon() {
 }
 
 /*
-   All matrices are from Adobe DNG Converter unless otherwise noted.
- */
-void CLASS adobe_coeff(const char *make, const char *model) {
+All matrices are from Adobe DNG Converter unless otherwise noted.
+*/
+void
+adobe_coeff(const char *make, const char *model) {
     static const struct {
         const char *prefix;
         short black, maximum, trans[12];
@@ -8908,7 +10398,7 @@ void CLASS adobe_coeff(const char *make, const char *model) {
                     {8035,  435,    -962,  -6001, 13872, 2320,  -1159, 3065,  5434}},
             {"Photron BC2-HD",                0,   0,        /* DJC */
                     {14603, -4122,  -528,  -1810, 9794,  2017,  -297,  2763,  5936}},
-            {"Red One",                       704, 0xffff,        /* DJC */
+            {"Red One",                       704, (short)0xffff,        /* DJC */
                     {21014, -7891,  -2613, -3056, 12201, 856,   -2203, 5125,  8042}},
             {"Ricoh GR II",                   0,   0,
                     {4630,  -834,   -423,  -4977, 12805, 2417,  -638,  1467,  6115}},
@@ -9080,10 +10570,14 @@ void CLASS adobe_coeff(const char *make, const char *model) {
     int i, j;
 
     snprintf(name, 130, "%s %s", make, model);
-    for ( i = 0; i < sizeof table / sizeof *table; i++ )
+    for ( i = 0; i < sizeof table / sizeof *table; i++ ) {
         if ( !strncmp(name, table[i].prefix, strlen(table[i].prefix))) {
-            if ( table[i].black ) black = (ushort) table[i].black;
-            if ( table[i].maximum ) maximum = (ushort) table[i].maximum;
+            if ( table[i].black ) {
+                black = (ushort) table[i].black;
+            }
+            if ( table[i].maximum ) {
+                maximum = (ushort) table[i].maximum;
+            }
             if ( table[i].trans[0] ) {
                 for ( GLOBAL_colorTransformForRaw = j = 0; j < 12; j++ )
                     ((double *) cam_xyz)[j] = table[i].trans[j] / 10000.0;
@@ -9091,20 +10585,20 @@ void CLASS adobe_coeff(const char *make, const char *model) {
             }
             break;
         }
+    }
 }
 
-void CLASS simple_coeff(int index) {
+void
+simple_coeff(int index) {
     static const float table[][12] = {
-            /* index 0 -- all Foveon cameras */
-            {1.4032,    -0.2231,  -0.1016,   -0.5263, 1.4816,   0.017,     -0.0112,   0.0183, 0.9113},
-            /* index 1 -- Kodak DC20 and DC25 */
-            {2.25,      0.75,     -1.75,     -0.25,   -0.25,    0.75,      0.75,      -0.25,  -0.25,     -1.75,    0.75,     2.25},
-            /* index 2 -- Logitech Fotoman Pixtura */
-            {1.893,     -0.418,   -0.476,    -0.495,  1.773,    -0.278,    -1.017,    -0.655, 2.672},
-            /* index 3 -- Nikon E880, E900, and E990 */
-            {-1.936280, 1.800443, -1.448486, 2.584324,
-                                                      1.405365, -0.524955, -0.289090, 0.408680,
-                                                                                              -1.204965, 1.082304, 2.941367, -1.818705}
+        // index 0 -- all Foveon cameras
+        {1.4032,    -0.2231,  -0.1016,   -0.5263, 1.4816,   0.017,     -0.0112,   0.0183, 0.9113},
+        // index 1 -- Kodak DC20 and DC25
+        {2.25,      0.75,     -1.75,     -0.25,   -0.25,    0.75,      0.75,      -0.25,  -0.25,     -1.75,    0.75,     2.25},
+        // index 2 -- Logitech Fotoman Pixtura
+        {1.893,     -0.418,   -0.476,    -0.495,  1.773,    -0.278,    -1.017,    -0.655, 2.672},
+        // index 3 -- Nikon E880, E900, and E990
+        {-1.936280, 1.800443, -1.448486, 2.584324,1.405365, -0.524955, -0.289090, 0.408680, -1.204965, 1.082304, 2.941367, -1.818705}
     };
     int i, c;
 
@@ -9115,7 +10609,8 @@ void CLASS simple_coeff(int index) {
     }
 }
 
-short CLASS guess_byte_order(int words) {
+short
+guess_byte_order(int words) {
     uchar test[4][2];
     int t = 2, msb;
     double diff, sum[2] = {0, 0};
@@ -9133,7 +10628,8 @@ short CLASS guess_byte_order(int words) {
     return sum[0] < sum[1] ? BIG_ENDIAN_ORDER : LITTLE_ENDIAN_ORDER;
 }
 
-float CLASS find_green(int bps, int bite, int off0, int off1) {
+float
+find_green(int bps, int bite, int off0, int off1) {
     UINT64 bitbuf = 0;
     int vbits, col, i, c;
     ushort img[2][2064];
@@ -9144,8 +10640,9 @@ float CLASS find_green(int bps, int bite, int off0, int off1) {
         for ( vbits = col = 0; col < width; col++ ) {
             for ( vbits -= bps; vbits < 0; vbits += bite ) {
                 bitbuf <<= bite;
-                for ( i = 0; i < bite; i += 8 )
+                for ( i = 0; i < bite; i += 8 ) {
                     bitbuf |= (unsigned) (fgetc(ifp) << i);
+                }
             }
             img[c][col] = bitbuf << (64 - bps - vbits) >> (64 - bps);
         }
@@ -9154,7 +10651,7 @@ float CLASS find_green(int bps, int bite, int off0, int off1) {
         sum[c & 1] += ABS(img[0][c] - img[1][c + 1]);
         sum[~c & 1] += ABS(img[1][c] - img[0][c + 1]);
     }
-    return 100 * log(sum[0] / sum[1]);
+    return 100.0 * log(sum[0] / sum[1]);
 }
 
 /*
@@ -9517,6 +11014,7 @@ tiffIdentify() {
     mix_green = profile_length = data_error = zero_is_bad = 0;
     pixel_aspect = is_raw = GLOBAL_colorTransformForRaw = 1;
     tile_width = tile_length = 0;
+
     for ( i = 0; i < 4; i++ ) {
         cam_mul[i] = i == 1;
         pre_mul[i] = i < 3;
@@ -9527,8 +11025,11 @@ tiffIdentify() {
             rgb_cam[c][i] = c == i;
         }
     }
+
     colors = 3;
-    for ( i = 0; i < 0x10000; i++ ) curve[i] = i;
+    for ( i = 0; i < 0x10000; i++ ) {
+        curve[i] = i;
+    }
 
     GLOBAL_endianOrder = get2();
     hlen = get4();
@@ -9536,176 +11037,164 @@ tiffIdentify() {
     fread(head, 1, 32, ifp);
     fseek(ifp, 0, SEEK_END);
     flen = fsize = ftell(ifp);
-    if ((cp = (char *) memmem(head, 32, (char *) "MMMM", 4)) ||
-        (cp = (char *) memmem(head, 32, (char *) "IIII", 4))) {
+
+    if ( (cp = (char *) memmem(head, 32, (char *) "MMMM", 4)) ||
+         (cp = (char *) memmem(head, 32, (char *) "IIII", 4)) ) {
         parse_phase_one(cp - head);
-        if ( cp - head && parse_tiff(0)) apply_tiff();
-    } else
-        if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER || GLOBAL_endianOrder == BIG_ENDIAN_ORDER ) {
-            if ( !memcmp(head + 6, "HEAPCCDR", 8)) {
-                data_offset = hlen;
-                parse_ciff(hlen, flen - hlen, 0);
-                TIFF_CALLBACK_loadRawData = &CLASS canon_load_raw;
-            } else if ( parse_tiff(0)) apply_tiff();
-        } else
-            if ( !memcmp(head, "\xff\xd8\xff\xe1", 4) &&
-                 !memcmp(head + 6, "Exif", 4)) {
-                fseek(ifp, 4, SEEK_SET);
-                data_offset = 4 + get2();
-                fseek(ifp, data_offset, SEEK_SET);
-                if ( fgetc(ifp) != 0xff )
-                    parse_tiff(12);
-                thumb_offset = 0;
-            } else
-                if ( !memcmp(head + 25, "ARECOYK", 7)) {
-                    strcpy(make, "Contax");
-                    strcpy(model, "N Digital");
-                    fseek(ifp, 33, SEEK_SET);
-                    get_timestamp(1);
-                    fseek(ifp, 60, SEEK_SET);
-                    for ( c = 0; c < 4; c++ ) {
-                        cam_mul[c ^ (c >> 1)] = get4();
-                    }
-                } else
-                    if ( !strcmp(head, "PXN")) {
-                        strcpy(make, "Logitech");
-                        strcpy(model, "Fotoman Pixtura");
-                    } else
-                        if ( !strcmp(head, "qktk")) {
-                            strcpy(make, "Apple");
-                            strcpy(model, "QuickTake 100");
-                            TIFF_CALLBACK_loadRawData = &CLASS quicktake_100_load_raw;
-                        } else
-                            if ( !strcmp(head, "qktn")) {
-                                strcpy(make, "Apple");
-                                strcpy(model, "QuickTake 150");
-                                TIFF_CALLBACK_loadRawData = &CLASS kodak_radc_load_raw;
-                            } else
-                                if ( !memcmp(head, "FUJIFILM", 8)) {
-                                    fseek(ifp, 84, SEEK_SET);
-                                    thumb_offset = get4();
-                                    thumb_length = get4();
-                                    fseek(ifp, 92, SEEK_SET);
-                                    parse_fuji(get4());
-                                    if ( thumb_offset > 120 ) {
-                                        fseek(ifp, 120, SEEK_SET);
-                                        i = get4();
-                                        if ( i ) {
-                                            is_raw++;
-                                        }
-                                        if ( is_raw == 2 && OPTIONS_values->shotSelect )
-                                            parse_fuji(i);
-                                    }
-                                    fseek(ifp, 100 + 28 * (OPTIONS_values->shotSelect > 0), SEEK_SET);
-                                    parse_tiff(data_offset = get4());
-                                    parse_tiff(thumb_offset + 12);
-                                    apply_tiff();
-                                    if ( !TIFF_CALLBACK_loadRawData ) {
-                                        TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-                                        tiff_bps = 14;
-                                    }
-                                } else
-                                    if ( !memcmp(head, "RIFF", 4)) {
-                                        fseek(ifp, 0, SEEK_SET);
-                                        parse_riff();
-                                    } else
-                                        if ( !memcmp(head + 4, "ftypcrx ", 8)) {
-                                            fseek(ifp, 0, SEEK_SET);
-                                            parse_crx(fsize);
-                                        } else
-                                            if ( !memcmp(head + 4, "ftypqt   ", 9)) {
-                                                fseek(ifp, 0, SEEK_SET);
-                                                parse_qt(fsize);
-                                                is_raw = 0;
-                                            } else
-                                                if ( !memcmp(head, "\0\001\0\001\0@", 6)) {
-                                                    fseek(ifp, 6, SEEK_SET);
-                                                    fread(make, 1, 8, ifp);
-                                                    fread(model, 1, 8, ifp);
-                                                    fread(model2, 1, 16, ifp);
-                                                    data_offset = get2();
-                                                    get2();
-                                                    raw_width = get2();
-                                                    raw_height = get2();
-                                                    TIFF_CALLBACK_loadRawData = &CLASS nokia_load_raw;
-                                                    filters = 0x61616161;
-                                                } else
-                                                    if ( !memcmp(head, "NOKIARAW", 8)) {
-                                                        strcpy(make, "NOKIA");
-                                                        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                        fseek(ifp, 300, SEEK_SET);
-                                                        data_offset = get4();
-                                                        i = get4();
-                                                        width = get2();
-                                                        height = get2();
-                                                        switch ( tiff_bps = i * 8 / (width * height)) {
-                                                            case 8:
-                                                                TIFF_CALLBACK_loadRawData = &CLASS eight_bit_load_raw;
-                                                                break;
-                                                            case 10:
-                                                                TIFF_CALLBACK_loadRawData = &CLASS nokia_load_raw;
-                                                        }
-                                                        raw_height = height +
-                                                                     (top_margin = i / (width * tiff_bps / 8) - height);
-                                                        mask[0][3] = 1;
-                                                        filters = 0x61616161;
-                                                    } else
-                                                        if ( !memcmp(head, "ARRI", 4)) {
-                                                            GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                            fseek(ifp, 20, SEEK_SET);
-                                                            width = get4();
-                                                            height = get4();
-                                                            strcpy(make, "ARRI");
-                                                            fseek(ifp, 668, SEEK_SET);
-                                                            fread(model, 1, 64, ifp);
-                                                            data_offset = 4096;
-                                                            TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                                                            GLOBAL_loadFlags = 88;
-                                                            filters = 0x61616161;
-                                                        } else
-                                                            if ( !memcmp(head, "XPDS", 4)) {
-                                                                GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                                fseek(ifp, 0x800, SEEK_SET);
-                                                                fread(make, 1, 41, ifp);
-                                                                raw_height = get2();
-                                                                raw_width = get2();
-                                                                fseek(ifp, 56, SEEK_CUR);
-                                                                fread(model, 1, 30, ifp);
-                                                                data_offset = 0x10000;
-                                                                TIFF_CALLBACK_loadRawData = &CLASS canon_rmf_load_raw;
-                                                                gamma_curve(0, 12.25, 1, 1023);
-                                                            } else
-                                                                if ( !memcmp(head + 4, "RED1", 4)) {
-                                                                    strcpy(make, "Red");
-                                                                    strcpy(model, "One");
-                                                                    parse_redcine();
-                                                                    TIFF_CALLBACK_loadRawData = &CLASS redcine_load_raw;
-                                                                    gamma_curve(1 / 2.4, 12.92, 1, 4095);
-                                                                    filters = 0x49494949;
-                                                                } else
-                                                                    if ( !memcmp(head, "DSC-Image", 9))
-                                                                        parse_rollei();
-                                                                    else
-                                                                        if ( !memcmp(head, "PWAD", 4))
-                                                                            parse_sinar_ia();
-                                                                        else
-                                                                            if ( !memcmp(head, "\0MRM", 4))
-                                                                                parse_minolta(0);
-                                                                            else
-                                                                                if ( !memcmp(head, "FOVb", 4))
-                                                                                    parse_foveon();
-                                                                                else
-                                                                                    if ( !memcmp(head, "CI", 2))
-                                                                                        parse_cine();
-    if ( make[0] == 0 )
-        for ( zero_fsize = i = 0; i < sizeof table / sizeof *table; i++ )
+        if ( cp - head && parse_tiff(0)) {
+            apply_tiff();
+        }
+    } else if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER || GLOBAL_endianOrder == BIG_ENDIAN_ORDER ) {
+        if ( !memcmp(head + 6, "HEAPCCDR", 8) ) {
+            data_offset = hlen;
+            parse_ciff(hlen, flen - hlen, 0);
+            TIFF_CALLBACK_loadRawData = &CLASS canon_load_raw;
+        } else if ( parse_tiff(0) ) {
+            apply_tiff();
+        }
+    } else if ( !memcmp(head, "\xff\xd8\xff\xe1", 4) && !memcmp(head + 6, "Exif", 4) ) {
+        fseek(ifp, 4, SEEK_SET);
+        data_offset = 4 + get2();
+        fseek(ifp, data_offset, SEEK_SET);
+        if ( fgetc(ifp) != 0xff ) {
+            parse_tiff(12);
+        }
+        thumb_offset = 0;
+    } else if ( !memcmp(head + 25, "ARECOYK", 7) ) {
+        strcpy(make, "Contax");
+        strcpy(model, "N Digital");
+        fseek(ifp, 33, SEEK_SET);
+        get_timestamp(1);
+        fseek(ifp, 60, SEEK_SET);
+        for ( c = 0; c < 4; c++ ) {
+            cam_mul[c ^ (c >> 1)] = get4();
+        }
+    } else if ( !strcmp(head, "PXN") ) {
+        strcpy(make, "Logitech");
+        strcpy(model, "Fotoman Pixtura");
+    } else if ( !strcmp(head, "qktk") ) {
+        strcpy(make, "Apple");
+        strcpy(model, "QuickTake 100");
+        TIFF_CALLBACK_loadRawData = &CLASS quicktake_100_load_raw;
+    } else if ( !strcmp(head, "qktn") ) {
+        strcpy(make, "Apple");
+        strcpy(model, "QuickTake 150");
+        TIFF_CALLBACK_loadRawData = &CLASS kodak_radc_load_raw;
+    } else if ( !memcmp(head, "FUJIFILM", 8) ) {
+        fseek(ifp, 84, SEEK_SET);
+        thumb_offset = get4();
+        thumb_length = get4();
+        fseek(ifp, 92, SEEK_SET);
+        parse_fuji(get4());
+        if ( thumb_offset > 120 ) {
+            fseek(ifp, 120, SEEK_SET);
+            i = get4();
+            if ( i ) {
+                is_raw++;
+            }
+            if ( is_raw == 2 && OPTIONS_values->shotSelect ) {
+                parse_fuji(i);
+            }
+        }
+        fseek(ifp, 100 + 28 * (OPTIONS_values->shotSelect > 0), SEEK_SET);
+        parse_tiff(data_offset = get4());
+        parse_tiff(thumb_offset + 12);
+        apply_tiff();
+        if ( !TIFF_CALLBACK_loadRawData ) {
+            TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
+            tiff_bps = 14;
+        }
+    } else if ( !memcmp(head, "RIFF", 4) ) {
+        fseek(ifp, 0, SEEK_SET);
+        parse_riff();
+    } else if ( !memcmp(head + 4, "ftypcrx ", 8) ) {
+        fseek(ifp, 0, SEEK_SET);
+        parse_crx(fsize);
+    } else if ( !memcmp(head + 4, "ftypqt   ", 9) ) {
+        fseek(ifp, 0, SEEK_SET);
+        parse_qt(fsize);
+        is_raw = 0;
+    } else if ( !memcmp(head, "\0\001\0\001\0@", 6) ) {
+        fseek(ifp, 6, SEEK_SET);
+        fread(make, 1, 8, ifp);
+        fread(model, 1, 8, ifp);
+        fread(model2, 1, 16, ifp);
+        data_offset = get2();
+        get2();
+        raw_width = get2();
+        raw_height = get2();
+        TIFF_CALLBACK_loadRawData = &CLASS nokia_load_raw;
+        filters = 0x61616161;
+    } else if ( !memcmp(head, "NOKIARAW", 8) ) {
+        strcpy(make, "NOKIA");
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        fseek(ifp, 300, SEEK_SET);
+        data_offset = get4();
+        i = get4();
+        width = get2();
+        height = get2();
+        switch ( tiff_bps = i * 8 / (width * height) ) {
+            case 8:
+                TIFF_CALLBACK_loadRawData = &CLASS eight_bit_load_raw;
+                break;
+            case 10:
+                TIFF_CALLBACK_loadRawData = &CLASS nokia_load_raw;
+        }
+        raw_height = height + (top_margin = i / (width * tiff_bps / 8) - height);
+        mask[0][3] = 1;
+        filters = 0x61616161;
+    } else if ( !memcmp(head, "ARRI", 4) ) {
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        fseek(ifp, 20, SEEK_SET);
+        width = get4();
+        height = get4();
+        strcpy(make, "ARRI");
+        fseek(ifp, 668, SEEK_SET);
+        fread(model, 1, 64, ifp);
+        data_offset = 4096;
+        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+        GLOBAL_loadFlags = 88;
+        filters = 0x61616161;
+    } else if ( !memcmp(head, "XPDS", 4) ) {
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        fseek(ifp, 0x800, SEEK_SET);
+        fread(make, 1, 41, ifp);
+        raw_height = get2();
+        raw_width = get2();
+        fseek(ifp, 56, SEEK_CUR);
+        fread(model, 1, 30, ifp);
+        data_offset = 0x10000;
+        TIFF_CALLBACK_loadRawData = &CLASS canon_rmf_load_raw;
+        gamma_curve(0, 12.25, 1, 1023);
+    } else if ( !memcmp(head + 4, "RED1", 4) ) {
+        strcpy(make, "Red");
+        strcpy(model, "One");
+        parse_redcine();
+        TIFF_CALLBACK_loadRawData = &CLASS redcine_load_raw;
+        gamma_curve(1 / 2.4, 12.92, 1, 4095);
+        filters = 0x49494949;
+    } else if ( !memcmp(head, "DSC-Image", 9) ) {
+        parse_rollei();
+    } else if ( !memcmp(head, "PWAD", 4) ) {
+        parse_sinar_ia();
+    } else if ( !memcmp(head, "\0MRM", 4) ) {
+        parse_minolta(0);
+    } else if ( !memcmp(head, "FOVb", 4) ) {
+        parse_foveon();
+    } else if ( !memcmp(head, "CI", 2) ) {
+        parse_cine();
+    }
+
+    if ( make[0] == 0 ) {
+        for ( zero_fsize = i = 0; i < sizeof table / sizeof *table; i++ ) {
             if ( fsize == table[i].fsize ) {
                 strcpy(make, table[i].make);
                 strcpy(model, table[i].model);
                 GLOBAL_flipsMask = table[i].flags >> 2;
                 zero_is_bad = table[i].flags & 2;
-                if ( table[i].flags & 1 )
+                if ( table[i].flags & 1 ) {
                     parse_external_jpeg();
+                }
                 data_offset = table[i].offset;
                 raw_width = table[i].rw;
                 raw_height = table[i].rh;
@@ -9716,29 +11205,38 @@ tiffIdentify() {
                 filters = 0x1010101 * table[i].cf;
                 colors = 4 - !((filters & filters >> 1) & 0x5555);
                 GLOBAL_loadFlags = table[i].lf;
-                switch ( tiff_bps = (fsize - data_offset) * 8 / (raw_width * raw_height)) {
+                switch ( tiff_bps = (fsize - data_offset) * 8 / (raw_width * raw_height) ) {
                     case 6:
-                        TIFF_CALLBACK_loadRawData = &CLASS minolta_rd175_load_raw;
+                        TIFF_CALLBACK_loadRawData = &minolta_rd175_load_raw;
                         break;
                     case 8:
-                        TIFF_CALLBACK_loadRawData = &CLASS eight_bit_load_raw;
+                        TIFF_CALLBACK_loadRawData = &eight_bit_load_raw;
                         break;
                     case 10:
                     case 12:
                         GLOBAL_loadFlags |= 512;
                         if ( !strcmp(make, "Canon")) GLOBAL_loadFlags |= 256;
-                        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+                        TIFF_CALLBACK_loadRawData = &packed_load_raw;
                         break;
                     case 16:
                         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER | 0x404 * (GLOBAL_loadFlags & 1);
                         tiff_bps -= GLOBAL_loadFlags >> 4;
                         tiff_bps -= GLOBAL_loadFlags = GLOBAL_loadFlags >> 1 & 7;
-                        TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
+                        TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
                 }
                 maximum = (1 << tiff_bps) - (1 << table[i].max);
             }
-    if ( zero_fsize ) fsize = 0;
-    if ( make[0] == 0 ) parse_smal(0, flen);
+        }
+    }
+
+    if ( zero_fsize ) {
+        fsize = 0;
+    }
+
+    if ( make[0] == 0 ) {
+        parse_smal(0, flen);
+    }
+
     if ( make[0] == 0 ) {
         parse_jpeg(0);
         if ( !(strncmp(model, "ov", 2) && strncmp(model, "RP_OV", 5)) &&
@@ -9748,88 +11246,113 @@ tiffIdentify() {
             data_offset = ftell(ifp) + 0x8000 - 32;
             width = raw_width;
             raw_width = 2611;
-            TIFF_CALLBACK_loadRawData = &CLASS nokia_load_raw;
+            TIFF_CALLBACK_loadRawData = &nokia_load_raw;
             filters = 0x16161616;
-        } else is_raw = 0;
+        } else {
+            is_raw = 0;
+        }
     }
 
-    for ( i = 0; i < sizeof corp / sizeof *corp; i++ )
-        if ( strcasestr(make, corp[i]))    /* Simplify company names */
+    for ( i = 0; i < sizeof corp / sizeof *corp; i++ ) {
+        if ( strcasestr(make, corp[i])) {
+            // Simplify company names
             strcpy(make, corp[i]);
+        }
+    }
+
     if ((!strcmp(make, "Kodak") || !strcmp(make, "Leica")) &&
         ((cp = strcasestr(model, " DIGITAL CAMERA")) ||
          (cp = strstr(model, "FILE VERSION"))))
         *cp = 0;
+
     if ( !strncasecmp(model, "PENTAX", 6))
         strcpy(make, "Pentax");
+
     cp = make + strlen(make);        /* Remove trailing spaces */
     while ( *--cp == ' ' ) *cp = 0;
+
     cp = model + strlen(model);
     while ( *--cp == ' ' ) *cp = 0;
+
     i = strlen(make);            /* Remove make from model */
     if ( !strncasecmp(model, make, i) && model[i++] == ' ' )
         memmove(model, model + i, 64 - i);
+
     if ( !strncmp(model, "FinePix ", 8))
         strcpy(model, model + 8);
+
     if ( !strncmp(model, "Digital Camera ", 15))
         strcpy(model, model + 15);
     desc[511] = artist[63] = make[63] = model[63] = model2[63] = 0;
+
     if ( !is_raw ) goto notraw;
 
     if ( !height ) height = raw_height;
+
     if ( !width ) width = raw_width;
+
     if ( height == 2624 && width == 3936 )    /* Pentax K10D and Samsung GX10 */
     {
         height = 2616;
         width = 3896;
     }
+
     if ( height == 3136 && width == 4864 )  /* Pentax K20D and Samsung GX20 */
     {
         height = 3124;
         width = 4688;
         filters = 0x16161616;
     }
+
     if ( raw_height == 2868 && (!strcmp(model, "K-r") || !strcmp(model, "K-x"))) {
         width = 4309;
         filters = 0x16161616;
     }
+
     if ( raw_height == 3136 && !strcmp(model, "K-7")) {
         height = 3122;
         width = 4684;
         filters = 0x16161616;
         top_margin = 2;
     }
+
     if ( raw_height == 3284 && !strncmp(model, "K-5", 3)) {
         left_margin = 10;
         width = 4950;
         filters = 0x16161616;
     }
+
     if ( raw_height == 3300 && !strncmp(model, "K-50", 4)) {
         height = 3288, width = 4952;
         left_margin = 0;
         top_margin = 12;
     }
+
     if ( raw_height == 3664 && !strncmp(model, "K-S", 3)) {
         width = 5492;
         left_margin = 0;
     }
+
     if ( raw_height == 4032 && !strcmp(model, "K-3")) {
         height = 4032;
         width = 6040;
         left_margin = 4;
     }
+
     if ( raw_height == 4060 && !strcmp(model, "KP")) {
         height = 4032;
         width = 6032;
         left_margin = 52;
         top_margin = 28;
     }
+
     if ( raw_height == 4950 && !strcmp(model, "K-1")) {
         height = 4932;
         width = 7380;
         left_margin = 4;
         top_margin = 18;
     }
+
     if ( raw_height == 5552 && !strcmp(model, "645D")) {
         height = 5502;
         width = 7328;
@@ -9837,8 +11360,10 @@ tiffIdentify() {
         top_margin = 29;
         filters = 0x61616161;
     }
+
     if ( height == 3014 && width == 4096 )    /* Ricoh GX200 */
         width = 4014;
+
     if ( GLOBAL_dngVersion ) {
         if ( filters == UINT_MAX) filters = 0;
         if ( filters ) is_raw *= tiff_samples;
@@ -9859,6 +11384,7 @@ tiffIdentify() {
         }
         goto dng_skip;
     }
+
     if ( !strcmp(make, "Canon") && !fsize && tiff_bps != 15 ) {
         if ( !TIFF_CALLBACK_loadRawData )
             TIFF_CALLBACK_loadRawData = &CLASS lossless_jpeg_load_raw;
@@ -9879,20 +11405,24 @@ tiffIdentify() {
             top_margin = 16;
         }
     }
+
     for ( i = 0; i < sizeof unique / sizeof *unique; i++ )
         if ( unique_id == 0x80000000 + unique[i].id ) {
             adobe_coeff("Canon", unique[i].model);
             if ( model[4] == 'K' && strlen(model) == 8 )
                 strcpy(model, unique[i].model);
         }
+
     for ( i = 0; i < sizeof sonique / sizeof *sonique; i++ )
         if ( unique_id == sonique[i].id )
             strcpy(model, sonique[i].model);
+
     for ( i = 0; i < sizeof panalias / sizeof *panalias; i++ )
         if ( panalias[i][0] == '@' ) orig = panalias[i] + 1;
         else
             if ( !strcmp(model, panalias[i]))
                 adobe_coeff("Panasonic", orig);
+
     if ( !strcmp(make, "Nikon")) {
         if ( !TIFF_CALLBACK_loadRawData )
             TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
@@ -9900,7 +11430,7 @@ tiffIdentify() {
             GLOBAL_loadFlags |= !data_offset << 2 | 2;
     }
 
-/* Set parameters based on camera name (for non-DNG files). */
+    /* Set parameters based on camera name (for non-DNG files). */
 
     if ( !strcmp(model, "KAI-0340")
          && find_green(16, 16, 3840, 5120) < 25 ) {
@@ -9908,1293 +11438,744 @@ tiffIdentify() {
         top_margin = filters = 0;
         strcpy(model, "C603");
     }
+
     if ( !strcmp(make, "Sony") && raw_width > 3888 )
         black = 128 << (tiff_bps - 12);
+
+    //-------------------------------------------------------------------------------------------------------------
     if ( is_foveon ) {
         if ( height * 2 < width ) pixel_aspect = 0.5;
         if ( height > width ) pixel_aspect = 2;
         filters = 0;
         simple_coeff(0);
-    } else
-        if ( !strcmp(make, "Canon") && tiff_bps == 15 ) {
-            switch ( width ) {
-                case 3344:
-                    width -= 66;
-                case 3872:
-                    width -= 6;
+    } else if ( !strcmp(make, "Canon") && tiff_bps == 15 ) {
+        switch ( width ) {
+        case 3344:
+        width -= 66;
+        case 3872:
+        width -= 6;
+        }
+        if ( height > width ) {
+        SWAP(height, width);
+        SWAP(raw_height, raw_width);
+        }
+        if ( width == 7200 && height == 3888 ) {
+        raw_width = width = 6480;
+        raw_height = height = 4320;
+        }
+        filters = 0;
+        tiff_samples = colors = 3;
+        TIFF_CALLBACK_loadRawData = &CLASS canon_sraw_load_raw;
+    } else if ( !strcmp(model, "PowerShot 600") ) {
+        height = 613;
+        width = 854;
+        raw_width = 896;
+        colors = 4;
+        filters = 0xe1e4e1e4;
+        TIFF_CALLBACK_loadRawData = &CLASS canon_600_load_raw;
+    } else if ( !strcmp(model, "PowerShot A5") ||
+        !strcmp(model, "PowerShot A5 Zoom") ) {
+        height = 773;
+        width = 960;
+        raw_width = 992;
+        pixel_aspect = 256 / 235.0;
+        filters = 0x1e4e1e4e;
+        goto canon_a5;
+    } else if ( !strcmp(model, "PowerShot A50") ) {
+        height = 968;
+        width = 1290;
+        raw_width = 1320;
+        filters = 0x1b4e4b1e;
+        goto canon_a5;
+    } else if ( !strcmp(model, "PowerShot Pro70") ) {
+        height = 1024;
+        width = 1552;
+        filters = 0x1e4b4e1b;
+        canon_a5:
+        colors = 4;
+        tiff_bps = 10;
+        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+        GLOBAL_loadFlags = 264;
+    } else if ( !strcmp(model, "PowerShot Pro90 IS") ||
+        !strcmp(model, "PowerShot G1")) {
+        colors = 4;
+        filters = 0xb4b4b4b4;
+    } else if ( !strcmp(model, "PowerShot A610") ) {
+        if ( canon_s2is() ) {
+            strcpy(model + 10, "S2 IS");
+        }
+    } else if ( !strcmp(model, "PowerShot SX220 HS") ) {
+        mask[1][3] = -4;
+    } else if ( !strcmp(model, "EOS D2000C") ) {
+        filters = 0x61616161;
+        black = curve[200];
+    } else if ( !strcmp(model, "EOS 80D") ) {
+        top_margin -= 2;
+        height += 2;
+    } else if ( !strcmp(model, "D1") ) {
+        cam_mul[0] *= 256 / 527.0;
+        cam_mul[2] *= 256 / 317.0;
+    } else if ( !strcmp(model, "D1X") ) {
+        width -= 4;
+        pixel_aspect = 0.5;
+    } else if ( !strcmp(model, "D40X") || !strcmp(model, "D60") || !strcmp(model, "D80") || !strcmp(model, "D3000") ) {
+        height -= 3;
+        width -= 4;
+    } else if ( !strcmp(model, "D3") || !strcmp(model, "D3S") || !strcmp(model, "D700") ) {
+        width -= 4;
+        left_margin = 2;
+    } else if ( !strcmp(model, "D3100") ) {
+        width -= 28;
+        left_margin = 6;
+    } else if ( !strcmp(model, "D5000") || !strcmp(model, "D90") ) {
+        width -= 42;
+    } else if ( !strcmp(model, "D5100") || !strcmp(model, "D7000") || !strcmp(model, "COOLPIX A") ) {
+        width -= 44;
+    } else if ( !strcmp(model, "D3200") || !strncmp(model, "D6", 2) || !strncmp(model, "D800", 4) ) {
+        width -= 46;
+    } else if ( !strcmp(model, "D4") || !strcmp(model, "Df") ) {
+        width -= 52;
+        left_margin = 2;
+    } else if ( !strncmp(model, "D40", 3) || !strncmp(model, "D50", 3) || !strncmp(model, "D70", 3) ) {
+       width--;
+    } else if ( !strcmp(model, "D100") ) {
+    if ( GLOBAL_loadFlags )
+        raw_width = (width += 3) + 3;
+    } else if ( !strcmp(model, "D200") ) {
+        left_margin = 1;
+        width -= 4;
+        filters = 0x94949494;
+    } else if ( !strncmp(model, "D2H", 3) ) {
+        left_margin = 6;
+        width -= 14;
+    } else if ( !strncmp(model, "D2X", 3) ) {
+        if ( width == 3264 ) {
+            width -= 32;
+        } else {
+            width -= 8;
+        }
+    } else if ( !strncmp(model, "D300", 4) ) {
+        width -= 32;
+    } else if ( !strncmp(model, "COOLPIX B", 9) ) {
+        GLOBAL_loadFlags = 24;
+    } else if ( !strncmp(model, "COOLPIX P", 9) && raw_width != 4032 ) {
+        GLOBAL_loadFlags = 24;
+        filters = 0x94949494;
+        if ( model[9] == '7' && iso_speed >= 400 ) {
+            black = 255;
+        }
+    } else if ( !strncmp(model, "1 ", 2) ) {
+        height -= 2;
+    } else if ( fsize == 1581060 ) {
+        simple_coeff(3);
+        pre_mul[0] = 1.2085;
+        pre_mul[1] = 1.0943;
+        pre_mul[3] = 1.1103;
+    } else if ( fsize == 3178560 ) {
+        cam_mul[0] *= 4;
+        cam_mul[2] *= 4;
+    } else if ( fsize == 4771840 ) {
+        if ( !timestamp && nikon_e995() ) {
+            strcpy(model, "E995");
+        }
+        if ( strcmp(model, "E995") ) {
+            filters = 0xb4b4b4b4;
+            simple_coeff(3);
+            pre_mul[0] = 1.196;
+            pre_mul[1] = 1.246;
+            pre_mul[2] = 1.018;
+        }
+    } else if ( fsize == 2940928 ) {
+        if ( !timestamp && !nikon_e2100() ) {
+            strcpy(model, "E2500");
+        }
+        if ( !strcmp(model, "E2500") ) {
+            height -= 2;
+            GLOBAL_loadFlags = 6;
+            colors = 4;
+            filters = 0x4b4b4b4b;
+        }
+    } else if ( fsize == 4775936 ) {
+        if ( !timestamp ) {
+            nikon_3700();
+        }
+        if ( model[0] == 'E' && atoi(model + 1) < 3700 ) {
+            filters = 0x49494949;
+        }
+        if ( !strcmp(model, "Optio 33WR") ) {
+            GLOBAL_flipsMask = 1;
+            filters = 0x16161616;
+        }
+        if ( make[0] == 'O' ) {
+            i = find_green(12, 32, 1188864, 3576832);
+            c = find_green(12, 32, 2383920, 2387016);
+            if ( abs(i) < abs(c)) {
+                SWAP(i, c);
+                GLOBAL_loadFlags = 24;
             }
-            if ( height > width ) {
-                SWAP(height, width);
-                SWAP(raw_height, raw_width);
+            if ( i < 0 ) {
+                filters = 0x61616161;
             }
-            if ( width == 7200 && height == 3888 ) {
-                raw_width = width = 6480;
-                raw_height = height = 4320;
+        }
+    } else if ( fsize == 5869568 ) {
+        if ( !timestamp && minolta_z2() ) {
+            strcpy(make, "Minolta");
+            strcpy(model, "DiMAGE Z2");
+        }
+        GLOBAL_loadFlags = 6 + 24 * (make[0] == 'M');
+    } else if ( fsize == 6291456 ) {
+        fseek(ifp, 0x300000, SEEK_SET);
+        if ( (GLOBAL_endianOrder = guess_byte_order(0x10000)) == BIG_ENDIAN_ORDER ) {
+            height -= (top_margin = 16);
+            width -= (left_margin = 28);
+            maximum = 0xf5c0;
+            strcpy(make, "ISG");
+            model[0] = 0;
+        }
+    } else if ( !strcmp(make, "Fujifilm") ) {
+        if ( !strcmp(model + 7, "S2Pro") ) {
+            strcpy(model, "S2Pro");
+            height = 2144;
+            width = 2880;
+            GLOBAL_flipsMask = 6;
+        }
+        top_margin = (raw_height - height) >> 2 << 1;
+        left_margin = (raw_width - width) >> 2 << 1;
+        if ( width == 2848 || width == 3664 ) {
+            filters = 0x16161616;
+        }
+        if ( width == 4032 || width == 4952 || width == 6032 || width == 8280 ) {
+            left_margin = 0;
+        }
+        if ( width == 3328 && (width -= 66) ) {
+            left_margin = 34;
+        }
+        if ( width == 4936 ) {
+            left_margin = 4;
+        }
+        if ( !strcmp(model, "HS50EXR") || !strcmp(model, "F900EXR") ) {
+            width += 2;
+            left_margin = 0;
+            filters = 0x16161616;
+        }
+        if ( fuji_layout ) {
+            raw_width *= is_raw;
+        }
+        if ( filters == 9 ) {
+            for ( c = 0; c < 36; c++ ) {
+                ((char *) xtrans)[c] = xtrans_abs[(c / 6 + top_margin) % 6][(c + left_margin) % 6];
             }
+        }
+    } else if ( !strcmp(model, "KD-400Z") ) {
+        height = 1712;
+        width = 2312;
+        raw_width = 2336;
+        goto konica_400z;
+    } else if ( !strcmp(model, "KD-510Z") ) {
+        goto konica_510z;
+    } else if ( !strcasecmp(make, "Minolta") ) {
+        if ( !TIFF_CALLBACK_loadRawData && (maximum = 0xfff) ) {
+            TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
+        }
+        if ( !strncmp(model, "DiMAGE A", 8) ) {
+            if ( !strcmp(model, "DiMAGE A200") ) {
+                filters = 0x49494949;
+            }
+            tiff_bps = 12;
+            TIFF_CALLBACK_loadRawData = &packed_load_raw;
+        } else if ( !strncmp(model, "ALPHA", 5) || !strncmp(model, "DYNAX", 5) || !strncmp(model, "MAXXUM", 6) ) {
+            snprintf(model + 20, 40, "DYNAX %-10s", model + 6 + (model[0] == 'M'));
+            adobe_coeff(make, model + 20);
+            TIFF_CALLBACK_loadRawData = &packed_load_raw;
+        } else if ( !strncmp(model, "DiMAGE G", 8) ) {
+            if ( model[8] == '4' ) {
+                height = 1716;
+                width = 2304;
+            } else if ( model[8] == '5' ) {
+                konica_510z:
+                height = 1956;
+                width = 2607;
+                raw_width = 2624;
+            } else if ( model[8] == '6' ) {
+                height = 2136;
+                width = 2848;
+            }
+            data_offset += 14;
+            filters = 0x61616161;
+            konica_400z:
+            TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
+            maximum = 0x3df;
+            GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
+        }
+    } else if ( !strcmp(model, "*ist D") ) {
+        TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
+        data_error = -1;
+    } else if ( !strcmp(model, "*ist DS") ) {
+        height -= 2;
+    } else if ( !strcmp(make, "Samsung") && raw_width == 4704 ) {
+        height -= top_margin = 8;
+        width -= 2 * (left_margin = 8);
+        GLOBAL_loadFlags = 256;
+    } else if ( !strcmp(make, "Samsung") && raw_height == 3714 ) {
+        height -= top_margin = 18;
+        left_margin = raw_width - (width = 5536);
+        if ( raw_width != 5600 ) {
+            left_margin = top_margin = 0;
+        }
+        filters = 0x61616161;
+        colors = 3;
+    } else if ( !strcmp(make, "Samsung") && raw_width == 5632 ) {
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        height = 3694;
+        top_margin = 2;
+        width = 5574 - (left_margin = 32 + tiff_bps);
+        if ( tiff_bps == 12 ) {
+            GLOBAL_loadFlags = 80;
+        }
+    } else if ( !strcmp(make, "Samsung") && raw_width == 5664 ) {
+        height -= top_margin = 17;
+        left_margin = 96;
+        width = 5544;
+        filters = 0x49494949;
+    } else if ( !strcmp(make, "Samsung") && raw_width == 6496 ) {
+        filters = 0x61616161;
+        black = 1 << (tiff_bps - 7);
+    } else if ( !strcmp(model, "EX1") ) {
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        height -= 20;
+        top_margin = 2;
+        if ( (width -= 6) > 3682 ) {
+            height -= 10;
+            width -= 46;
+            top_margin = 8;
+        }
+    } else if ( !strcmp(model, "WB2000") ) {
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        height -= 3;
+        top_margin = 2;
+        if ( (width -= 10) > 3718 ) {
+            height -= 28;
+            width -= 56;
+            top_margin = 8;
+        }
+    } else if ( strstr(model, "WB550") ) {
+        strcpy(model, "WB550");
+    } else if ( !strcmp(model, "EX2F") ) {
+        height = 3045;
+        width = 4070;
+        top_margin = 3;
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        filters = 0x49494949;
+        TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
+    } else if ( !strcmp(model, "STV680 VGA") ) {
+        black = 16;
+    } else if ( !strcmp(model, "N95") ) {
+        height = raw_height - (top_margin = 2);
+    } else if ( !strcmp(model, "640x480") ) {
+        gamma_curve(0.45, 4.5, 1, 255);
+    } else if ( !strcmp(make, "Hasselblad") ) {
+        if ( TIFF_CALLBACK_loadRawData == &lossless_jpeg_load_raw ) {
+            TIFF_CALLBACK_loadRawData = &hasselblad_load_raw;
+        }
+        if ( raw_width == 7262 ) {
+            height = 5444;
+            width = 7248;
+            top_margin = 4;
+            left_margin = 7;
+            filters = 0x61616161;
+        } else if ( raw_width == 7410 || raw_width == 8282 ) {
+            height -= 84;
+            width -= 82;
+            top_margin = 4;
+            left_margin = 41;
+            filters = 0x61616161;
+        } else if ( raw_width == 8384 ) {
+            height = 6208;
+            width = 8280;
+            top_margin = 96;
+            left_margin = 46;
+        } else if ( raw_width == 9044 ) {
+            height = 6716;
+            width = 8964;
+            top_margin = 8;
+            left_margin = 40;
+            black += GLOBAL_loadFlags = 256;
+            maximum = 0x8101;
+        } else if ( raw_width == 4090 ) {
+            strcpy(model, "V96C");
+            height -= (top_margin = 6);
+            width -= (left_margin = 3) + 7;
+            filters = 0x61616161;
+        }
+        if ( tiff_samples > 1 ) {
+            is_raw = tiff_samples + 1;
+            if ( !OPTIONS_values->shotSelect && !OPTIONS_values->halfSizePreInterpolation ) {
+                filters = 0;
+            }
+        }
+    } else if ( !strcmp(make, "Sinar") ) {
+        if ( !TIFF_CALLBACK_loadRawData ) {
+            TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
+        }
+        if ( is_raw > 1 && !OPTIONS_values->shotSelect && !OPTIONS_values->halfSizePreInterpolation ) {
             filters = 0;
-            tiff_samples = colors = 3;
-            TIFF_CALLBACK_loadRawData = &CLASS canon_sraw_load_raw;
-        } else
-            if ( !strcmp(model, "PowerShot 600")) {
-                height = 613;
-                width = 854;
-                raw_width = 896;
-                colors = 4;
-                filters = 0xe1e4e1e4;
-                TIFF_CALLBACK_loadRawData = &CLASS canon_600_load_raw;
-            } else
-                if ( !strcmp(model, "PowerShot A5") ||
-                     !strcmp(model, "PowerShot A5 Zoom")) {
-                    height = 773;
-                    width = 960;
-                    raw_width = 992;
-                    pixel_aspect = 256 / 235.0;
-                    filters = 0x1e4e1e4e;
-                    goto canon_a5;
-                } else
-                    if ( !strcmp(model, "PowerShot A50")) {
-                        height = 968;
-                        width = 1290;
-                        raw_width = 1320;
-                        filters = 0x1b4e4b1e;
-                        goto canon_a5;
-                    } else
-                        if ( !strcmp(model, "PowerShot Pro70")) {
-                            height = 1024;
-                            width = 1552;
-                            filters = 0x1e4b4e1b;
-                            canon_a5:
-                            colors = 4;
-                            tiff_bps = 10;
-                            TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                            GLOBAL_loadFlags = 264;
-                        } else
-                            if ( !strcmp(model, "PowerShot Pro90 IS") ||
-                                 !strcmp(model, "PowerShot G1")) {
-                                colors = 4;
-                                filters = 0xb4b4b4b4;
-                            } else
-                                if ( !strcmp(model, "PowerShot A610")) {
-                                    if ( canon_s2is()) strcpy(model + 10, "S2 IS");
-                                } else
-                                    if ( !strcmp(model, "PowerShot SX220 HS")) {
-                                        mask[1][3] = -4;
-                                    } else
-                                        if ( !strcmp(model, "EOS D2000C")) {
-                                            filters = 0x61616161;
-                                            black = curve[200];
-                                        } else
-                                            if ( !strcmp(model, "EOS 80D")) {
-                                                top_margin -= 2;
-                                                height += 2;
-                                            } else
-                                                if ( !strcmp(model, "D1")) {
-                                                    cam_mul[0] *= 256 / 527.0;
-                                                    cam_mul[2] *= 256 / 317.0;
-                                                } else
-                                                    if ( !strcmp(model, "D1X")) {
-                                                        width -= 4;
-                                                        pixel_aspect = 0.5;
-                                                    } else
-                                                        if ( !strcmp(model, "D40X") ||
-                                                             !strcmp(model, "D60") ||
-                                                             !strcmp(model, "D80") ||
-                                                             !strcmp(model, "D3000")) {
-                                                            height -= 3;
-                                                            width -= 4;
-                                                        } else
-                                                            if ( !strcmp(model, "D3") ||
-                                                                 !strcmp(model, "D3S") ||
-                                                                 !strcmp(model, "D700")) {
-                                                                width -= 4;
-                                                                left_margin = 2;
-                                                            } else
-                                                                if ( !strcmp(model, "D3100")) {
-                                                                    width -= 28;
-                                                                    left_margin = 6;
-                                                                } else
-                                                                    if ( !strcmp(model, "D5000") ||
-                                                                         !strcmp(model, "D90")) {
-                                                                        width -= 42;
-                                                                    } else
-                                                                        if ( !strcmp(model, "D5100") ||
-                                                                             !strcmp(model, "D7000") ||
-                                                                             !strcmp(model, "COOLPIX A")) {
-                                                                            width -= 44;
-                                                                        } else
-                                                                            if ( !strcmp(model, "D3200") ||
-                                                                                 !strncmp(model, "D6", 2) ||
-                                                                                 !strncmp(model, "D800", 4)) {
-                                                                                width -= 46;
-                                                                            } else
-                                                                                if ( !strcmp(model, "D4") ||
-                                                                                     !strcmp(model, "Df")) {
-                                                                                    width -= 52;
-                                                                                    left_margin = 2;
-                                                                                } else
-                                                                                    if ( !strncmp(model, "D40", 3) ||
-                                                                                         !strncmp(model, "D50", 3) ||
-                                                                                         !strncmp(model, "D70", 3)) {
-                                                                                        width--;
-                                                                                    } else
-                                                                                        if ( !strcmp(model, "D100")) {
-                                                                                            if ( GLOBAL_loadFlags )
-                                                                                                raw_width =
-                                                                                                        (width += 3) +
-                                                                                                        3;
-                                                                                        } else
-                                                                                            if ( !strcmp(model,
-                                                                                                         "D200")) {
-                                                                                                left_margin = 1;
-                                                                                                width -= 4;
-                                                                                                filters = 0x94949494;
-                                                                                            } else
-                                                                                                if ( !strncmp(model,
-                                                                                                              "D2H",
-                                                                                                              3)) {
-                                                                                                    left_margin = 6;
-                                                                                                    width -= 14;
-                                                                                                } else
-                                                                                                    if ( !strncmp(model,
-                                                                                                                  "D2X",
-                                                                                                                  3)) {
-                                                                                                        if ( width ==
-                                                                                                             3264 )
-                                                                                                            width -= 32;
-                                                                                                        else width -= 8;
-                                                                                                    } else
-                                                                                                        if ( !strncmp(
-                                                                                                                model,
-                                                                                                                "D300",
-                                                                                                                4)) {
-                                                                                                            width -= 32;
-                                                                                                        } else
-                                                                                                            if ( !strncmp(
-                                                                                                                    model,
-                                                                                                                    "COOLPIX B",
-                                                                                                                    9)) {
-                                                                                                                GLOBAL_loadFlags = 24;
-                                                                                                            } else
-                                                                                                                if ( !strncmp(
-                                                                                                                        model,
-                                                                                                                        "COOLPIX P",
-                                                                                                                        9) &&
-                                                                                                                     raw_width !=
-                                                                                                                     4032 ) {
-                                                                                                                    GLOBAL_loadFlags = 24;
-                                                                                                                    filters = 0x94949494;
-                                                                                                                    if ( model[9] ==
-                                                                                                                         '7' &&
-                                                                                                                         iso_speed >=
-                                                                                                                         400 )
-                                                                                                                        black = 255;
-                                                                                                                } else
-                                                                                                                    if ( !strncmp(
-                                                                                                                            model,
-                                                                                                                            "1 ",
-                                                                                                                            2)) {
-                                                                                                                        height -= 2;
-                                                                                                                    } else
-                                                                                                                        if ( fsize ==
-                                                                                                                             1581060 ) {
-                                                                                                                            simple_coeff(
-                                                                                                                                    3);
-                                                                                                                            pre_mul[0] = 1.2085;
-                                                                                                                            pre_mul[1] = 1.0943;
-                                                                                                                            pre_mul[3] = 1.1103;
-                                                                                                                        } else
-                                                                                                                            if ( fsize ==
-                                                                                                                                 3178560 ) {
-                                                                                                                                cam_mul[0] *= 4;
-                                                                                                                                cam_mul[2] *= 4;
-                                                                                                                            } else
-                                                                                                                                if ( fsize ==
-                                                                                                                                     4771840 ) {
-                                                                                                                                    if ( !timestamp &&
-                                                                                                                                         nikon_e995())
-                                                                                                                                        strcpy(model,
-                                                                                                                                               "E995");
-                                                                                                                                    if ( strcmp(
-                                                                                                                                            model,
-                                                                                                                                            "E995")) {
-                                                                                                                                        filters = 0xb4b4b4b4;
-                                                                                                                                        simple_coeff(
-                                                                                                                                                3);
-                                                                                                                                        pre_mul[0] = 1.196;
-                                                                                                                                        pre_mul[1] = 1.246;
-                                                                                                                                        pre_mul[2] = 1.018;
-                                                                                                                                    }
-                                                                                                                                } else
-                                                                                                                                    if ( fsize ==
-                                                                                                                                         2940928 ) {
-                                                                                                                                        if ( !timestamp &&
-                                                                                                                                             !nikon_e2100())
-                                                                                                                                            strcpy(model,
-                                                                                                                                                   "E2500");
-                                                                                                                                        if ( !strcmp(
-                                                                                                                                                model,
-                                                                                                                                                "E2500")) {
-                                                                                                                                            height -= 2;
-                                                                                                                                            GLOBAL_loadFlags = 6;
-                                                                                                                                            colors = 4;
-                                                                                                                                            filters = 0x4b4b4b4b;
-                                                                                                                                        }
-                                                                                                                                    } else
-                                                                                                                                        if ( fsize ==
-                                                                                                                                             4775936 ) {
-                                                                                                                                            if ( !timestamp ) nikon_3700();
-                                                                                                                                            if ( model[0] ==
-                                                                                                                                                 'E' &&
-                                                                                                                                                 atoi(model +
-                                                                                                                                                      1) <
-                                                                                                                                                 3700 )
-                                                                                                                                                filters = 0x49494949;
-                                                                                                                                            if ( !strcmp(
-                                                                                                                                                    model,
-                                                                                                                                                    "Optio 33WR")) {
-                                                                                                                                                GLOBAL_flipsMask = 1;
-                                                                                                                                                filters = 0x16161616;
-                                                                                                                                            }
-                                                                                                                                            if ( make[0] ==
-                                                                                                                                                 'O' ) {
-                                                                                                                                                i = find_green(
-                                                                                                                                                        12,
-                                                                                                                                                        32,
-                                                                                                                                                        1188864,
-                                                                                                                                                        3576832);
-                                                                                                                                                c = find_green(
-                                                                                                                                                        12,
-                                                                                                                                                        32,
-                                                                                                                                                        2383920,
-                                                                                                                                                        2387016);
-                                                                                                                                                if ( abs(
-                                                                                                                                                        i) <
-                                                                                                                                                     abs(c)) {
-                                                                                                                                                    SWAP(i,
-                                                                                                                                                         c);
-                                                                                                                                                    GLOBAL_loadFlags = 24;
-                                                                                                                                                }
-                                                                                                                                                if ( i <
-                                                                                                                                                     0 )
-                                                                                                                                                    filters = 0x61616161;
-                                                                                                                                            }
-                                                                                                                                        } else
-                                                                                                                                            if ( fsize ==
-                                                                                                                                                 5869568 ) {
-                                                                                                                                                if ( !timestamp &&
-                                                                                                                                                     minolta_z2()) {
-                                                                                                                                                    strcpy(make,
-                                                                                                                                                           "Minolta");
-                                                                                                                                                    strcpy(model,
-                                                                                                                                                           "DiMAGE Z2");
-                                                                                                                                                }
-                                                                                                                                                GLOBAL_loadFlags =
-                                                                                                                                                        6 +
-                                                                                                                                                        24 *
-                                                                                                                                                        (make[0] ==
-                                                                                                                                                         'M');
-                                                                                                                                            } else
-                                                                                                                                                if ( fsize ==
-                                                                                                                                                     6291456 ) {
-                                                                                                                                                    fseek(ifp,
-                                                                                                                                                          0x300000,
-                                                                                                                                                          SEEK_SET);
-                                                                                                                                                    if ((GLOBAL_endianOrder = guess_byte_order(
-                                                                                                                                                            0x10000)) ==
-                                                                                                                                                        BIG_ENDIAN_ORDER ) {
-                                                                                                                                                        height -= (top_margin = 16);
-                                                                                                                                                        width -= (left_margin = 28);
-                                                                                                                                                        maximum = 0xf5c0;
-                                                                                                                                                        strcpy(make,
-                                                                                                                                                               "ISG");
-                                                                                                                                                        model[0] = 0;
-                                                                                                                                                    }
-                                                                                                                                                } else
-                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                            make,
-                                                                                                                                                            "Fujifilm")) {
-                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                model +
-                                                                                                                                                                7,
-                                                                                                                                                                "S2Pro")) {
-                                                                                                                                                            strcpy(model,
-                                                                                                                                                                   "S2Pro");
-                                                                                                                                                            height = 2144;
-                                                                                                                                                            width = 2880;
-                                                                                                                                                            GLOBAL_flipsMask = 6;
-                                                                                                                                                        }
-                                                                                                                                                        top_margin =
-                                                                                                                                                                (raw_height -
-                                                                                                                                                                 height)
-                                                                                                                                                                        >> 2
-                                                                                                                                                                        << 1;
-                                                                                                                                                        left_margin =
-                                                                                                                                                                (raw_width -
-                                                                                                                                                                 width)
-                                                                                                                                                                        >> 2
-                                                                                                                                                                        << 1;
-                                                                                                                                                        if ( width ==
-                                                                                                                                                             2848 ||
-                                                                                                                                                             width ==
-                                                                                                                                                             3664 )
-                                                                                                                                                            filters = 0x16161616;
-                                                                                                                                                        if ( width ==
-                                                                                                                                                             4032 ||
-                                                                                                                                                             width ==
-                                                                                                                                                             4952 ||
-                                                                                                                                                             width ==
-                                                                                                                                                             6032 ||
-                                                                                                                                                             width ==
-                                                                                                                                                             8280 )
-                                                                                                                                                            left_margin = 0;
-                                                                                                                                                        if ( width ==
-                                                                                                                                                             3328 &&
-                                                                                                                                                             (width -= 66))
-                                                                                                                                                            left_margin = 34;
-                                                                                                                                                        if ( width ==
-                                                                                                                                                             4936 )
-                                                                                                                                                            left_margin = 4;
-                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                model,
-                                                                                                                                                                "HS50EXR") ||
-                                                                                                                                                             !strcmp(model,
-                                                                                                                                                                     "F900EXR")) {
-                                                                                                                                                            width += 2;
-                                                                                                                                                            left_margin = 0;
-                                                                                                                                                            filters = 0x16161616;
-                                                                                                                                                        }
-                                                                                                                                                        if ( fuji_layout ) raw_width *= is_raw;
-                                                                                                                                                        if ( filters == 9 ) {
-                                                                                                                                                            for ( c = 0; c < 36; c++ ) {
-                                                                                                                                                                ((char *) xtrans)[c] = xtrans_abs[
-                                                                                                                                                                                (c /
-                                                                                                                                                                                 6 +
-                                                                                                                                                                                 top_margin) %
-                                                                                                                                                                                6][
-                                                                                                                                                                                (c +
-                                                                                                                                                                                 left_margin) %
-                                                                                                                                                                                6];
-                                                                                                                                                            }
-                                                                                                                                                        }
-                                                                                                                                                    } else
-                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                model,
-                                                                                                                                                                "KD-400Z")) {
-                                                                                                                                                            height = 1712;
-                                                                                                                                                            width = 2312;
-                                                                                                                                                            raw_width = 2336;
-                                                                                                                                                            goto konica_400z;
-                                                                                                                                                        } else
-                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                    model,
-                                                                                                                                                                    "KD-510Z")) {
-                                                                                                                                                                goto konica_510z;
-                                                                                                                                                            } else
-                                                                                                                                                                if ( !strcasecmp(
-                                                                                                                                                                        make,
-                                                                                                                                                                        "Minolta")) {
-                                                                                                                                                                    if ( !TIFF_CALLBACK_loadRawData &&
-                                                                                                                                                                         (maximum = 0xfff))
-                                                                                                                                                                        TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-                                                                                                                                                                    if ( !strncmp(
-                                                                                                                                                                            model,
-                                                                                                                                                                            "DiMAGE A",
-                                                                                                                                                                            8)) {
-                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                model,
-                                                                                                                                                                                "DiMAGE A200"))
-                                                                                                                                                                            filters = 0x49494949;
-                                                                                                                                                                        tiff_bps = 12;
-                                                                                                                                                                        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                                                                                                                                                                    } else
-                                                                                                                                                                        if ( !strncmp(
-                                                                                                                                                                                model,
-                                                                                                                                                                                "ALPHA",
-                                                                                                                                                                                5) ||
-                                                                                                                                                                             !strncmp(
-                                                                                                                                                                                     model,
-                                                                                                                                                                                     "DYNAX",
-                                                                                                                                                                                     5) ||
-                                                                                                                                                                             !strncmp(
-                                                                                                                                                                                     model,
-                                                                                                                                                                                     "MAXXUM",
-                                                                                                                                                                                     6)) {
-                                                                                                                                                                            snprintf(
-                                                                                                                                                                                    model +
-                                                                                                                                                                                    20,
-                                                                                                                                                                                    40,
-                                                                                                                                                                                    "DYNAX %-10s",
-                                                                                                                                                                                    model +
-                                                                                                                                                                                    6 +
-                                                                                                                                                                                    (model[0] ==
-                                                                                                                                                                                     'M'));
-                                                                                                                                                                            adobe_coeff(
-                                                                                                                                                                                    make,
-                                                                                                                                                                                    model +
-                                                                                                                                                                                    20);
-                                                                                                                                                                            TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                                                                                                                                                                        } else
-                                                                                                                                                                            if ( !strncmp(
-                                                                                                                                                                                    model,
-                                                                                                                                                                                    "DiMAGE G",
-                                                                                                                                                                                    8)) {
-                                                                                                                                                                                if ( model[8] ==
-                                                                                                                                                                                     '4' ) {
-                                                                                                                                                                                    height = 1716;
-                                                                                                                                                                                    width = 2304;
-                                                                                                                                                                                } else
-                                                                                                                                                                                    if ( model[8] ==
-                                                                                                                                                                                         '5' ) {
-                                                                                                                                                                                        konica_510z:
-                                                                                                                                                                                        height = 1956;
-                                                                                                                                                                                        width = 2607;
-                                                                                                                                                                                        raw_width = 2624;
-                                                                                                                                                                                    } else
-                                                                                                                                                                                        if ( model[8] ==
-                                                                                                                                                                                             '6' ) {
-                                                                                                                                                                                            height = 2136;
-                                                                                                                                                                                            width = 2848;
-                                                                                                                                                                                        }
-                                                                                                                                                                                data_offset += 14;
-                                                                                                                                                                                filters = 0x61616161;
-                                                                                                                                                                                konica_400z:
-                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-                                                                                                                                                                                maximum = 0x3df;
-                                                                                                                                                                                GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-                                                                                                                                                                            }
-                                                                                                                                                                } else
-                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                            model,
-                                                                                                                                                                            "*ist D")) {
-                                                                                                                                                                        TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-                                                                                                                                                                        data_error = -1;
-                                                                                                                                                                    } else
-                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                model,
-                                                                                                                                                                                "*ist DS")) {
-                                                                                                                                                                            height -= 2;
-                                                                                                                                                                        } else
-                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                    make,
-                                                                                                                                                                                    "Samsung") &&
-                                                                                                                                                                                 raw_width ==
-                                                                                                                                                                                 4704 ) {
-                                                                                                                                                                                height -= top_margin = 8;
-                                                                                                                                                                                width -=
-                                                                                                                                                                                        2 *
-                                                                                                                                                                                        (left_margin = 8);
-                                                                                                                                                                                GLOBAL_loadFlags = 256;
-                                                                                                                                                                            } else
-                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                        make,
-                                                                                                                                                                                        "Samsung") &&
-                                                                                                                                                                                     raw_height ==
-                                                                                                                                                                                     3714 ) {
-                                                                                                                                                                                    height -= top_margin = 18;
-                                                                                                                                                                                    left_margin =
-                                                                                                                                                                                            raw_width -
-                                                                                                                                                                                            (width = 5536);
-                                                                                                                                                                                    if ( raw_width !=
-                                                                                                                                                                                         5600 )
-                                                                                                                                                                                        left_margin = top_margin = 0;
-                                                                                                                                                                                    filters = 0x61616161;
-                                                                                                                                                                                    colors = 3;
-                                                                                                                                                                                } else
-                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                            make,
-                                                                                                                                                                                            "Samsung") &&
-                                                                                                                                                                                         raw_width ==
-                                                                                                                                                                                         5632 ) {
-                                                                                                                                                                                        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                                                                                                                                                        height = 3694;
-                                                                                                                                                                                        top_margin = 2;
-                                                                                                                                                                                        width = 5574 -
-                                                                                                                                                                                                (left_margin =
-                                                                                                                                                                                                         32 +
-                                                                                                                                                                                                         tiff_bps);
-                                                                                                                                                                                        if ( tiff_bps ==
-                                                                                                                                                                                             12 )
-                                                                                                                                                                                            GLOBAL_loadFlags = 80;
-                                                                                                                                                                                    } else
-                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                make,
-                                                                                                                                                                                                "Samsung") &&
-                                                                                                                                                                                             raw_width ==
-                                                                                                                                                                                             5664 ) {
-                                                                                                                                                                                            height -= top_margin = 17;
-                                                                                                                                                                                            left_margin = 96;
-                                                                                                                                                                                            width = 5544;
-                                                                                                                                                                                            filters = 0x49494949;
-                                                                                                                                                                                        } else
-                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                    make,
-                                                                                                                                                                                                    "Samsung") &&
-                                                                                                                                                                                                 raw_width ==
-                                                                                                                                                                                                 6496 ) {
-                                                                                                                                                                                                filters = 0x61616161;
-                                                                                                                                                                                                black = 1
-                                                                                                                                                                                                        << (tiff_bps -
-                                                                                                                                                                                                            7);
-                                                                                                                                                                                            } else
-                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                        model,
-                                                                                                                                                                                                        "EX1")) {
-                                                                                                                                                                                                    GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                                                                                                                                                                    height -= 20;
-                                                                                                                                                                                                    top_margin = 2;
-                                                                                                                                                                                                    if ((width -= 6) >
-                                                                                                                                                                                                        3682 ) {
-                                                                                                                                                                                                        height -= 10;
-                                                                                                                                                                                                        width -= 46;
-                                                                                                                                                                                                        top_margin = 8;
-                                                                                                                                                                                                    }
-                                                                                                                                                                                                } else
-                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                            model,
-                                                                                                                                                                                                            "WB2000")) {
-                                                                                                                                                                                                        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                                                                                                                                                                        height -= 3;
-                                                                                                                                                                                                        top_margin = 2;
-                                                                                                                                                                                                        if ((width -= 10) >
-                                                                                                                                                                                                            3718 ) {
-                                                                                                                                                                                                            height -= 28;
-                                                                                                                                                                                                            width -= 56;
-                                                                                                                                                                                                            top_margin = 8;
-                                                                                                                                                                                                        }
-                                                                                                                                                                                                    } else
-                                                                                                                                                                                                        if ( strstr(
-                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                "WB550")) {
-                                                                                                                                                                                                            strcpy(model,
-                                                                                                                                                                                                                   "WB550");
-                                                                                                                                                                                                        } else
-                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                    "EX2F")) {
-                                                                                                                                                                                                                height = 3045;
-                                                                                                                                                                                                                width = 4070;
-                                                                                                                                                                                                                top_margin = 3;
-                                                                                                                                                                                                                GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                                                                                                                                                                                filters = 0x49494949;
-                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                                        model,
-                                                                                                                                                                                                                        "STV680 VGA")) {
-                                                                                                                                                                                                                    black = 16;
-                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                            "N95")) {
-                                                                                                                                                                                                                        height =
-                                                                                                                                                                                                                                raw_height -
-                                                                                                                                                                                                                                (top_margin = 2);
-                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                "640x480")) {
-                                                                                                                                                                                                                            gamma_curve(
-                                                                                                                                                                                                                                    0.45,
-                                                                                                                                                                                                                                    4.5,
-                                                                                                                                                                                                                                    1,
-                                                                                                                                                                                                                                    255);
-                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                    make,
-                                                                                                                                                                                                                                    "Hasselblad")) {
-                                                                                                                                                                                                                                if ( TIFF_CALLBACK_loadRawData ==
-                                                                                                                                                                                                                                     &CLASS lossless_jpeg_load_raw )
-                                                                                                                                                                                                                                    TIFF_CALLBACK_loadRawData = &CLASS hasselblad_load_raw;
-                                                                                                                                                                                                                                if ( raw_width ==
-                                                                                                                                                                                                                                     7262 ) {
-                                                                                                                                                                                                                                    height = 5444;
-                                                                                                                                                                                                                                    width = 7248;
-                                                                                                                                                                                                                                    top_margin = 4;
-                                                                                                                                                                                                                                    left_margin = 7;
-                                                                                                                                                                                                                                    filters = 0x61616161;
-                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                    if ( raw_width ==
-                                                                                                                                                                                                                                         7410 ||
-                                                                                                                                                                                                                                         raw_width ==
-                                                                                                                                                                                                                                         8282 ) {
-                                                                                                                                                                                                                                        height -= 84;
-                                                                                                                                                                                                                                        width -= 82;
-                                                                                                                                                                                                                                        top_margin = 4;
-                                                                                                                                                                                                                                        left_margin = 41;
-                                                                                                                                                                                                                                        filters = 0x61616161;
-                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                        if ( raw_width ==
-                                                                                                                                                                                                                                             8384 ) {
-                                                                                                                                                                                                                                            height = 6208;
-                                                                                                                                                                                                                                            width = 8280;
-                                                                                                                                                                                                                                            top_margin = 96;
-                                                                                                                                                                                                                                            left_margin = 46;
-                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                            if ( raw_width ==
-                                                                                                                                                                                                                                                 9044 ) {
-                                                                                                                                                                                                                                                height = 6716;
-                                                                                                                                                                                                                                                width = 8964;
-                                                                                                                                                                                                                                                top_margin = 8;
-                                                                                                                                                                                                                                                left_margin = 40;
-                                                                                                                                                                                                                                                black += GLOBAL_loadFlags = 256;
-                                                                                                                                                                                                                                                maximum = 0x8101;
-                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                if ( raw_width ==
-                                                                                                                                                                                                                                                     4090 ) {
-                                                                                                                                                                                                                                                    strcpy(model,
-                                                                                                                                                                                                                                                           "V96C");
-                                                                                                                                                                                                                                                    height -= (top_margin = 6);
-                                                                                                                                                                                                                                                    width -=
-                                                                                                                                                                                                                                                            (left_margin = 3) +
-                                                                                                                                                                                                                                                            7;
-                                                                                                                                                                                                                                                    filters = 0x61616161;
-                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                if ( tiff_samples >
-                                                                                                                                                                                                                                     1 ) {
-                                                                                                                                                                                                                                    is_raw =
-                                                                                                                                                                                                                                            tiff_samples +
-                                                                                                                                                                                                                                            1;
-                                                                                                                                                                                                                                    if ( !OPTIONS_values->shotSelect &&
-                                                                                                                                                                                                                                         !OPTIONS_values->halfSizePreInterpolation )
-                                                                                                                                                                                                                                        filters = 0;
-                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                                                        make,
-                                                                                                                                                                                                                                        "Sinar")) {
-                                                                                                                                                                                                                                    if ( !TIFF_CALLBACK_loadRawData ) TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-                                                                                                                                                                                                                                    if ( is_raw >
-                                                                                                                                                                                                                                         1 &&
-                                                                                                                                                                                                                                         !OPTIONS_values->shotSelect &&
-                                                                                                                                                                                                                                         !OPTIONS_values->halfSizePreInterpolation )
-                                                                                                                                                                                                                                        filters = 0;
-                                                                                                                                                                                                                                    maximum = 0x3fff;
-                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                            make,
-                                                                                                                                                                                                                                            "Leaf")) {
-                                                                                                                                                                                                                                        maximum = 0x3fff;
-                                                                                                                                                                                                                                        fseek(ifp,
-                                                                                                                                                                                                                                              data_offset,
-                                                                                                                                                                                                                                              SEEK_SET);
-                                                                                                                                                                                                                                        if ( ljpeg_start(
-                                                                                                                                                                                                                                                &jh,
-                                                                                                                                                                                                                                                1) &&
-                                                                                                                                                                                                                                             jh.bits ==
-                                                                                                                                                                                                                                             15 )
-                                                                                                                                                                                                                                            maximum = 0x1fff;
-                                                                                                                                                                                                                                        if ( tiff_samples >
-                                                                                                                                                                                                                                             1 )
-                                                                                                                                                                                                                                            filters = 0;
-                                                                                                                                                                                                                                        if ( tiff_samples >
-                                                                                                                                                                                                                                             1 ||
-                                                                                                                                                                                                                                             tile_length <
-                                                                                                                                                                                                                                             raw_height ) {
-                                                                                                                                                                                                                                            TIFF_CALLBACK_loadRawData = &CLASS leaf_hdr_load_raw;
-                                                                                                                                                                                                                                            raw_width = tile_width;
-                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                        if ((width |
-                                                                                                                                                                                                                                             height) ==
-                                                                                                                                                                                                                                            2048 ) {
-                                                                                                                                                                                                                                            if ( tiff_samples ==
-                                                                                                                                                                                                                                                 1 ) {
-                                                                                                                                                                                                                                                filters = 1;
-                                                                                                                                                                                                                                                strcpy(GLOBAL_bayerPatternLabels,
-                                                                                                                                                                                                                                                       "RBTG");
-                                                                                                                                                                                                                                                strcpy(model,
-                                                                                                                                                                                                                                                       "CatchLight");
-                                                                                                                                                                                                                                                top_margin = 8;
-                                                                                                                                                                                                                                                left_margin = 18;
-                                                                                                                                                                                                                                                height = 2032;
-                                                                                                                                                                                                                                                width = 2016;
-                                                                                                                                                                                                                                            } else {
-                                                                                                                                                                                                                                                strcpy(model,
-                                                                                                                                                                                                                                                       "DCB2");
-                                                                                                                                                                                                                                                top_margin = 10;
-                                                                                                                                                                                                                                                left_margin = 16;
-                                                                                                                                                                                                                                                height = 2028;
-                                                                                                                                                                                                                                                width = 2022;
-                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                            if ( width +
-                                                                                                                                                                                                                                                 height ==
-                                                                                                                                                                                                                                                 3144 +
-                                                                                                                                                                                                                                                 2060 ) {
-                                                                                                                                                                                                                                                if ( !model[0] )
-                                                                                                                                                                                                                                                    strcpy(model,
-                                                                                                                                                                                                                                                           "Cantare");
-                                                                                                                                                                                                                                                if ( width >
-                                                                                                                                                                                                                                                     height ) {
-                                                                                                                                                                                                                                                    top_margin = 6;
-                                                                                                                                                                                                                                                    left_margin = 32;
-                                                                                                                                                                                                                                                    height = 2048;
-                                                                                                                                                                                                                                                    width = 3072;
-                                                                                                                                                                                                                                                    filters = 0x61616161;
-                                                                                                                                                                                                                                                } else {
-                                                                                                                                                                                                                                                    left_margin = 6;
-                                                                                                                                                                                                                                                    top_margin = 32;
-                                                                                                                                                                                                                                                    width = 2048;
-                                                                                                                                                                                                                                                    height = 3072;
-                                                                                                                                                                                                                                                    filters = 0x16161616;
-                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                if ( !cam_mul[0] ||
-                                                                                                                                                                                                                                                     model[0] ==
-                                                                                                                                                                                                                                                     'V' )
-                                                                                                                                                                                                                                                    filters = 0;
-                                                                                                                                                                                                                                                else is_raw = tiff_samples;
-                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                if ( width ==
-                                                                                                                                                                                                                                                     2116 ) {
-                                                                                                                                                                                                                                                    strcpy(model,
-                                                                                                                                                                                                                                                           "Valeo 6");
-                                                                                                                                                                                                                                                    height -=
-                                                                                                                                                                                                                                                            2 *
-                                                                                                                                                                                                                                                            (top_margin = 30);
-                                                                                                                                                                                                                                                    width -=
-                                                                                                                                                                                                                                                            2 *
-                                                                                                                                                                                                                                                            (left_margin = 55);
-                                                                                                                                                                                                                                                    filters = 0x49494949;
-                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                    if ( width ==
-                                                                                                                                                                                                                                                         3171 ) {
-                                                                                                                                                                                                                                                        strcpy(model,
-                                                                                                                                                                                                                                                               "Valeo 6");
-                                                                                                                                                                                                                                                        height -=
-                                                                                                                                                                                                                                                                2 *
-                                                                                                                                                                                                                                                                (top_margin = 24);
-                                                                                                                                                                                                                                                        width -=
-                                                                                                                                                                                                                                                                2 *
-                                                                                                                                                                                                                                                                (left_margin = 24);
-                                                                                                                                                                                                                                                        filters = 0x16161616;
-                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                make,
-                                                                                                                                                                                                                                                "Leica") ||
-                                                                                                                                                                                                                                             !strcmp(make,
-                                                                                                                                                                                                                                                     "Panasonic")) {
-                                                                                                                                                                                                                                            if ((flen -
-                                                                                                                                                                                                                                                 data_offset) /
-                                                                                                                                                                                                                                                (raw_width *
-                                                                                                                                                                                                                                                 8 /
-                                                                                                                                                                                                                                                 7) ==
-                                                                                                                                                                                                                                                raw_height )
-                                                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS panasonic_load_raw;
-                                                                                                                                                                                                                                            if ( !TIFF_CALLBACK_loadRawData ) {
-                                                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
-                                                                                                                                                                                                                                                GLOBAL_loadFlags = 4;
-                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                            zero_is_bad = 1;
-                                                                                                                                                                                                                                            if ((height += 12) >
-                                                                                                                                                                                                                                                raw_height )
-                                                                                                                                                                                                                                                height = raw_height;
-                                                                                                                                                                                                                                            for ( i = 0;
-                                                                                                                                                                                                                                                  i <
-                                                                                                                                                                                                                                                  sizeof pana /
-                                                                                                                                                                                                                                                  sizeof *pana; i++ )
-                                                                                                                                                                                                                                                if ( raw_width ==
-                                                                                                                                                                                                                                                     pana[i][0] &&
-                                                                                                                                                                                                                                                     raw_height ==
-                                                                                                                                                                                                                                                     pana[i][1] ) {
-                                                                                                                                                                                                                                                    left_margin = pana[i][2];
-                                                                                                                                                                                                                                                    top_margin = pana[i][3];
-                                                                                                                                                                                                                                                    width += pana[i][4];
-                                                                                                                                                                                                                                                    height += pana[i][5];
-                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                            filters =
-                                                                                                                                                                                                                                                    0x01010101 *
-                                                                                                                                                                                                                                                    (uchar) "\x94\x61\x49\x16"
-                                                                                                                                                                                                                                                    [((filters -
-                                                                                                                                                                                                                                                       1) ^
-                                                                                                                                                                                                                                                      (left_margin &
-                                                                                                                                                                                                                                                       1) ^
-                                                                                                                                                                                                                                                      (top_margin
-                                                                                                                                                                                                                                                              << 1)) &
-                                                                                                                                                                                                                                                     3];
-                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                                                    "C770UZ")) {
-                                                                                                                                                                                                                                                height = 1718;
-                                                                                                                                                                                                                                                width = 2304;
-                                                                                                                                                                                                                                                filters = 0x16161616;
-                                                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                                                                                                                                                                                                                                                GLOBAL_loadFlags = 30;
-                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                                                                        make,
-                                                                                                                                                                                                                                                        "Olympus")) {
-                                                                                                                                                                                                                                                    height +=
-                                                                                                                                                                                                                                                            height &
-                                                                                                                                                                                                                                                            1;
-                                                                                                                                                                                                                                                    if ( exif_cfa ) filters = exif_cfa;
-                                                                                                                                                                                                                                                    if ( width ==
-                                                                                                                                                                                                                                                         4100 )
-                                                                                                                                                                                                                                                        width -= 4;
-                                                                                                                                                                                                                                                    if ( width ==
-                                                                                                                                                                                                                                                         4080 )
-                                                                                                                                                                                                                                                        width -= 24;
-                                                                                                                                                                                                                                                    if ( width ==
-                                                                                                                                                                                                                                                         9280 ) {
-                                                                                                                                                                                                                                                        width -= 6;
-                                                                                                                                                                                                                                                        height -= 6;
-                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                    if ( TIFF_CALLBACK_loadRawData ==
-                                                                                                                                                                                                                                                         &CLASS unpacked_load_raw )
-                                                                                                                                                                                                                                                        GLOBAL_loadFlags = 4;
-                                                                                                                                                                                                                                                    tiff_bps = 12;
-                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                            "E-300") ||
-                                                                                                                                                                                                                                                         !strcmp(model,
-                                                                                                                                                                                                                                                                 "E-500")) {
-                                                                                                                                                                                                                                                        width -= 20;
-                                                                                                                                                                                                                                                        if ( TIFF_CALLBACK_loadRawData ==
-                                                                                                                                                                                                                                                             &CLASS unpacked_load_raw ) {
-                                                                                                                                                                                                                                                            maximum = 0xfc3;
-                                                                                                                                                                                                                                                            memset(cblack,
-                                                                                                                                                                                                                                                                   0,
-                                                                                                                                                                                                                                                                   sizeof cblack);
-                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                "E-330")) {
-                                                                                                                                                                                                                                                            width -= 30;
-                                                                                                                                                                                                                                                            if ( TIFF_CALLBACK_loadRawData ==
-                                                                                                                                                                                                                                                                 &CLASS unpacked_load_raw )
-                                                                                                                                                                                                                                                                maximum = 0xf79;
-                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                                                                    "SP550UZ")) {
-                                                                                                                                                                                                                                                                thumb_length =
-                                                                                                                                                                                                                                                                        flen -
-                                                                                                                                                                                                                                                                        (thumb_offset = 0xa39800);
-                                                                                                                                                                                                                                                                thumb_height = 480;
-                                                                                                                                                                                                                                                                thumb_width = 640;
-                                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                                                                                        model,
-                                                                                                                                                                                                                                                                        "TG-4")) {
-                                                                                                                                                                                                                                                                    width -= 16;
-                                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                            "TG-5")) {
-                                                                                                                                                                                                                                                                        width -= 6;
-                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                            "N Digital")) {
-                                                                                                                                                                                                                                                        height = 2047;
-                                                                                                                                                                                                                                                        width = 3072;
-                                                                                                                                                                                                                                                        filters = 0x61616161;
-                                                                                                                                                                                                                                                        data_offset = 0x1a00;
-                                                                                                                                                                                                                                                        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                "DSC-F828")) {
-                                                                                                                                                                                                                                                            width = 3288;
-                                                                                                                                                                                                                                                            left_margin = 5;
-                                                                                                                                                                                                                                                            mask[1][3] = -17;
-                                                                                                                                                                                                                                                            data_offset = 862144;
-                                                                                                                                                                                                                                                            TIFF_CALLBACK_loadRawData = &CLASS sony_load_raw;
-                                                                                                                                                                                                                                                            filters = 0x9c9c9c9c;
-                                                                                                                                                                                                                                                            colors = 4;
-                                                                                                                                                                                                                                                            strcpy(GLOBAL_bayerPatternLabels,
-                                                                                                                                                                                                                                                                   "RGBE");
-                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                                                                    "DSC-V3")) {
-                                                                                                                                                                                                                                                                width = 3109;
-                                                                                                                                                                                                                                                                left_margin = 59;
-                                                                                                                                                                                                                                                                mask[0][1] = 9;
-                                                                                                                                                                                                                                                                data_offset = 787392;
-                                                                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS sony_load_raw;
-                                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                                                                                        make,
-                                                                                                                                                                                                                                                                        "Sony") &&
-                                                                                                                                                                                                                                                                     raw_width ==
-                                                                                                                                                                                                                                                                     3984 ) {
-                                                                                                                                                                                                                                                                    width = 3925;
-                                                                                                                                                                                                                                                                    GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-                                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                                            make,
-                                                                                                                                                                                                                                                                            "Sony") &&
-                                                                                                                                                                                                                                                                         raw_width ==
-                                                                                                                                                                                                                                                                         4288 ) {
-                                                                                                                                                                                                                                                                        width -= 32;
-                                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                                make,
-                                                                                                                                                                                                                                                                                "Sony") &&
-                                                                                                                                                                                                                                                                             raw_width ==
-                                                                                                                                                                                                                                                                             4600 ) {
-                                                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                                                                                    "DSLR-A350"))
-                                                                                                                                                                                                                                                                                height -= 4;
-                                                                                                                                                                                                                                                                            black = 0;
-                                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                                                    make,
-                                                                                                                                                                                                                                                                                    "Sony") &&
-                                                                                                                                                                                                                                                                                 raw_width ==
-                                                                                                                                                                                                                                                                                 4928 ) {
-                                                                                                                                                                                                                                                                                if ( height <
-                                                                                                                                                                                                                                                                                     3280 )
-                                                                                                                                                                                                                                                                                    width -= 8;
-                                                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                                                                                                        make,
-                                                                                                                                                                                                                                                                                        "Sony") &&
-                                                                                                                                                                                                                                                                                     raw_width ==
-                                                                                                                                                                                                                                                                                     5504 ) {
-                                                                                                                                                                                                                                                                                    width -=
-                                                                                                                                                                                                                                                                                            height >
-                                                                                                                                                                                                                                                                                            3664
-                                                                                                                                                                                                                                                                                            ? 8
-                                                                                                                                                                                                                                                                                            : 32;
-                                                                                                                                                                                                                                                                                    if ( !strncmp(
-                                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                                            "DSC",
-                                                                                                                                                                                                                                                                                            3))
-                                                                                                                                                                                                                                                                                        black = 200
-                                                                                                                                                                                                                                                                                                << (tiff_bps -
-                                                                                                                                                                                                                                                                                                    12);
-                                                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                                                            make,
-                                                                                                                                                                                                                                                                                            "Sony") &&
-                                                                                                                                                                                                                                                                                         raw_width ==
-                                                                                                                                                                                                                                                                                         6048 ) {
-                                                                                                                                                                                                                                                                                        width -= 24;
-                                                                                                                                                                                                                                                                                        if ( strstr(
-                                                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                                                "RX1") ||
-                                                                                                                                                                                                                                                                                             strstr(model,
-                                                                                                                                                                                                                                                                                                    "A99"))
-                                                                                                                                                                                                                                                                                            width -= 6;
-                                                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                                                make,
-                                                                                                                                                                                                                                                                                                "Sony") &&
-                                                                                                                                                                                                                                                                                             raw_width ==
-                                                                                                                                                                                                                                                                                             7392 ) {
-                                                                                                                                                                                                                                                                                            width -= 30;
-                                                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                                                                    make,
-                                                                                                                                                                                                                                                                                                    "Sony") &&
-                                                                                                                                                                                                                                                                                                 raw_width ==
-                                                                                                                                                                                                                                                                                                 8000 ) {
-                                                                                                                                                                                                                                                                                                width -= 32;
-                                                                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                                                                if ( !strcmp(
-                                                                                                                                                                                                                                                                                                        model,
-                                                                                                                                                                                                                                                                                                        "DSLR-A100")) {
-                                                                                                                                                                                                                                                                                                    if ( width ==
-                                                                                                                                                                                                                                                                                                         3880 ) {
-                                                                                                                                                                                                                                                                                                        height--;
-                                                                                                                                                                                                                                                                                                        width = ++raw_width;
-                                                                                                                                                                                                                                                                                                    } else {
-                                                                                                                                                                                                                                                                                                        height -= 4;
-                                                                                                                                                                                                                                                                                                        width -= 4;
-                                                                                                                                                                                                                                                                                                        GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-                                                                                                                                                                                                                                                                                                        GLOBAL_loadFlags = 2;
-                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                    filters = 0x61616161;
-                                                                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                                                            "PIXL")) {
-                                                                                                                                                                                                                                                                                                        height -= top_margin = 4;
-                                                                                                                                                                                                                                                                                                        width -= left_margin = 32;
-                                                                                                                                                                                                                                                                                                        gamma_curve(
-                                                                                                                                                                                                                                                                                                                0,
-                                                                                                                                                                                                                                                                                                                7,
-                                                                                                                                                                                                                                                                                                                1,
-                                                                                                                                                                                                                                                                                                                255);
-                                                                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                                                                "C603") ||
-                                                                                                                                                                                                                                                                                                             !strcmp(model,
-                                                                                                                                                                                                                                                                                                                     "C330")
-                                                                                                                                                                                                                                                                                                             ||
-                                                                                                                                                                                                                                                                                                             !strcmp(model,
-                                                                                                                                                                                                                                                                                                                     "12MP")) {
-                                                                                                                                                                                                                                                                                                            GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-                                                                                                                                                                                                                                                                                                            if ( filters &&
-                                                                                                                                                                                                                                                                                                                 data_offset ) {
-                                                                                                                                                                                                                                                                                                                fseek(ifp,
-                                                                                                                                                                                                                                                                                                                      data_offset <
-                                                                                                                                                                                                                                                                                                                      4096
-                                                                                                                                                                                                                                                                                                                      ? 168
-                                                                                                                                                                                                                                                                                                                      : 5252,
-                                                                                                                                                                                                                                                                                                                      SEEK_SET);
-                                                                                                                                                                                                                                                                                                                read_shorts(
-                                                                                                                                                                                                                                                                                                                        curve,
-                                                                                                                                                                                                                                                                                                                        256);
-                                                                                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                                                                                gamma_curve(
-                                                                                                                                                                                                                                                                                                                        0,
-                                                                                                                                                                                                                                                                                                                        3.875,
-                                                                                                                                                                                                                                                                                                                        1,
-                                                                                                                                                                                                                                                                                                                        255);
-                                                                                                                                                                                                                                                                                                            TIFF_CALLBACK_loadRawData = filters
-                                                                                                                                                                                                                                                                                                                                        ? &CLASS eight_bit_load_raw
-                                                                                                                                                                                                                                                                                                                                        :
-                                                                                                                                                                                                                                                                                                                                        strcmp(model,
-                                                                                                                                                                                                                                                                                                                                               "C330")
-                                                                                                                                                                                                                                                                                                                                        ? &CLASS kodak_c603_load_raw
-                                                                                                                                                                                                                                                                                                                                        :
-                                                                                                                                                                                                                                                                                                                                        &CLASS kodak_c330_load_raw;
-                                                                                                                                                                                                                                                                                                            GLOBAL_loadFlags =
-                                                                                                                                                                                                                                                                                                                    tiff_bps >
-                                                                                                                                                                                                                                                                                                                    16;
-                                                                                                                                                                                                                                                                                                            tiff_bps = 8;
-                                                                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                                                                            if ( !strncasecmp(
-                                                                                                                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                                                                                                                    "EasyShare",
-                                                                                                                                                                                                                                                                                                                    9)) {
-                                                                                                                                                                                                                                                                                                                data_offset =
-                                                                                                                                                                                                                                                                                                                        data_offset <
-                                                                                                                                                                                                                                                                                                                        0x15000
-                                                                                                                                                                                                                                                                                                                        ? 0x15000
-                                                                                                                                                                                                                                                                                                                        : 0x17000;
-                                                                                                                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
-                                                                                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                                                                                if ( !strcasecmp(
-                                                                                                                                                                                                                                                                                                                        make,
-                                                                                                                                                                                                                                                                                                                        "Kodak")) {
-                                                                                                                                                                                                                                                                                                                    if ( filters ==
-                                                                                                                                                                                                                                                                                                                         UINT_MAX)
-                                                                                                                                                                                                                                                                                                                        filters = 0x61616161;
-                                                                                                                                                                                                                                                                                                                    if ( !strncmp(
-                                                                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                                                                            "NC2000",
-                                                                                                                                                                                                                                                                                                                            6) ||
-                                                                                                                                                                                                                                                                                                                         !strncmp(
-                                                                                                                                                                                                                                                                                                                                 model,
-                                                                                                                                                                                                                                                                                                                                 "EOSDCS",
-                                                                                                                                                                                                                                                                                                                                 6) ||
-                                                                                                                                                                                                                                                                                                                         !strncmp(
-                                                                                                                                                                                                                                                                                                                                 model,
-                                                                                                                                                                                                                                                                                                                                 "DCS4",
-                                                                                                                                                                                                                                                                                                                                 4)) {
-                                                                                                                                                                                                                                                                                                                        width -= 4;
-                                                                                                                                                                                                                                                                                                                        left_margin = 2;
-                                                                                                                                                                                                                                                                                                                        if ( model[6] ==
-                                                                                                                                                                                                                                                                                                                             ' ' )
-                                                                                                                                                                                                                                                                                                                            model[6] = 0;
-                                                                                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                                                                                "DCS460A"))
-                                                                                                                                                                                                                                                                                                                            goto bw;
-                                                                                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                                                                                "DCS660M")) {
-                                                                                                                                                                                                                                                                                                                            black = 214;
-                                                                                                                                                                                                                                                                                                                            goto bw;
-                                                                                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                                                                                                                                    "DCS760M")) {
-                                                                                                                                                                                                                                                                                                                                bw:
-                                                                                                                                                                                                                                                                                                                                colors = 1;
-                                                                                                                                                                                                                                                                                                                                filters = 0;
-                                                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                            model +
-                                                                                                                                                                                                                                                                                                                            4,
-                                                                                                                                                                                                                                                                                                                            "20X"))
-                                                                                                                                                                                                                                                                                                                        strcpy(GLOBAL_bayerPatternLabels,
-                                                                                                                                                                                                                                                                                                                               "MYCY");
-                                                                                                                                                                                                                                                                                                                    if ( strstr(
-                                                                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                                                                            "DC25")) {
-                                                                                                                                                                                                                                                                                                                        strcpy(model,
-                                                                                                                                                                                                                                                                                                                               "DC25");
-                                                                                                                                                                                                                                                                                                                        data_offset = 15424;
-                                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                                    if ( !strncmp(
-                                                                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                                                                            "DC2",
-                                                                                                                                                                                                                                                                                                                            3)) {
-                                                                                                                                                                                                                                                                                                                        raw_height =
-                                                                                                                                                                                                                                                                                                                                2 +
-                                                                                                                                                                                                                                                                                                                                (height = 242);
-                                                                                                                                                                                                                                                                                                                        if ( flen <
-                                                                                                                                                                                                                                                                                                                             100000 ) {
-                                                                                                                                                                                                                                                                                                                            raw_width = 256;
-                                                                                                                                                                                                                                                                                                                            width = 249;
-                                                                                                                                                                                                                                                                                                                            pixel_aspect =
-                                                                                                                                                                                                                                                                                                                                    (4.0 *
-                                                                                                                                                                                                                                                                                                                                     height) /
-                                                                                                                                                                                                                                                                                                                                    (3.0 *
-                                                                                                                                                                                                                                                                                                                                     width);
-                                                                                                                                                                                                                                                                                                                        } else {
-                                                                                                                                                                                                                                                                                                                            raw_width = 512;
-                                                                                                                                                                                                                                                                                                                            width = 501;
-                                                                                                                                                                                                                                                                                                                            pixel_aspect =
-                                                                                                                                                                                                                                                                                                                                    (493.0 *
-                                                                                                                                                                                                                                                                                                                                     height) /
-                                                                                                                                                                                                                                                                                                                                    (373.0 *
-                                                                                                                                                                                                                                                                                                                                     width);
-                                                                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                                                                        top_margin = left_margin = 1;
-                                                                                                                                                                                                                                                                                                                        colors = 4;
-                                                                                                                                                                                                                                                                                                                        filters = 0x8d8d8d8d;
-                                                                                                                                                                                                                                                                                                                        simple_coeff(
-                                                                                                                                                                                                                                                                                                                                1);
-                                                                                                                                                                                                                                                                                                                        pre_mul[1] = 1.179;
-                                                                                                                                                                                                                                                                                                                        pre_mul[2] = 1.209;
-                                                                                                                                                                                                                                                                                                                        pre_mul[3] = 1.036;
-                                                                                                                                                                                                                                                                                                                        TIFF_CALLBACK_loadRawData = &CLASS eight_bit_load_raw;
-                                                                                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                                                                                        if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                                                                                "40")) {
-                                                                                                                                                                                                                                                                                                                            strcpy(model,
-                                                                                                                                                                                                                                                                                                                                   "DC40");
-                                                                                                                                                                                                                                                                                                                            height = 512;
-                                                                                                                                                                                                                                                                                                                            width = 768;
-                                                                                                                                                                                                                                                                                                                            data_offset = 1152;
-                                                                                                                                                                                                                                                                                                                            TIFF_CALLBACK_loadRawData = &CLASS kodak_radc_load_raw;
-                                                                                                                                                                                                                                                                                                                            tiff_bps = 12;
-                                                                                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                                                                                            if ( strstr(
-                                                                                                                                                                                                                                                                                                                                    model,
-                                                                                                                                                                                                                                                                                                                                    "DC50")) {
-                                                                                                                                                                                                                                                                                                                                strcpy(model,
-                                                                                                                                                                                                                                                                                                                                       "DC50");
-                                                                                                                                                                                                                                                                                                                                height = 512;
-                                                                                                                                                                                                                                                                                                                                width = 768;
-                                                                                                                                                                                                                                                                                                                                data_offset = 19712;
-                                                                                                                                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS kodak_radc_load_raw;
-                                                                                                                                                                                                                                                                                                                            } else
-                                                                                                                                                                                                                                                                                                                                if ( strstr(
-                                                                                                                                                                                                                                                                                                                                        model,
-                                                                                                                                                                                                                                                                                                                                        "DC120")) {
-                                                                                                                                                                                                                                                                                                                                    strcpy(model,
-                                                                                                                                                                                                                                                                                                                                           "DC120");
-                                                                                                                                                                                                                                                                                                                                    height = 976;
-                                                                                                                                                                                                                                                                                                                                    width = 848;
-                                                                                                                                                                                                                                                                                                                                    pixel_aspect =
-                                                                                                                                                                                                                                                                                                                                            height /
-                                                                                                                                                                                                                                                                                                                                            0.75 /
-                                                                                                                                                                                                                                                                                                                                            width;
-                                                                                                                                                                                                                                                                                                                                    TIFF_CALLBACK_loadRawData =
-                                                                                                                                                                                                                                                                                                                                            tiff_compress ==
-                                                                                                                                                                                                                                                                                                                                            7
-                                                                                                                                                                                                                                                                                                                                            ?
-                                                                                                                                                                                                                                                                                                                                            &CLASS kodak_jpeg_load_raw
-                                                                                                                                                                                                                                                                                                                                            : &CLASS kodak_dc120_load_raw;
-                                                                                                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                                                                                            "DCS200")) {
-                                                                                                                                                                                                                                                                                                                                        thumb_height = 128;
-                                                                                                                                                                                                                                                                                                                                        thumb_width = 192;
-                                                                                                                                                                                                                                                                                                                                        thumb_offset = 6144;
-                                                                                                                                                                                                                                                                                                                                        thumb_misc = 360;
-                                                                                                                                                                                                                                                                                                                                        write_thumb = &CLASS layer_thumb;
-                                                                                                                                                                                                                                                                                                                                        black = 17;
-                                                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                                } else
-                                                                                                                                                                                                                                                                                                                    if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                            model,
-                                                                                                                                                                                                                                                                                                                            "Fotoman Pixtura")) {
-                                                                                                                                                                                                                                                                                                                        height = 512;
-                                                                                                                                                                                                                                                                                                                        width = 768;
-                                                                                                                                                                                                                                                                                                                        data_offset = 3632;
-                                                                                                                                                                                                                                                                                                                        TIFF_CALLBACK_loadRawData = &CLASS kodak_radc_load_raw;
-                                                                                                                                                                                                                                                                                                                        filters = 0x61616161;
-                                                                                                                                                                                                                                                                                                                        simple_coeff(
-                                                                                                                                                                                                                                                                                                                                2);
-                                                                                                                                                                                                                                                                                                                    } else
-                                                                                                                                                                                                                                                                                                                        if ( !strncmp(
-                                                                                                                                                                                                                                                                                                                                model,
-                                                                                                                                                                                                                                                                                                                                "QuickTake",
-                                                                                                                                                                                                                                                                                                                                9)) {
-                                                                                                                                                                                                                                                                                                                            if ( head[5] )
-                                                                                                                                                                                                                                                                                                                                strcpy(model +
-                                                                                                                                                                                                                                                                                                                                       10,
-                                                                                                                                                                                                                                                                                                                                       "200");
-                                                                                                                                                                                                                                                                                                                            fseek(ifp,
-                                                                                                                                                                                                                                                                                                                                  544,
-                                                                                                                                                                                                                                                                                                                                  SEEK_SET);
-                                                                                                                                                                                                                                                                                                                            height = get2();
-                                                                                                                                                                                                                                                                                                                            width = get2();
-                                                                                                                                                                                                                                                                                                                            data_offset =
-                                                                                                                                                                                                                                                                                                                                    (get4(), get2()) ==
-                                                                                                                                                                                                                                                                                                                                    30
-                                                                                                                                                                                                                                                                                                                                    ? 738
-                                                                                                                                                                                                                                                                                                                                    : 736;
-                                                                                                                                                                                                                                                                                                                            if ( height >
-                                                                                                                                                                                                                                                                                                                                 width ) {
-                                                                                                                                                                                                                                                                                                                                SWAP(height,
-                                                                                                                                                                                                                                                                                                                                     width);
-                                                                                                                                                                                                                                                                                                                                fseek(ifp,
-                                                                                                                                                                                                                                                                                                                                      data_offset -
-                                                                                                                                                                                                                                                                                                                                      6,
-                                                                                                                                                                                                                                                                                                                                      SEEK_SET);
-                                                                                                                                                                                                                                                                                                                                GLOBAL_flipsMask =
-                                                                                                                                                                                                                                                                                                                                        ~get2() &
-                                                                                                                                                                                                                                                                                                                                        3
-                                                                                                                                                                                                                                                                                                                                        ? 5
-                                                                                                                                                                                                                                                                                                                                        : 6;
-                                                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                                                            filters = 0x61616161;
-                                                                                                                                                                                                                                                                                                                        } else
-                                                                                                                                                                                                                                                                                                                            if ( !strcmp(
-                                                                                                                                                                                                                                                                                                                                    make,
-                                                                                                                                                                                                                                                                                                                                    "Rollei") &&
-                                                                                                                                                                                                                                                                                                                                 !TIFF_CALLBACK_loadRawData ) {
-                                                                                                                                                                                                                                                                                                                                switch ( raw_width ) {
-                                                                                                                                                                                                                                                                                                                                    case 1316:
-                                                                                                                                                                                                                                                                                                                                        height = 1030;
-                                                                                                                                                                                                                                                                                                                                        width = 1300;
-                                                                                                                                                                                                                                                                                                                                        top_margin = 1;
-                                                                                                                                                                                                                                                                                                                                        left_margin = 6;
-                                                                                                                                                                                                                                                                                                                                        break;
-                                                                                                                                                                                                                                                                                                                                    case 2568:
-                                                                                                                                                                                                                                                                                                                                        height = 1960;
-                                                                                                                                                                                                                                                                                                                                        width = 2560;
-                                                                                                                                                                                                                                                                                                                                        top_margin = 2;
-                                                                                                                                                                                                                                                                                                                                        left_margin = 8;
-                                                                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                                                                                filters = 0x16161616;
-                                                                                                                                                                                                                                                                                                                                TIFF_CALLBACK_loadRawData = &CLASS rollei_load_raw;
-                                                                                                                                                                                                                                                                                                                            }
-    if ( !model[0] )
+        }
+        maximum = 0x3fff;
+    } else if ( !strcmp(make, "Leaf") ) {
+        maximum = 0x3fff;
+        fseek(ifp, data_offset, SEEK_SET);
+        if ( ljpeg_start(&jh, 1) && jh.bits == 15 ) {
+            maximum = 0x1fff;
+        }
+        if ( tiff_samples > 1 ) {
+            filters = 0;
+        }
+        if ( tiff_samples > 1 || tile_length < raw_height ) {
+            TIFF_CALLBACK_loadRawData = &leaf_hdr_load_raw;
+            raw_width = tile_width;
+        }
+        if ( (width | height) == 2048 ) {
+            if ( tiff_samples == 1 ) {
+                filters = 1;
+                strcpy(GLOBAL_bayerPatternLabels, "RBTG");
+                strcpy(model, "CatchLight");
+                top_margin = 8;
+                left_margin = 18;
+                height = 2032;
+                width = 2016;
+            } else {
+                strcpy(model, "DCB2");
+                top_margin = 10;
+                left_margin = 16;
+                height = 2028;
+                width = 2022;
+            }
+        } else if ( width + height == 3144 + 2060 ) {
+            if ( !model[0] ) {
+                strcpy(model, "Cantare");
+            }
+            if ( width > height ) {
+                top_margin = 6;
+                left_margin = 32;
+                height = 2048;
+                width = 3072;
+                filters = 0x61616161;
+            } else {
+                left_margin = 6;
+                top_margin = 32;
+                width = 2048;
+                height = 3072;
+                filters = 0x16161616;
+            }
+            if ( !cam_mul[0] || model[0] == 'V' ) {
+                filters = 0;
+            } else {
+                is_raw = tiff_samples;
+            }
+        } else if ( width == 2116 ) {
+            strcpy(model, "Valeo 6");
+            height -= 2 * (top_margin = 30);
+            width -= 2 * (left_margin = 55);
+            filters = 0x49494949;
+        } else if ( width == 3171 ) {
+            strcpy(model, "Valeo 6");
+            height -= 2 * (top_margin = 24);
+            width -= 2 * (left_margin = 24);
+            filters = 0x16161616;
+        }
+    } else if ( !strcmp(make, "Leica") || !strcmp(make, "Panasonic") ) {
+        if ( (flen - data_offset) / (raw_width * 8 / 7) == raw_height ) {
+            TIFF_CALLBACK_loadRawData = &panasonic_load_raw;
+        }
+        if ( !TIFF_CALLBACK_loadRawData ) {
+            TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
+            GLOBAL_loadFlags = 4;
+        }
+        zero_is_bad = 1;
+        if ( (height += 12) > raw_height ) {
+            height = raw_height;
+        }
+        for ( i = 0; i < sizeof pana / sizeof *pana; i++ ) {
+            if ( raw_width == pana[i][0] && raw_height == pana[i][1] ) {
+                left_margin = pana[i][2];
+                top_margin = pana[i][3];
+                width += pana[i][4];
+                height += pana[i][5];
+            }
+        }
+        filters = 0x01010101 * (uchar) "\x94\x61\x49\x16"[((filters - 1) ^ (left_margin & 1) ^ (top_margin << 1)) & 3];
+    } else if ( !strcmp(model, "C770UZ") ) {
+        height = 1718;
+        width = 2304;
+        filters = 0x16161616;
+        TIFF_CALLBACK_loadRawData = &packed_load_raw;
+        GLOBAL_loadFlags = 30;
+    } else if ( !strcmp(make, "Olympus") ) {
+        height += height & 1;
+        if ( exif_cfa ) {
+            filters = exif_cfa;
+        }
+        if ( width == 4100 ) {
+            width -= 4;
+        }
+        if ( width == 4080 ) {
+            width -= 24;
+        }
+        if ( width == 9280 ) {
+            width -= 6;
+            height -= 6;
+        }
+        if ( TIFF_CALLBACK_loadRawData == &unpacked_load_raw ) {
+            GLOBAL_loadFlags = 4;
+        }
+        tiff_bps = 12;
+        if ( !strcmp(model, "E-300") || !strcmp(model, "E-500") ) {
+            width -= 20;
+            if ( TIFF_CALLBACK_loadRawData == &unpacked_load_raw ) {
+                maximum = 0xfc3;
+                memset(cblack, 0, sizeof cblack);
+            }
+        } else if ( !strcmp(model, "E-330") ) {
+            width -= 30;
+            if ( TIFF_CALLBACK_loadRawData == &unpacked_load_raw ) {
+                maximum = 0xf79;
+            }
+        } else if ( !strcmp(model, "SP550UZ") ) {
+            thumb_length = flen - (thumb_offset = 0xa39800);
+            thumb_height = 480;
+            thumb_width = 640;
+        } else if ( !strcmp(model, "TG-4") ) {
+            width -= 16;
+        } else if ( !strcmp(model, "TG-5") ) {
+            width -= 6;
+        }
+    } else if ( !strcmp(model, "N Digital") ) {
+        height = 2047;
+        width = 3072;
+        filters = 0x61616161;
+        data_offset = 0x1a00;
+        TIFF_CALLBACK_loadRawData = &packed_load_raw;
+    } else if ( !strcmp(model, "DSC-F828") ) {
+        width = 3288;
+        left_margin = 5;
+        mask[1][3] = -17;
+        data_offset = 862144;
+        TIFF_CALLBACK_loadRawData = &sony_load_raw;
+        filters = 0x9c9c9c9c;
+        colors = 4;
+        strcpy(GLOBAL_bayerPatternLabels, "RGBE");
+    } else if ( !strcmp(model, "DSC-V3") ) {
+        width = 3109;
+        left_margin = 59;
+        mask[0][1] = 9;
+        data_offset = 787392;
+        TIFF_CALLBACK_loadRawData = &sony_load_raw;
+    } else if ( !strcmp(make, "Sony") && raw_width == 3984 ) {
+        width = 3925;
+        GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
+    } else if ( !strcmp(make, "Sony") && raw_width == 4288 ) {
+        width -= 32;
+    } else if ( !strcmp(make, "Sony") && raw_width == 4600 ) {
+        if ( !strcmp(model, "DSLR-A350") ) {
+            height -= 4;
+        }
+        black = 0;
+    } else if ( !strcmp(make, "Sony") && raw_width == 4928 ) {
+        if ( height < 3280 ) {
+            width -= 8;
+        }
+    } else if ( !strcmp(make, "Sony") && raw_width == 5504 ) {
+        width -= height > 3664 ? 8 : 32;
+        if ( !strncmp(model, "DSC", 3) ) {
+            black = 200 << (tiff_bps - 12);
+        }
+    } else if ( !strcmp(make, "Sony") && raw_width == 6048 ) {
+        width -= 24;
+        if ( strstr(model, "RX1") || strstr(model, "A99") ) {
+            width -= 6;
+        }
+    } else if ( !strcmp(make, "Sony") && raw_width == 7392 ) {
+        width -= 30;
+    } else if ( !strcmp(make, "Sony") && raw_width == 8000 ) {
+        width -= 32;
+    } else if ( !strcmp(model, "DSLR-A100") ) {
+        if ( width == 3880 ) {
+            height--;
+            width = ++raw_width;
+        } else {
+            height -= 4;
+            width -= 4;
+            GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
+            GLOBAL_loadFlags = 2;
+        }
+        filters = 0x61616161;
+    } else if ( !strcmp(model, "PIXL") ) {
+        height -= top_margin = 4;
+        width -= left_margin = 32;
+        gamma_curve(0, 7, 1, 255);
+    } else if ( !strcmp(model, "C603") || !strcmp(model, "C330") || !strcmp(model, "12MP") ) {
+        GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
+        if ( filters && data_offset ) {
+            fseek(ifp, data_offset < 4096 ? 168 : 5252, SEEK_SET);
+            read_shorts(curve, 256);
+        } else {
+            gamma_curve(0, 3.875, 1, 255);
+        }
+        TIFF_CALLBACK_loadRawData = filters ?
+                &eight_bit_load_raw : strcmp(model, "C330") ? &kodak_c603_load_raw : &kodak_c330_load_raw;
+        GLOBAL_loadFlags = tiff_bps > 16;
+        tiff_bps = 8;
+    } else if ( !strncasecmp(model, "EasyShare", 9) ) {
+        data_offset = data_offset < 0x15000 ? 0x15000 : 0x17000;
+        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+    } else if ( !strcasecmp(make, "Kodak") ) {
+        if ( filters == UINT_MAX ) {
+            filters = 0x61616161;
+        }
+        if ( !strncmp(model, "NC2000", 6) || !strncmp(model, "EOSDCS", 6) ||
+             !strncmp(model, "DCS4", 4) ) {
+            width -= 4;
+            left_margin = 2;
+            if ( model[6] == ' ' ) {
+                model[6] = 0;
+            }
+            if ( !strcmp(model, "DCS460A") ) {
+                goto bw;
+            }
+        } else if ( !strcmp(model, "DCS660M") ) {
+            black = 214;
+            goto bw;
+        } else if ( !strcmp(model, "DCS760M") ) {
+            bw:
+            colors = 1;
+            filters = 0;
+        }
+        if ( !strcmp(model + 4, "20X") ) {
+            strcpy(GLOBAL_bayerPatternLabels, "MYCY");
+        }
+        if ( strstr(model, "DC25") ) {
+            strcpy(model, "DC25");
+            data_offset = 15424;
+        }
+        if ( !strncmp(model, "DC2", 3) ) {
+            raw_height = 2 + (height = 242);
+            if ( flen < 100000 ) {
+                raw_width = 256;
+                width = 249;
+                pixel_aspect = (4.0 * height) / (3.0 * width);
+            } else {
+                raw_width = 512;
+                width = 501;
+                pixel_aspect = (493.0 * height) / (373.0 * width);
+            }
+            top_margin = left_margin = 1;
+            colors = 4;
+            filters = 0x8d8d8d8d;
+            simple_coeff(1);
+            pre_mul[1] = 1.179;
+            pre_mul[2] = 1.209;
+            pre_mul[3] = 1.036;
+            TIFF_CALLBACK_loadRawData = &eight_bit_load_raw;
+        } else if ( !strcmp(model, "40") ) {
+            strcpy(model, "DC40");
+            height = 512;
+            width = 768;
+            data_offset = 1152;
+            TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
+            tiff_bps = 12;
+        } else if ( strstr(model, "DC50") ) {
+            strcpy(model, "DC50");
+            height = 512;
+            width = 768;
+            data_offset = 19712;
+            TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
+        } else if ( strstr(model, "DC120") ) {
+            strcpy(model, "DC120");
+            height = 976;
+            width = 848;
+            pixel_aspect = height / 0.75 / width;
+            TIFF_CALLBACK_loadRawData = tiff_compress == 7 ? &kodak_jpeg_load_raw : &kodak_dc120_load_raw;
+        } else if ( !strcmp(model, "DCS200") ) {
+            thumb_height = 128;
+            thumb_width = 192;
+            thumb_offset = 6144;
+            thumb_misc = 360;
+            write_thumb = &layer_thumb;
+            black = 17;
+        }
+    } else if ( !strcmp(model, "Fotoman Pixtura") ) {
+        height = 512;
+        width = 768;
+        data_offset = 3632;
+        TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
+        filters = 0x61616161;
+        simple_coeff(2);
+    } else if ( !strncmp(model, "QuickTake", 9) ) {
+        if ( head[5] ) {
+            strcpy(model + 10, "200");
+        }
+        fseek(ifp, 544, SEEK_SET);
+        height = get2();
+        width = get2();
+        data_offset = (get4(), get2()) == 30 ? 738 : 736;
+        if ( height > width ) {
+            SWAP(height, width);
+            fseek(ifp, data_offset - 6, SEEK_SET);
+            GLOBAL_flipsMask = ~get2() & 3 ? 5 : 6;
+        }
+        filters = 0x61616161;
+    } else if ( !strcmp(make, "Rollei") && !TIFF_CALLBACK_loadRawData ) {
+        switch ( raw_width ) {
+            case 1316:
+                height = 1030;
+                width = 1300;
+                top_margin = 1;
+                left_margin = 6;
+                break;
+            case 2568:
+                height = 1960;
+                width = 2560;
+                top_margin = 2;
+                left_margin = 8;
+                break;
+        }
+        filters = 0x16161616;
+        TIFF_CALLBACK_loadRawData = &rollei_load_raw;
+    }
+    //-------------------------------------------------------------------------------------------------------------
+
+    if ( !model[0] ) {
         snprintf(model, 64, "%dx%d", width, height);
-    if ( filters == UINT_MAX) filters = 0x94949494;
+    }
+
+    if ( filters == UINT_MAX) {
+        filters = 0x94949494;
+    }
+
     if ( thumb_offset && !thumb_height ) {
         fseek(ifp, thumb_offset, SEEK_SET);
-        if ( ljpeg_start(&jh, 1)) {
+        if ( ljpeg_start(&jh, 1) ) {
             thumb_width = jh.wide;
             thumb_height = jh.high;
         }
     }
+
     dng_skip:
-    if ((OPTIONS_values->useCameraMatrix & (OPTIONS_values->useCameraWb || GLOBAL_dngVersion))
-        && cmatrix[0][0] > 0.125 ) {
+    if ( (OPTIONS_values->useCameraMatrix & (OPTIONS_values->useCameraWb || GLOBAL_dngVersion) ) && cmatrix[0][0] > 0.125 ) {
         memcpy(rgb_cam, cmatrix, sizeof cmatrix);
         GLOBAL_colorTransformForRaw = 0;
     }
-    if ( GLOBAL_colorTransformForRaw ) adobe_coeff(make, model);
-    if ( TIFF_CALLBACK_loadRawData == &CLASS kodak_radc_load_raw )
-        if ( GLOBAL_colorTransformForRaw ) adobe_coeff("Apple", "Quicktake");
+
+    if ( GLOBAL_colorTransformForRaw ) {
+        adobe_coeff(make, model);
+    }
+
+    if ( TIFF_CALLBACK_loadRawData == &kodak_radc_load_raw ) {
+        if ( GLOBAL_colorTransformForRaw ) {
+            adobe_coeff("Apple", "Quicktake");
+        }
+    }
+
     if ( fuji_width ) {
         fuji_width = width >> !fuji_layout;
         filters = fuji_width & 1 ? 0x94949494 : 0x49494949;
@@ -11202,14 +12183,27 @@ tiffIdentify() {
         height = width - 1;
         pixel_aspect = 1;
     } else {
-        if ( raw_height < height ) raw_height = height;
-        if ( raw_width < width ) raw_width = width;
+        if ( raw_height < height ) {
+            raw_height = height;
+        }
+        if ( raw_width < width ) {
+            raw_width = width;
+        }
     }
-    if ( !tiff_bps ) tiff_bps = 12;
-    if ( !maximum ) maximum = (1 << tiff_bps) - 1;
+
+    if ( !tiff_bps ) {
+        tiff_bps = 12;
+    }
+
+    if ( !maximum ) {
+        maximum = (1 << tiff_bps) - 1;
+    }
+
     if ( !TIFF_CALLBACK_loadRawData || height < 22 || width < 22 ||
-         tiff_bps > 16 || tiff_samples > 6 || colors > 4 )
+         tiff_bps > 16 || tiff_samples > 6 || colors > 4 ) {
         is_raw = 0;
+    }
+
 #ifdef NO_JASPER
     if ( TIFF_CALLBACK_loadRawData == &CLASS redcine_load_raw ) {
         fprintf(stderr, _("%s: You must link dcraw with %s!!\n"),
@@ -11217,38 +12211,55 @@ tiffIdentify() {
         is_raw = 0;
     }
 #endif
+
 #ifdef NO_JPEG
-                                                                                                                            if (TIFF_CALLBACK_loadRawData == &CLASS kodak_jpeg_load_raw ||
-      TIFF_CALLBACK_loadRawData == &CLASS lossy_dng_load_raw) {
-    fprintf (stderr,_("%s: You must link dcraw with %s!!\n"),
-	ifname, "libjpeg");
-    is_raw = 0;
-  }
+    if (TIFF_CALLBACK_loadRawData == &CLASS kodak_jpeg_load_raw || TIFF_CALLBACK_loadRawData == &CLASS lossy_dng_load_raw) {
+        fprintf (stderr,_("%s: You must link dcraw with %s!!\n"),
+        ifname, "libjpeg");
+        is_raw = 0;
+    }
 #endif
-    if ( !GLOBAL_bayerPatternLabels[0] )
+
+    if ( !GLOBAL_bayerPatternLabels[0] ) {
         strcpy(GLOBAL_bayerPatternLabels, colors == 3 ? "RGBG" : "GMCY");
-    if ( !raw_height ) raw_height = height;
-    if ( !raw_width ) raw_width = width;
-    if ( filters > 999 && colors == 3 )
+    }
+
+    if ( !raw_height ) {
+        raw_height = height;
+    }
+
+    if ( !raw_width ) {
+        raw_width = width;
+    }
+
+    if ( filters > 999 && colors == 3 ) {
         filters |= ((filters >> 2 & 0x22222222) |
                     (filters << 2 & 0x88888888)) & filters << 1;
+    }
+
     notraw:
-    if ( GLOBAL_flipsMask == UINT_MAX) GLOBAL_flipsMask = cameraFlip;
-    if ( GLOBAL_flipsMask == UINT_MAX) GLOBAL_flipsMask = 0;
+    if ( GLOBAL_flipsMask == UINT_MAX ) {
+        GLOBAL_flipsMask = cameraFlip;
+    }
+
+    if ( GLOBAL_flipsMask == UINT_MAX ) {
+        GLOBAL_flipsMask = 0;
+    }
 }
 
 #ifndef NO_LCMS
 
-void CLASS apply_profile(const char *input, const char *output) {
+void
+apply_profile(const char *input, const char *output) {
     char *prof;
     cmsHPROFILE hInProfile = 0, hOutProfile = 0;
     cmsHTRANSFORM hTransform;
     FILE *fp;
     unsigned size;
 
-    if ( strcmp(input, "embed"))
+    if ( strcmp(input, "embed") ) {
         hInProfile = cmsOpenProfileFromFile(input, "r");
-    else
+    } else {
         if ( profile_length ) {
             prof = (char *) malloc(profile_length);
             merror(prof, "apply_profile()");
@@ -11256,13 +12267,19 @@ void CLASS apply_profile(const char *input, const char *output) {
             fread(prof, 1, profile_length, ifp);
             hInProfile = cmsOpenProfileFromMem(prof, profile_length);
             free(prof);
-        } else
+        } else {
             fprintf(stderr, _("%s has no embedded profile.\n"), ifname);
-    if ( !hInProfile ) return;
-    if ( !output )
+        }
+    }
+
+    if ( !hInProfile ) {
+        return;
+    }
+
+    if ( !output ) {
         hOutProfile = cmsCreate_sRGBProfile();
-    else
-        if ((fp = fopen(output, "rb"))) {
+    } else {
+        if ( (fp = fopen(output, "rb")) ) {
             fread(&size, 4, 1, fp);
             fseek(fp, 0, SEEK_SET);
             GLOBAL_outputIccProfile = (unsigned *) malloc(size = ntohl(size));
@@ -11273,11 +12290,17 @@ void CLASS apply_profile(const char *input, const char *output) {
                 free(GLOBAL_outputIccProfile);
                 GLOBAL_outputIccProfile = 0;
             }
-        } else
+        } else {
             fprintf(stderr, _("Cannot open file %s!\n"), output);
-    if ( !hOutProfile ) goto quit;
-    if ( OPTIONS_values->verbose )
+        }
+    }
+
+    if ( !hOutProfile ) {
+        goto quit;
+    }
+    if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("Applying color profile...\n"));
+    }
     hTransform = cmsCreateTransform(hInProfile, TYPE_RGBA_16,
                                     hOutProfile, TYPE_RGBA_16, INTENT_PERCEPTUAL, 0);
     cmsDoTransform(hTransform, image, image, width * height);
@@ -11290,7 +12313,8 @@ void CLASS apply_profile(const char *input, const char *output) {
 
 #endif
 
-void CLASS convert_to_rgb() {
+void
+convert_to_rgb() {
     int row, col, c, i, j, k;
     ushort *img;
     float out[3], out_cam[3][4];
@@ -11344,6 +12368,7 @@ void CLASS convert_to_rgb() {
     memcpy(out_cam, rgb_cam, sizeof out_cam);
     GLOBAL_colorTransformForRaw |= colors == 1 || OPTIONS_values->documentMode ||
                                    OPTIONS_values->outputColorSpace < 1 || OPTIONS_values->outputColorSpace > 6;
+
     if ( !GLOBAL_colorTransformForRaw ) {
         GLOBAL_outputIccProfile = (unsigned *) calloc(phead[0], 1);
         merror(GLOBAL_outputIccProfile, "convert_to_rgb()");
@@ -11360,30 +12385,39 @@ void CLASS convert_to_rgb() {
         GLOBAL_outputIccProfile[pbody[5] / 4 + 2] = strlen(name[OPTIONS_values->outputColorSpace - 1]) + 1;
         memcpy((char *) GLOBAL_outputIccProfile + pbody[8] + 8, pwhite, sizeof pwhite);
         pcurve[3] = (short) (256 / OPTIONS_values->gammaParameters[5] + 0.5) << 16;
-        for ( i = 4; i < 7; i++ )
+        for ( i = 4; i < 7; i++ ) {
             memcpy((char *) GLOBAL_outputIccProfile + pbody[i * 3 + 2], pcurve, sizeof pcurve);
+        }
         pseudoinverse((double (*)[3]) out_rgb[OPTIONS_values->outputColorSpace - 1], inverse, 3);
-        for ( i = 0; i < 3; i++ )
+        for ( i = 0; i < 3; i++ ) {
             for ( j = 0; j < 3; j++ ) {
-                for ( num = k = 0; k < 3; k++ )
+                for ( num = k = 0; k < 3; k++ ) {
                     num += xyzd50_srgb[i][k] * inverse[j][k];
+                }
                 GLOBAL_outputIccProfile[pbody[j * 3 + 23] / 4 + i + 2] = num * 0x10000 + 0.5;
             }
-        for ( i = 0; i < phead[0] / 4; i++ )
+        }
+        for ( i = 0; i < phead[0] / 4; i++ ) {
             GLOBAL_outputIccProfile[i] = htonl(GLOBAL_outputIccProfile[i]);
+        }
         strcpy((char *) GLOBAL_outputIccProfile + pbody[2] + 8, "auto-generated by dcraw");
         strcpy((char *) GLOBAL_outputIccProfile + pbody[5] + 12, name[OPTIONS_values->outputColorSpace - 1]);
-        for ( i = 0; i < 3; i++ )
-            for ( j = 0; j < colors; j++ )
-                for ( out_cam[i][j] = k = 0; k < 3; k++ )
+        for ( i = 0; i < 3; i++ ) {
+            for ( j = 0; j < colors; j++ ) {
+                for ( out_cam[i][j] = k = 0; k < 3; k++ ) {
                     out_cam[i][j] += out_rgb[OPTIONS_values->outputColorSpace - 1][i][k] * rgb_cam[k][j];
+                }
+            }
+        }
     }
-    if ( OPTIONS_values->verbose )
+
+    if ( OPTIONS_values->verbose ) {
         fprintf(stderr, GLOBAL_colorTransformForRaw ? _("Building histograms...\n") :
                         _("Converting to %s colorspace...\n"), name[OPTIONS_values->outputColorSpace - 1]);
+    }
 
     memset(histogram, 0, sizeof histogram);
-    for ( img = image[0], row = 0; row < height; row++ )
+    for ( img = image[0], row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++, img += 4 ) {
             if ( !GLOBAL_colorTransformForRaw ) {
                 out[0] = out[1] = out[2] = 0;
@@ -11404,20 +12438,29 @@ void CLASS convert_to_rgb() {
                 histogram[c][img[c] >> 3]++;
             }
         }
-    if ( colors == 4 && OPTIONS_values->outputColorSpace ) colors = 3;
-    if ( OPTIONS_values->documentMode && filters ) colors = 1;
+    }
+    if ( colors == 4 && OPTIONS_values->outputColorSpace ) {
+        colors = 3;
+    }
+    if ( OPTIONS_values->documentMode && filters ) {
+        colors = 1;
+    }
 }
 
-void CLASS fuji_rotate() {
+void
+fuji_rotate() {
     int i, row, col;
     double step;
     float r, c, fr, fc;
     unsigned ur, uc;
     ushort wide, high, (*img)[4], (*pix)[4];
 
-    if ( !fuji_width ) return;
-    if ( OPTIONS_values->verbose )
+    if ( !fuji_width ) {
+        return;
+    }
+    if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("Rotating image 45 degrees...\n"));
+    }
     fuji_width = (fuji_width - 1 + shrink) >> shrink;
     step = sqrt(0.5);
     wide = fuji_width / step;
@@ -11425,19 +12468,23 @@ void CLASS fuji_rotate() {
     img = (ushort (*)[4]) calloc(high, wide * sizeof *img);
     merror(img, "fuji_rotate()");
 
-    for ( row = 0; row < high; row++ )
+    for ( row = 0; row < high; row++ ) {
         for ( col = 0; col < wide; col++ ) {
             ur = r = fuji_width + (row - col) * step;
             uc = c = (row + col) * step;
-            if ( ur > height - 2 || uc > width - 2 ) continue;
+            if ( ur > height - 2 || uc > width - 2 ) {
+                continue;
+            }
             fr = r - ur;
             fc = c - uc;
             pix = image + ur * width + uc;
-            for ( i = 0; i < colors; i++ )
+            for ( i = 0; i < colors; i++ ) {
                 img[row * wide + col][i] =
                         (pix[0][i] * (1 - fc) + pix[1][i] * fc) * (1 - fr) +
                         (pix[width][i] * (1 - fc) + pix[width + 1][i] * fc) * fr;
+            }
         }
+    }
     free(image);
     width = wide;
     height = high;
@@ -11445,13 +12492,18 @@ void CLASS fuji_rotate() {
     fuji_width = 0;
 }
 
-void CLASS stretch() {
+void
+stretch() {
     ushort newdim, (*img)[4], *pix0, *pix1;
     int row, col, c;
     double rc, frac;
 
-    if ( pixel_aspect == 1 ) return;
-    if ( OPTIONS_values->verbose ) fprintf(stderr, _("Stretching the image...\n"));
+    if ( pixel_aspect == 1 ) {
+        return;
+    }
+    if ( OPTIONS_values->verbose ) {
+        fprintf(stderr, _("Stretching the image...\n"));
+    }
     if ( pixel_aspect < 1 ) {
         newdim = height / pixel_aspect + 0.5;
         img = (ushort (*)[4]) calloc(width, newdim * sizeof *img);
@@ -11476,7 +12528,9 @@ void CLASS stretch() {
         for ( rc = col = 0; col < newdim; col++, rc += 1 / pixel_aspect ) {
             frac = rc - (c = rc);
             pix0 = pix1 = image[c];
-            if ( c + 1 < width ) pix1 += 4;
+            if ( c + 1 < width ) {
+                pix1 += 4;
+            }
             for ( row = 0; row < height; row++, pix0 += width * 4, pix1 += width * 4 ) {
                 for ( c = 0; c < colors; c++ ) {
                     img[row * newdim + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
@@ -11489,7 +12543,8 @@ void CLASS stretch() {
     image = img;
 }
 
-int CLASS flip_index(int row, int col) {
+int
+flip_index(int row, int col) {
     if ( GLOBAL_flipsMask & 4 ) {
         SWAP(row, col);
     }
@@ -11528,8 +12583,8 @@ struct tiff_hdr {
     char desc[512], make[64], model[64], soft[32], date[20], artist[64];
 };
 
-void CLASS tiff_set(struct tiff_hdr *th, ushort *ntag,
-                    ushort tag, ushort type, int count, int val) {
+void
+tiff_set(struct tiff_hdr *th, ushort *ntag, ushort tag, ushort type, int count, int val) {
     struct tiff_tag *tt;
     int c;
 
@@ -11562,7 +12617,8 @@ void CLASS tiff_set(struct tiff_hdr *th, ushort *ntag,
 
 #define TOFF(ptr) ((char *)(&(ptr)) - (char *)th)
 
-void CLASS tiff_head(struct tiff_hdr *th, int full) {
+void
+tiff_head(struct tiff_hdr *th, int full) {
     int c, psize = 0;
     struct tm *t;
 
@@ -11591,8 +12647,9 @@ void CLASS tiff_head(struct tiff_hdr *th, int full) {
         tiff_set(th, &th->ntag, 256, 4, 1, width);
         tiff_set(th, &th->ntag, 257, 4, 1, height);
         tiff_set(th, &th->ntag, 258, 3, colors, OPTIONS_values->outputBitsPerPixel);
-        if ( colors > 2 )
+        if ( colors > 2 ) {
             th->tag[th->ntag - 1].val.i = TOFF(th->bps);
+        }
         for ( c = 0; c < 4; c++ ) {
             th->bps[c] = OPTIONS_values->outputBitsPerPixel;
         }
@@ -11603,13 +12660,16 @@ void CLASS tiff_head(struct tiff_hdr *th, int full) {
     tiff_set(th, &th->ntag, 271, 2, 64, TOFF(th->make));
     tiff_set(th, &th->ntag, 272, 2, 64, TOFF(th->model));
     if ( full ) {
-        if ( GLOBAL_outputIccProfile ) psize = ntohl(GLOBAL_outputIccProfile[0]);
+        if ( GLOBAL_outputIccProfile ) {
+            psize = ntohl(GLOBAL_outputIccProfile[0]);
+        }
         tiff_set(th, &th->ntag, 273, 4, 1, sizeof *th + psize);
         tiff_set(th, &th->ntag, 277, 3, 1, colors);
         tiff_set(th, &th->ntag, 278, 4, 1, height);
         tiff_set(th, &th->ntag, 279, 4, 1, height * width * colors * OPTIONS_values->outputBitsPerPixel / 8);
-    } else
+    } else {
         tiff_set(th, &th->ntag, 274, 3, 1, "12435867"[GLOBAL_flipsMask] - '0');
+    }
     tiff_set(th, &th->ntag, 282, 5, 1, TOFF(th->rat[0]));
     tiff_set(th, &th->ntag, 283, 5, 1, TOFF(th->rat[2]));
     tiff_set(th, &th->ntag, 284, 3, 1, 1);
@@ -11618,7 +12678,9 @@ void CLASS tiff_head(struct tiff_hdr *th, int full) {
     tiff_set(th, &th->ntag, 306, 2, 20, TOFF(th->date));
     tiff_set(th, &th->ntag, 315, 2, 64, TOFF(th->artist));
     tiff_set(th, &th->ntag, 34665, 4, 1, TOFF(th->nexif));
-    if ( psize ) tiff_set(th, &th->ntag, 34675, 7, psize, sizeof *th);
+    if ( psize ) {
+        tiff_set(th, &th->ntag, 34675, 7, psize, sizeof *th);
+    }
     tiff_set(th, &th->nexif, 33434, 5, 1, TOFF(th->rat[4]));
     tiff_set(th, &th->nexif, 33437, 5, 1, TOFF(th->rat[6]));
     tiff_set(th, &th->nexif, 34855, 3, 1, iso_speed);
@@ -11639,7 +12701,8 @@ void CLASS tiff_head(struct tiff_hdr *th, int full) {
     }
 }
 
-void CLASS jpeg_thumb() {
+void
+jpeg_thumb() {
     char *thumb;
     ushort exif[5];
     struct tiff_hdr th;
@@ -11649,7 +12712,7 @@ void CLASS jpeg_thumb() {
     fread(thumb, 1, thumb_length, ifp);
     fputc(0xff, ofp);
     fputc(0xd8, ofp);
-    if ( strcmp(thumb + 6, "Exif")) {
+    if ( strcmp(thumb + 6, "Exif") ) {
         memcpy(exif, "\xff\xe1  Exif\0\0", 10);
         exif[1] = htons (8 + sizeof th);
         fwrite(exif, 1, sizeof exif, ofp);
@@ -11660,47 +12723,61 @@ void CLASS jpeg_thumb() {
     free(thumb);
 }
 
-void CLASS write_ppm_tiff() {
+void
+write_ppm_tiff() {
     struct tiff_hdr th;
     uchar *ppm;
     ushort *ppm2;
     int c, row, col, soff, rstep, cstep;
     int perc, val, total, white = 0x2000;
 
-    perc = width * height * 0.01;        /* 99th percentile white level */
-    if ( fuji_width ) perc /= 2;
-    if ( !((OPTIONS_values->highlight & ~2) || OPTIONS_values->noAutoBright))
+    perc = width * height * 0.01; // 99th percentile white level
+    if ( fuji_width ) {
+        perc /= 2;
+    }
+    if ( !((OPTIONS_values->highlight & ~2) || OPTIONS_values->noAutoBright) ) {
         for ( white = c = 0; c < colors; c++ ) {
-            for ( val = 0x2000, total = 0; --val > 32; )
-                if ((total += histogram[c][val]) > perc ) break;
-            if ( white < val ) white = val;
+            for ( val = 0x2000, total = 0; --val > 32; ) {
+                if ((total += histogram[c][val]) > perc ) {
+                    break;
+                }
+            }
+            if ( white < val ) {
+                white = val;
+            }
         }
+    }
     gamma_curve(OPTIONS_values->gammaParameters[0], OPTIONS_values->gammaParameters[1], 2,
                 (white << 3) / OPTIONS_values->brightness);
     iheight = height;
     iwidth = width;
-    if ( GLOBAL_flipsMask & 4 ) SWAP(height, width);
-    ppm = (uchar *) calloc(width, colors * OPTIONS_values->outputBitsPerPixel / 8);
+    if ( GLOBAL_flipsMask & 4 ) {
+        SWAP(height, width);
+    }
+    ppm = (uchar *)calloc(width, colors * OPTIONS_values->outputBitsPerPixel / 8);
     ppm2 = (ushort *) ppm;
     merror(ppm, "write_ppm_tiff()");
     if ( OPTIONS_values->outputTiff ) {
         tiff_head(&th, 1);
         fwrite(&th, sizeof th, 1, ofp);
-        if ( GLOBAL_outputIccProfile )
+        if ( GLOBAL_outputIccProfile ) {
             fwrite(GLOBAL_outputIccProfile, ntohl(GLOBAL_outputIccProfile[0]), 1, ofp);
-    } else
-        if ( colors > 3 )
+        }
+    } else {
+        if ( colors > 3 ) {
             fprintf(ofp,
                     "P7\nWIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
                     width, height, colors, (1 << OPTIONS_values->outputBitsPerPixel) - 1, GLOBAL_bayerPatternLabels);
-        else
+        } else {
             fprintf(ofp, "P%d\n%d %d\n%d\n",
                     colors / 2 + 5, width, height, (1 << OPTIONS_values->outputBitsPerPixel) - 1);
+        }
+    }
     soff = flip_index(0, 0);
     cstep = flip_index(0, 1) - soff;
     rstep = flip_index(1, 0) - flip_index(0, width);
     for ( row = 0; row < height; row++, soff += rstep ) {
-        for ( col = 0; col < width; col++, soff += cstep )
+        for ( col = 0; col < width; col++, soff += cstep ) {
             if ( OPTIONS_values->outputBitsPerPixel == 8 ) {
                 for ( c = 0; c < colors; c++ ) {
                     ppm[col * colors + c] = curve[image[soff][c]] >> 8;
@@ -11710,8 +12787,10 @@ void CLASS write_ppm_tiff() {
                     ppm2[col * colors + c] = curve[image[soff][c]];
                 }
             }
-        if ( OPTIONS_values->outputBitsPerPixel == 16 && !OPTIONS_values->outputTiff && htons(0x55aa) != 0x55aa )
+        }
+        if ( OPTIONS_values->outputBitsPerPixel == 16 && !OPTIONS_values->outputTiff && htons(0x55aa) != 0x55aa ) {
             swab(ppm2, ppm2, width * colors * 2);
+        }
         fwrite(ppm, colors * OPTIONS_values->outputBitsPerPixel / 8, width, ofp);
     }
     free(ppm);
@@ -11746,7 +12825,7 @@ main(int argc, const char **argv) {
     int arg = OPTIONS_values->setArguments(argc, argv);
 
     if ( OPTIONS_values->write_to_stdout ) {
-        if ( isatty(1)) {
+        if ( isatty(1) ) {
             fprintf(stderr, _("Will not write an image to the terminal!\n"));
             return 1;
         }
@@ -11764,20 +12843,25 @@ main(int argc, const char **argv) {
         GLOBAL_outputIccProfile = 0;
         meta_data = ofname = 0;
         ofp = stdout;
-        if ( setjmp (failure)) {
-            if ( fileno(ifp) > 2 ) fclose(ifp);
-            if ( fileno(ofp) > 2 ) fclose(ofp);
+        if ( setjmp (failure) ) {
+            if ( fileno(ifp) > 2 ) {
+                fclose(ifp);
+            }
+            if ( fileno(ofp) > 2 ) {
+                fclose(ofp);
+            }
             status = 1;
             goto cleanup;
         }
         ifname = argv[arg];
-        if ( !(ifp = fopen(ifname, "rb"))) {
+        if ( !(ifp = fopen(ifname, "rb")) ) {
             perror(ifname);
             continue;
         }
         status = (tiffIdentify(), !is_raw);
-        if ( OPTIONS_values->user_flip >= 0 )
+        if ( OPTIONS_values->user_flip >= 0 ) {
             GLOBAL_flipsMask = OPTIONS_values->user_flip;
+        }
         switch ((GLOBAL_flipsMask + 3600) % 360 ) {
             case 270:
                 GLOBAL_flipsMask = 5;
@@ -11789,25 +12873,26 @@ main(int argc, const char **argv) {
                 GLOBAL_flipsMask = 6;
         }
         if ( OPTIONS_values->timestamp_only ) {
-            if ((status = !timestamp))
+            if ( (status = !timestamp) ) {
                 fprintf(stderr, _("%s has no timestamp.\n"), ifname);
-            else
-                if ( OPTIONS_values->identify_only )
+            } else {
+                if ( OPTIONS_values->identify_only ) {
                     printf("%10ld%10d %s\n", (long) timestamp, shot_order, ifname);
-                else {
+                } else {
                     if ( OPTIONS_values->verbose )
                         fprintf(stderr, _("%s time set to %d.\n"), ifname, (int) timestamp);
                     ut.actime = ut.modtime = timestamp;
                     utime(ifname, &ut);
                 }
+            }
             goto next;
         }
         write_fun = &CLASS write_ppm_tiff;
         if ( OPTIONS_values->thumbnail_only ) {
-            if ((status = !thumb_offset)) {
+            if ( (status = !thumb_offset) ) {
                 fprintf(stderr, _("%s has no thumbnail.\n"), ifname);
                 goto next;
-            } else
+            } else {
                 if ( CALLBACK_loadThumbnailRawData ) {
                     // Will work over RAW image on following code
                     TIFF_CALLBACK_loadRawData = CALLBACK_loadThumbnailRawData;
@@ -11821,6 +12906,7 @@ main(int argc, const char **argv) {
                     write_fun = write_thumb;
                     goto thumbnail;
                 }
+            }
         }
         if ( TIFF_CALLBACK_loadRawData == &CLASS kodak_ycbcr_load_raw ) {
             height += height & 1;
@@ -11830,37 +12916,43 @@ main(int argc, const char **argv) {
             printf(_("\nFilename: %s\n"), ifname);
             printf(_("Timestamp: %s"), ctime(&timestamp));
             printf(_("Camera: %s %s\n"), make, model);
-            if ( artist[0] )
+            if ( artist[0] ) {
                 printf(_("Owner: %s\n"), artist);
+            }
             if ( GLOBAL_dngVersion ) {
                 printf(_("DNG Version: "));
-                for ( i = 24; i >= 0; i -= 8 )
+                for ( i = 24; i >= 0; i -= 8 ) {
                     printf("%d%c", GLOBAL_dngVersion >> i & 255, i ? '.' : '\n');
+                }
             }
             printf(_("ISO speed: %d\n"), (int) iso_speed);
             printf(_("Shutter: "));
-            if ( shutter > 0 && shutter < 1 )
+            if ( shutter > 0 && shutter < 1 ) {
                 shutter = (printf("1/"), 1 / shutter);
+            }
             printf(_("%0.1f sec\n"), shutter);
             printf(_("Aperture: f/%0.1f\n"), aperture);
             printf(_("Focal length: %0.1f mm\n"), focal_len);
             printf(_("Embedded ICC profile: %s\n"), profile_length ? _("yes") : _("no"));
             printf(_("Number of raw images: %d\n"), is_raw);
-            if ( pixel_aspect != 1 )
+            if ( pixel_aspect != 1 ) {
                 printf(_("Pixel Aspect Ratio: %0.6f\n"), pixel_aspect);
-            if ( thumb_offset )
+            }
+            if ( thumb_offset ) {
                 printf(_("Thumb size:  %4d x %d\n"), thumb_width, thumb_height);
+            }
             printf(_("Full size:   %4d x %d\n"), raw_width, raw_height);
-        } else
-            if ( !is_raw )
+        } else {
+            if ( !is_raw ) {
                 fprintf(stderr, _("Cannot decode file %s\n"), ifname);
-        if ( !is_raw ) goto next;
+            }
+        }
+        if ( !is_raw ) {
+            goto next;
+        }
         shrink = filters && (OPTIONS_values->halfSizePreInterpolation || (!OPTIONS_values->identify_only &&
-                                                                          (OPTIONS_values->threshold ||
-                                                                           OPTIONS_values->chromaticAberrationCorrection[0] !=
-                                                                           1 ||
-                                                                           OPTIONS_values->chromaticAberrationCorrection[2] !=
-                                                                           1)));
+                          (OPTIONS_values->threshold || OPTIONS_values->chromaticAberrationCorrection[0] != 1 ||
+                           OPTIONS_values->chromaticAberrationCorrection[2] != 1)));
         iheight = (height + shrink) >> shrink;
         iwidth = (width + shrink) >> shrink;
         if ( OPTIONS_values->identify_only ) {
@@ -11882,7 +12974,9 @@ main(int argc, const char **argv) {
                         if ( pixel_aspect > 1 ) iwidth = iwidth * pixel_aspect + 0.5;
                     }
                 }
-                if ( GLOBAL_flipsMask & 4 ) SWAP(iheight, iwidth);
+                if ( GLOBAL_flipsMask & 4 ) {
+                    SWAP(iheight, iwidth);
+                }
                 printf(_("Image size:  %4d x %d\n"), width, height);
                 printf(_("Output size: %4d x %d\n"), iwidth, iheight);
                 printf(_("Raw colors: %d"), colors);
@@ -11893,9 +12987,11 @@ main(int argc, const char **argv) {
                     if ( filters == 1 ) fhigh = fwide = 16;
                     if ( filters == 9 ) fhigh = fwide = 6;
                     printf(_("\nFilter pattern: "));
-                    for ( i = 0; i < fhigh; i++ )
-                        for ( c = i && putchar('/') && 0; c < fwide; c++ )
+                    for ( i = 0; i < fhigh; i++ ) {
+                        for ( c = i && putchar('/') && 0; c < fwide; c++ ) {
                             putchar(GLOBAL_bayerPatternLabels[fcol(i, c)]);
+                        }
+                    }
                 }
                 printf(_("\nDaylight multipliers:"));
                 for ( c = 0; c < colors; c++ ) {
@@ -11908,8 +13004,9 @@ main(int argc, const char **argv) {
                     }
                 }
                 putchar('\n');
-            } else
+            } else {
                 printf(_("%s is a %s %s image.\n"), ifname, make, model);
+            }
             next:
             fclose(ifp);
             continue;
@@ -11925,16 +13022,19 @@ main(int argc, const char **argv) {
             image = (ushort (*)[4]) calloc(iheight, iwidth * sizeof *image);
             merror(image, "main()");
         }
-        if ( OPTIONS_values->verbose )
-            fprintf(stderr, _("Loading %s %s image from %s ...\n"),
-                    make, model, ifname);
-        if ( OPTIONS_values->shotSelect >= is_raw )
-            fprintf(stderr, _("%s: \"-s %d\" requests a nonexistent image!\n"),
-                    ifname, OPTIONS_values->shotSelect);
+        if ( OPTIONS_values->verbose ) {
+            fprintf(stderr, _("Loading %s %s image from %s ...\n"), make, model, ifname);
+        }
+        if ( OPTIONS_values->shotSelect >= is_raw ) {
+            fprintf(stderr, _("%s: \"-s %d\" requests a nonexistent image!\n"), ifname, OPTIONS_values->shotSelect);
+        }
         fseeko(ifp, data_offset, SEEK_SET);
-        if ( raw_image && OPTIONS_values->readFromStdin )
+        if ( raw_image && OPTIONS_values->readFromStdin ) {
             fread(raw_image, 2, raw_height * raw_width, stdin);
-        else (*TIFF_CALLBACK_loadRawData)();
+        }
+        else {
+            (*TIFF_CALLBACK_loadRawData)();
+        }
         if ( OPTIONS_values->documentMode == 3 ) {
             top_margin = left_margin = fuji_width = 0;
             height = raw_height;
@@ -11948,11 +13048,17 @@ main(int argc, const char **argv) {
             crop_masked_pixels();
             free(raw_image);
         }
-        if ( zero_is_bad ) remove_zeroes();
+        if ( zero_is_bad ) {
+            remove_zeroes();
+        }
         bad_pixels(OPTIONS_values->bpfile);
-        if ( OPTIONS_values->dark_frame ) subtract(OPTIONS_values->dark_frame);
+        if ( OPTIONS_values->dark_frame ) {
+            subtract(OPTIONS_values->dark_frame);
+        }
         quality = 2 + !fuji_width;
-        if ( OPTIONS_values->user_qual >= 0 ) quality = OPTIONS_values->user_qual;
+        if ( OPTIONS_values->user_qual >= 0 ) {
+            quality = OPTIONS_values->user_qual;
+        }
         i = cblack[3];
         for ( c = 0; c < 3; c++ ) {
             if ( i > cblack[c] ) {
@@ -11987,63 +13093,86 @@ main(int argc, const char **argv) {
 #endif
         if ( is_foveon ) {
             if ( OPTIONS_values->documentMode || TIFF_CALLBACK_loadRawData == &CLASS foveon_dp_load_raw ) {
-                for ( i = 0; i < height * width * 4; i++ )
-                    if ((short) image[0][i] < 0 ) image[0][i] = 0;
-            } else foveon_interpolate();
-        } else
-            if ( OPTIONS_values->documentMode < 2 )
+                for ( i = 0; i < height * width * 4; i++ ) {
+                    if ((short) image[0][i] < 0 ) {
+                        image[0][i] = 0;
+                    }
+                }
+            } else {
+                foveon_interpolate();
+            }
+        } else {
+            if ( OPTIONS_values->documentMode < 2 ) {
                 scale_colors();
+            }
+        }
         pre_interpolate();
         if ( filters && !OPTIONS_values->documentMode ) {
-            if ( quality == 0 )
+            if ( quality == 0 ) {
                 lin_interpolate();
-            else
-                if ( quality == 1 || colors > 3 )
-                    vng_interpolate();
-                else
-                    if ( quality == 2 && filters > 1000 )
-                        ppg_interpolate();
-                    else
-                        if ( filters == 9 )
-                            xtrans_interpolate(quality * 2 - 3);
-                        else
-                            ahd_interpolate();
+            } else if ( quality == 1 || colors > 3 ) {
+                vng_interpolate();
+            } else if ( quality == 2 && filters > 1000 ) {
+                ppg_interpolate();
+            } else if ( filters == 9 ) {
+                xtrans_interpolate(quality * 2 - 3);
+            } else {
+                ahd_interpolate();
+            }
         }
-        if ( mix_green )
-            for ( colors = 3, i = 0; i < height * width; i++ )
+        if ( mix_green ) {
+            for ( colors = 3, i = 0; i < height * width; i++ ) {
                 image[i][1] = (image[i][1] + image[i][3]) >> 1;
-        if ( !is_foveon && colors == 3 ) median_filter();
-        if ( !is_foveon && OPTIONS_values->highlight == 2 ) blend_highlights();
-        if ( !is_foveon && OPTIONS_values->highlight > 2 ) recover_highlights();
-        if ( OPTIONS_values->useFujiRotate ) fuji_rotate();
+            }
+        }
+        if ( !is_foveon && colors == 3 ) {
+            median_filter();
+        }
+        if ( !is_foveon && OPTIONS_values->highlight == 2 ) {
+            blend_highlights();
+        }
+        if ( !is_foveon && OPTIONS_values->highlight > 2 ) {
+            recover_highlights();
+        }
+        if ( OPTIONS_values->useFujiRotate ) {
+            fuji_rotate();
+        }
 #ifndef NO_LCMS
-        if ( OPTIONS_values->cameraIccProfileFilename )
+        if ( OPTIONS_values->cameraIccProfileFilename ) {
             apply_profile(OPTIONS_values->cameraIccProfileFilename, OPTIONS_values->customOutputProfileForColorSpace);
+        }
 #endif
         convert_to_rgb();
-        if ( OPTIONS_values->useFujiRotate ) stretch();
+        if ( OPTIONS_values->useFujiRotate ) {
+            stretch();
+        }
         thumbnail:
         if ( write_fun == &CLASS jpeg_thumb ) {
             write_ext = ".jpg";
-        } else
+        } else {
             if ( OPTIONS_values->outputTiff && write_fun == &CLASS write_ppm_tiff ) {
                 write_ext = ".tiff";
             } else {
                 char extensions[4][5] = {".pgm", ".ppm", ".ppm", ".pam"};
                 write_ext = extensions[colors - 1];
             }
+        }
         ofname = (char *) malloc(strlen(ifname) + 64);
         merror(ofname, "main()");
-        if ( OPTIONS_values->write_to_stdout )
+        if ( OPTIONS_values->write_to_stdout ) {
             strcpy(ofname, _("standard output"));
-        else {
+        } else {
             strcpy(ofname, ifname);
-            if ((cp = strrchr(ofname, '.'))) *cp = 0;
-            if ( OPTIONS_values->multiOut )
+            if ( (cp = strrchr(ofname, '.')) ) {
+                *cp = 0;
+            }
+            if ( OPTIONS_values->multiOut ) {
                 snprintf(ofname + strlen(ofname), strlen(ofname), "_%0*d",
                          snprintf(0, 0, "%d", is_raw - 1), OPTIONS_values->shotSelect);
-            if ( OPTIONS_values->thumbnail_only )
+            }
+            if ( OPTIONS_values->thumbnail_only ) {
                 strcat(ofname, ".thumb");
+            }
             strcat(ofname, write_ext);
             ofp = fopen(ofname, "wb");
             if ( !ofp ) {
@@ -12052,16 +13181,27 @@ main(int argc, const char **argv) {
                 goto cleanup;
             }
         }
-        if ( OPTIONS_values->verbose )
+        if ( OPTIONS_values->verbose ) {
             fprintf(stderr, _("Writing data to %s ...\n"), ofname);
+        }
         (*write_fun)();
         fclose(ifp);
-        if ( ofp != stdout ) fclose(ofp);
+        if ( ofp != stdout ) {
+            fclose(ofp);
+        }
         cleanup:
-        if ( meta_data ) free(meta_data);
-        if ( ofname ) free(ofname);
-        if ( GLOBAL_outputIccProfile ) free(GLOBAL_outputIccProfile);
-        if ( image ) free(image);
+        if ( meta_data ) {
+            free(meta_data);
+        }
+        if ( ofname ) {
+            free(ofname);
+        }
+        if ( GLOBAL_outputIccProfile ) {
+            free(GLOBAL_outputIccProfile);
+        }
+        if ( image ) {
+            free(image);
+        }
         if ( OPTIONS_values->multiOut ) {
             if ( ++OPTIONS_values->shotSelect < is_raw ) arg--;
             else OPTIONS_values->shotSelect = 0;
