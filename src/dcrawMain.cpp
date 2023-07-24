@@ -214,7 +214,6 @@ struct decode {
     int leaf;
 };
 struct decode first_decode[2048];
-struct decode *second_decode;
 struct decode *free_decode;
 
 struct tiff_ifd {
@@ -836,7 +835,7 @@ getbithuff(int nbits, ushort *huff) {
 #define gethuff(h) getbithuff(*(h), (h) + 1)
 
 /*
-Construct a decode tree according the specification in *source.
+Construct decode tree according the specification in *source.
 The first 16 bytes specify how many codes should be 1-bit, 2-bit
 3-bit, etc.  Bytes after that are the leaf values.
 
@@ -4660,11 +4659,11 @@ foveon_make_curves(short **curvep, float dq[3], float div[3], float filt) {
 #define image ((short (*)[4]) image)
 
 int
-foveon_apply_curve(short *curve, int i) {
-    if ( abs(i) >= curve[0] ) {
+foveon_apply_curve(short *foveonCurve, int i) {
+    if ( abs(i) >= foveonCurve[0] ) {
         return 0;
     }
-    return i < 0 ? -curve[1 - i] : curve[1 + i];
+    return i < 0 ? -foveonCurve[1 - i] : foveonCurve[1 + i];
 }
 
 void
@@ -4672,8 +4671,8 @@ foveon_interpolate() {
     static const short hood[] = {-1, -1, -1, 0, -1, 1, 0, -1, 0, 1, 1, -1, 1, 0, 1, 1};
     short *pix;
     short prev[3];
-    short *curve[8];
-    short (*shrink)[3];
+    short *foveonCurve[8];
+    short (*foveonShrink)[3];
     float cfilt = 0;
     float ddft[3][3][2];
     float ppm[3][3][3];
@@ -4685,7 +4684,7 @@ foveon_interpolate() {
     float color_dq[3];
     float diag[3][3];
     float div[3];
-    float (*black)[3];
+    float (*foveonBlack)[3];
     float (*sgain)[3];
     float (*sgrow)[3];
     float fsum[3];
@@ -4825,16 +4824,16 @@ foveon_interpolate() {
         }
     }
 
-    foveon_make_curves(curve, color_dq, div, cfilt);
+    foveon_make_curves(foveonCurve, color_dq, div, cfilt);
     for ( c = 0; c < 3; c++ ) {
         chroma_dq[c] /= 3;
     }
-    foveon_make_curves(curve + 3, chroma_dq, div, cfilt);
+    foveon_make_curves(foveonCurve + 3, chroma_dq, div, cfilt);
     for ( c = 0; c < 3; c++ ) {
         dsum += chroma_dq[c] / div[c];
     }
-    curve[6] = foveon_make_curve(dsum, dsum, cfilt);
-    curve[7] = foveon_make_curve(dsum * 2, dsum * 2, cfilt);
+    foveonCurve[6] = foveon_make_curve(dsum, dsum, cfilt);
+    foveonCurve[7] = foveon_make_curve(dsum * 2, dsum * 2, cfilt);
 
     sgain = (float (*)[3]) foveon_camf_matrix(dim, "SpatialGain");
     if ( !sgain ) {
@@ -4843,61 +4842,61 @@ foveon_interpolate() {
     sgrow = (float (*)[3]) calloc(dim[1], sizeof *sgrow);
     sgx = (width + dim[1] - 2) / (dim[1] - 1);
 
-    black = (float (*)[3]) calloc(height, sizeof *black);
+    foveonBlack = (float (*)[3]) calloc(height, sizeof *foveonBlack);
     for ( row = 0; row < height; row++ ) {
         for ( i = 0; i < 6; i++ ) {
             ((float *) ddft[0])[i] = ((float *) ddft[1])[i] +
                                      row / (height - 1.0) * (((float *) ddft[2])[i] - ((float *) ddft[1])[i]);
         }
         for ( c = 0; c < 3; c++ ) {
-            black[row][c] =
+            foveonBlack[row][c] =
                     (foveon_avg(image[row * width] + c, dscr[0], cfilt) +
                      foveon_avg(image[row * width] + c, dscr[1], cfilt) * 3
                      - ddft[0][c][0]) / 4 - ddft[0][c][1];
         }
     }
-    memcpy(black, black + 8, sizeof *black * 8);
-    memcpy(black + height - 11, black + height - 22, 11 * sizeof *black);
-    memcpy(last, black, sizeof last);
+    memcpy(foveonBlack, foveonBlack + 8, sizeof *foveonBlack * 8);
+    memcpy(foveonBlack + height - 11, foveonBlack + height - 22, 11 * sizeof *foveonBlack);
+    memcpy(last, foveonBlack, sizeof last);
 
     for ( row = 1; row < height - 1; row++ ) {
         for ( c = 0; c < 3; c++ ) {
             if ( last[1][c] > last[0][c] ) {
                 if ( last[1][c] > last[2][c] ) {
-                    black[row][c] = (last[0][c] > last[2][c]) ? last[0][c] : last[2][c];
+                    foveonBlack[row][c] = (last[0][c] > last[2][c]) ? last[0][c] : last[2][c];
                 }
             } else {
                 if ( last[1][c] < last[2][c] ) {
-                    black[row][c] = (last[0][c] < last[2][c]) ? last[0][c] : last[2][c];
+                    foveonBlack[row][c] = (last[0][c] < last[2][c]) ? last[0][c] : last[2][c];
                 }
             }
         }
         memmove(last, last + 1, 2 * sizeof last[0]);
-        memcpy(last[2], black[row + 1], sizeof last[2]);
+        memcpy(last[2], foveonBlack[row + 1], sizeof last[2]);
     }
     for ( c = 0; c < 3; c++ ) {
-        black[row][c] = (last[0][c] + last[1][c]) / 2;
+        foveonBlack[row][c] = (last[0][c] + last[1][c]) / 2;
     }
     for ( c = 0; c < 3; c++ ) {
-        black[0][c] = (black[1][c] + black[3][c]) / 2;
+        foveonBlack[0][c] = (foveonBlack[1][c] + foveonBlack[3][c]) / 2;
     }
 
     val = 1 - exp(-1 / 24.0);
-    memcpy(fsum, black, sizeof fsum);
+    memcpy(fsum, foveonBlack, sizeof fsum);
     for ( row = 1; row < height; row++ ) {
         for ( c = 0; c < 3; c++ ) {
-            fsum[c] += black[row][c] =
-                    (black[row][c] - black[row - 1][c]) * val + black[row - 1][c];
+            fsum[c] += foveonBlack[row][c] =
+                    (foveonBlack[row][c] - foveonBlack[row - 1][c]) * val + foveonBlack[row - 1][c];
         }
     }
-    memcpy(last[0], black[height - 1], sizeof last[0]);
+    memcpy(last[0], foveonBlack[height - 1], sizeof last[0]);
     for ( c = 0; c < 3; c++ ) {
         fsum[c] /= height;
     }
     for ( row = height; row--; ) {
         for ( c = 0; c < 3; c++ ) {
-            last[0][c] = black[row][c] =
-                    (black[row][c] - fsum[c] - last[0][c]) * val + last[0][c];
+            last[0][c] = foveonBlack[row][c] =
+                    (foveonBlack[row][c] - fsum[c] - last[0][c]) * val + last[0][c];
         }
     }
 
@@ -4912,7 +4911,7 @@ foveon_interpolate() {
     }
     for ( row = 0; row < height; row++ ) {
         for ( c = 0; c < 3; c++ ) {
-            black[row][c] += fsum[c] / 2 + total[c] / (total[3] * 100.0);
+            foveonBlack[row][c] += fsum[c] / 2 + total[c] / (total[3] * 100.0);
         }
     }
 
@@ -4940,7 +4939,7 @@ foveon_interpolate() {
                 prev[c] = pix[c];
                 ipix[c] = pix[c] + floor((diff + (diff * diff >> 14)) * cfilt
                                          - ddft[0][c][1] - ddft[0][c][0] * ((float) col / width - 0.5)
-                                         - black[row][c]);
+                                         - foveonBlack[row][c]);
             }
             for ( c = 0; c < 3; c++ ) {
                 work[0][c] = ipix[c] * ipix[c] >> 14;
@@ -4964,7 +4963,7 @@ foveon_interpolate() {
             pix += 4;
         }
     }
-    free(black);
+    free(foveonBlack);
     free(sgrow);
     free(sgain);
 
@@ -5086,8 +5085,8 @@ foveon_interpolate() {
         pix = image[row * width + 2];
         for ( col = 2; col < width - 2; col++ ) {
             for ( c = 0; c < 3; c++ ) {
-                dev[c] = -foveon_apply_curve(curve[7], pix[c] -
-                                                       ((smrow[1][col][c] + 2 * smrow[2][col][c] + smrow[3][col][c])
+                dev[c] = -foveon_apply_curve(foveonCurve[7], pix[c] -
+                                                             ((smrow[1][col][c] + 2 * smrow[2][col][c] + smrow[3][col][c])
                                                                >> 2));
             }
             sum = (dev[0] + dev[1] + dev[2]) >> 3;
@@ -5125,7 +5124,7 @@ foveon_interpolate() {
             }
             j = total[3] > 375 ? (sum << 16) / total[3] : sum * 174;
             for ( c = 0; c < 3; c++ ) {
-                pix[c] += foveon_apply_curve(curve[6],
+                pix[c] += foveon_apply_curve(foveonCurve[6],
                                              ((j * total[c] + 0x8000) >> 16) - pix[c]);
             }
             pix += 4;
@@ -5135,11 +5134,11 @@ foveon_interpolate() {
     // Transform the image to a different colorspace
     for ( pix = image[0]; pix < image[height * width]; pix += 4 ) {
         for ( c = 0; c < 3; c++ ) {
-            pix[c] -= foveon_apply_curve(curve[c], pix[c]);
+            pix[c] -= foveon_apply_curve(foveonCurve[c], pix[c]);
         }
         sum = (pix[0] + pix[1] + pix[1] + pix[2]) >> 2;
         for ( c = 0; c < 3; c++ ) {
-            pix[c] -= foveon_apply_curve(curve[c], pix[c] - sum);
+            pix[c] -= foveon_apply_curve(foveonCurve[c], pix[c] - sum);
         }
         for ( c = 0; c < 3; c++ ) {
             for ( dsum = i = 0; i < 3; i++ )
@@ -5158,8 +5157,8 @@ foveon_interpolate() {
     }
 
     // Smooth the image bottom-to-top and save at 1/4 scale
-    shrink = (short (*)[3]) calloc((height / 4), (width / 4) * sizeof *shrink);
-    merror(shrink, "foveon_interpolate()");
+    foveonShrink = (short (*)[3]) calloc((height / 4), (width / 4) * sizeof *foveonShrink);
+    merror(foveonShrink, "foveon_interpolate()");
     for ( row = height / 4; row--; ) {
         for ( col = 0; col < width / 4; col++ ) {
             ipix[0] = ipix[1] = ipix[2] = 0;
@@ -5172,10 +5171,10 @@ foveon_interpolate() {
             }
             for ( c = 0; c < 3; c++ ) {
                 if ( row + 2 > height / 4 ) {
-                    shrink[row * (width / 4) + col][c] = ipix[c] >> 4;
+                    foveonShrink[row * (width / 4) + col][c] = ipix[c] >> 4;
                 } else {
-                    shrink[row * (width / 4) + col][c] =
-                            (shrink[(row + 1) * (width / 4) + col][c] * 1840 + ipix[c] * 141 + 2048) >> 12;
+                    foveonShrink[row * (width / 4) + col][c] =
+                            (foveonShrink[(row + 1) * (width / 4) + col][c] * 1840 + ipix[c] * 141 + 2048) >> 12;
                 }
             }
         }
@@ -5188,7 +5187,7 @@ foveon_interpolate() {
             for ( col = width & ~3; col--; ) {
                 for ( c = 0; c < 3; c++ ) {
                     smrow[0][col][c] = ipix[c] =
-                            (shrink[(row / 4) * (width / 4) + col / 4][c] * 1485 + ipix[c] * 6707 + 4096) >> 13;
+                            (foveonShrink[(row / 4) * (width / 4) + col / 4][c] * 1485 + ipix[c] * 6707 + 4096) >> 13;
                 }
             }
         }
@@ -5222,7 +5221,7 @@ foveon_interpolate() {
             }
             j = (j << 16) / i;
             for ( sum = c = 0; c < 3; c++ ) {
-                ipix[c] = foveon_apply_curve(curve[c + 3],
+                ipix[c] = foveon_apply_curve(foveonCurve[c + 3],
                                              ((smrow[2][col][c] * j + 0x8000) >> 16) - image[row * width + col][c]);
                 sum += ipix[c];
             }
@@ -5236,13 +5235,13 @@ foveon_interpolate() {
             }
         }
     }
-    free(shrink);
+    free(foveonShrink);
     free(smrow[6]);
     for ( i = 0; i < 8; i++ ) {
-        free(curve[i]);
+        free(foveonCurve[i]);
     }
 
-    // Trim off the black border
+    // Trim off the foveonBlack border
     active[1] -= keep[1];
     active[3] -= 2;
     i = active[2] - active[0];
@@ -6851,8 +6850,8 @@ xtrans_interpolate(int passes) {
                         lix = &lab[row][col];
                         g = 2 * lix[0][0] - lix[f][0] - lix[-f][0];
                         drv[d][row][col] = SQR(g)
-                                           + SQR((2 * lix[0][1] - lix[f][1] - lix[-f][1] + g * 500 / 232))
-                                           + SQR((2 * lix[0][2] - lix[f][2] - lix[-f][2] - g * 500 / 580));
+                                           + SQR((2 * lix[0][1] - lix[f][1] - lix[-f][1] + g * 500.0 / 232.0))
+                                           + SQR((2 * lix[0][2] - lix[f][2] - lix[-f][2] - g * 500.0 / 580.0));
                     }
                 }
             }
@@ -7347,9 +7346,11 @@ parse_thumb_note(int base, unsigned toff, unsigned tlen) {
     }
 }
 
-int parse_tiff_ifd(int base);
+int
+parse_tiff_ifd(int base);
 
-void parse_makernote(int base, int uptag) {
+void
+parse_makernote(int base, int uptag) {
     static const uchar xlat[2][256] = {
             {0xc1, 0xbf, 0x6d, 0x0d, 0x59, 0xc5, 0x13, 0x9d, 0x83, 0x61, 0x6b, 0x4f, 0xc7, 0x7f, 0x3d, 0x3d,
                     0x53, 0x59, 0xe3, 0xc7, 0xe9, 0x2f, 0x95, 0xa7, 0x95, 0x1f, 0xdf, 0x7f, 0x2b, 0x29, 0xc7, 0x0d,
@@ -7655,6 +7656,9 @@ void parse_makernote(int base, int uptag) {
                     for ( c = 0; c < 4; c++ ) {
                         cam_mul[c] = get2();
                     }
+                    break;
+                default:
+                    break;
             }
             if ( ver97 >= 200 ) {
                 if ( ver97 != 205 ) {
@@ -7937,6 +7941,9 @@ parse_exif(int base) {
                         exif_cfa |= fgetc(ifp) * 0x01010101 << c;
                     }
                 }
+                break;
+            default:
+                break;
         }
         fseek(ifp, save, SEEK_SET);
     }
@@ -7975,6 +7982,9 @@ parse_gps(int base) {
             case 18:
             case 29:
                 fgets((char *) (gpsdata + 14 + tag / 3), MIN(len, 12), ifp);
+                break;
+            default:
+                break;
         }
         fseek(ifp, save, SEEK_SET);
     }
@@ -9253,7 +9263,7 @@ parse_minolta(int base) {
 /*
 Many cameras have a "debug mode" that writes JPEG and raw
 at the same time.  The raw file has no header, so try to
-to open the matching JPEG file and read its metadata.
+open the matching JPEG file and read its metadata.
 */
 void
 parse_external_jpeg() {
@@ -9315,7 +9325,7 @@ parse_external_jpeg() {
 }
 
 /*
-CIFF block 0x1030 contains an 8x8 white sample.
+CIFF block 0x1030 contains 8x8 white sample.
 Load this into white[][] for use in scale_colors().
 */
 void
@@ -9737,6 +9747,9 @@ parse_phase_one(int base) {
                 if ( (cp = strstr(model, " camera")) ) {
                     *cp = 0;
                 }
+                break;
+            default:
+                break;
         }
         fseek(ifp, save, SEEK_SET);
     }
@@ -9759,6 +9772,9 @@ parse_phase_one(int base) {
             break;
         case 5488:
             strcpy(model, "H 25");
+            break;
+            break;
+        default:
             break;
     }
 }
@@ -9995,11 +10011,17 @@ parse_crx(int end) {
                         raw_height = high;
                         data_offset = off;
                         TIFF_CALLBACK_loadRawData = &canon_crx_load_raw;
+                        break;
+                    default:
+                        break;
                 }
                 break;
             case 0x50525657:
                 // PRVW
                 fseek(ifp, 6, SEEK_CUR);
+                break;
+            default:
+                break;
         }
         fseek(ifp, save + size, SEEK_SET);
     }
@@ -10298,6 +10320,9 @@ parse_foveon() {
 #ifdef LOCALTIME
                 timestamp = mktime(gmtime(&timestamp));
 #endif
+                break;
+            default:
+                break;
         }
         fseek(ifp, save, SEEK_SET);
     }
@@ -10307,7 +10332,7 @@ parse_foveon() {
 All matrices are from Adobe DNG Converter unless otherwise noted.
 */
 void
-adobe_coeff(const char *make, const char *model) {
+adobe_coeff(const char *adobeMake, const char *adobeModel) {
     static const struct {
         const char *prefix;
         short black;
@@ -11462,7 +11487,7 @@ adobe_coeff(const char *make, const char *model) {
     int i;
     int j;
 
-    snprintf(name, 130, "%s %s", make, model);
+    snprintf(name, 130, "%s %s", adobeMake, adobeModel);
     for ( i = 0; i < sizeof table / sizeof *table; i++ ) {
         if ( !strncmp(name, table[i].prefix, strlen(table[i].prefix))) {
             if ( table[i].black ) {
@@ -13676,26 +13701,26 @@ write_ppm_tiff() {
     int perc;
     int val;
     int total;
-    int white = 0x2000;
+    int ppmWhite = 0x2000;
 
-    perc = width * height * 0.01; // 99th percentile white level
+    perc = width * height * 0.01; // 99th percentile ppmWhite level
     if ( fuji_width ) {
         perc /= 2;
     }
     if ( !((OPTIONS_values->highlight & ~2) || OPTIONS_values->noAutoBright) ) {
-        for ( white = c = 0; c < colors; c++ ) {
+        for ( ppmWhite = c = 0; c < colors; c++ ) {
             for ( val = 0x2000, total = 0; --val > 32; ) {
                 if ((total += histogram[c][val]) > perc ) {
                     break;
                 }
             }
-            if ( white < val ) {
-                white = val;
+            if ( ppmWhite < val ) {
+                ppmWhite = val;
             }
         }
     }
     gamma_curve(OPTIONS_values->gammaParameters[0], OPTIONS_values->gammaParameters[1], 2,
-                (white << 3) / OPTIONS_values->brightness);
+                (ppmWhite << 3) / OPTIONS_values->brightness);
     iheight = height;
     iwidth = width;
     if ( GLOBAL_flipsMask & 4 ) {
