@@ -1,5 +1,5 @@
-#ifndef __DCRAW_JPEGLOADER__
-#define __DCRAW_JPEGLOADER__
+#ifndef __JPEG_RAW_LOADERS__
+#define __JPEG_RAW_LOADERS__
 
 struct jhead {
     int algo;

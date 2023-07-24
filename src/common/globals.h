@@ -1,6 +1,8 @@
 #ifndef __GLOBALS_H__
 #define __GLOBALS_H__
 
+#include <cstdio>
+
 // II in ASCII
 #define LITTLE_ENDIAN_ORDER 0x4949
 
@@ -11,9 +13,9 @@ extern short GLOBAL_endianOrder; // LITTLE_ENDIAN_ORDER or BIG_ENDIAN_ORDER
 
 /*
 Flips is a set of bits with several flags.
-00000001 (0x01): Flip image in X
-00000010 (0x02): Flip image in Y
-00000100 (0x04): Rotate image by 90 degrees by swapping height and width.
+00000001 (0x01): Flip GLOBAL_image in X
+00000010 (0x02): Flip GLOBAL_image in Y
+00000100 (0x04): Rotate GLOBAL_image by 90 degrees by swapping height and width.
 */
 extern unsigned GLOBAL_flipsMask;
 
@@ -21,7 +23,7 @@ extern unsigned GLOBAL_flipsMask;
 extern unsigned GLOBAL_dngVersion;
 extern unsigned GLOBAL_loadFlags;
 
-// Used only on imageProcess, pending to handle the per-image initialization
+// Used only on imageProcess, pending to handle the per-GLOBAL_image initialization
 extern unsigned *GLOBAL_outputIccProfile;
 
 // Others ( used everywhere :( )
@@ -32,5 +34,11 @@ extern unsigned GLOBAL_colorTransformForRaw;
 
 // Others
 extern void (*CALLBACK_loadThumbnailRawData)();
+
+extern unsigned short (*GLOBAL_image)[4];
+extern char GLOBAL_make[64];
+extern char GLOBAL_model[64];
+extern off_t GLOBAL_meta_offset;
+extern float GLOBAL_cam_mul[4];
 
 #endif

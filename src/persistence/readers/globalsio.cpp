@@ -152,3 +152,4 @@ getbithuff(int nbits, unsigned short *huff) {
     }
     return c;
 }
+

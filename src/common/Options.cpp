@@ -81,13 +81,13 @@ Options::printHelp(const char **argv) {
     printf("\nby Dave Coffin, dcoffin a cybercom o net\n");
     printf("\nUsage:  %s [OPTION]... [FILE]...\n\n", argv[0]);
     puts("-v        Print verbose messages");
-    puts("-c        Write image data to standard output");
-    puts("-e        Extract embedded thumbnail image");
+    puts("-c        Write GLOBAL_image data to standard output");
+    puts("-e        Extract embedded thumbnail GLOBAL_image");
     puts("-i        Identify files without decoding them");
     puts("-i -v     Identify files and show metadata");
     puts("-z        Change file dates to camera timestamp");
     puts("-w        Use camera white balance, if possible");
-    puts("-a        Average the whole image for white balance");
+    puts("-a        Average the whole GLOBAL_image for white balance");
     puts("-A <x y w h> Average a grey box for white balance");
     puts("-r <r g b g> Set custom white balance");
     puts("+M/-M     Use/don't use an embedded color matrix");
@@ -98,7 +98,7 @@ Options::printHelp(const char **argv) {
     puts("-S <num>  Set the saturation level");
     puts("-n <num>  Set threshold for wavelet denoising");
     puts("-H [0-9]  Highlight mode (0=clip, 1=unclip, 2=blend, 3+=rebuild)");
-    puts("-t [0-7]  Flip image (0=none, 3=180, 5=90CCW, 6=90CW)");
+    puts("-t [0-7]  Flip GLOBAL_image (0=none, 3=180, 5=90CCW, 6=90CW)");
     puts("-o [0-6]  Output colorspace (raw,sRGB,Adobe,Wide,ProPhoto,XYZ,ACES)");
 #ifndef NO_LCMS
     puts("-o <file> Apply output ICC profile from file");
@@ -107,14 +107,14 @@ Options::printHelp(const char **argv) {
     puts("-d        Document mode (no color, no interpolation)");
     puts("-D        Document mode without scaling (totally raw)");
     puts("-j        Don't stretch or rotate raw pixels");
-    puts("-W        Don't automatically brighten the image");
+    puts("-W        Don't automatically brighten the GLOBAL_image");
     puts("-b <num>  Adjust brightness (default = 1.0)");
     puts("-g <p ts> Set custom gamma curve (default = 2.222 4.5)");
     puts("-q [0-3]  Set the interpolation quality");
-    puts("-h        Half-size color image (twice as fast as \"-q 0\")");
+    puts("-h        Half-size color GLOBAL_image (twice as fast as \"-q 0\")");
     puts("-f        Interpolate RGGB as four colors");
     puts("-m <num>  Apply a 3x3 median filter to R-G and B-G");
-    puts("-s [0..N-1] Select one raw image or \"all\" from each file");
+    puts("-s [0..N-1] Select one raw GLOBAL_image or \"all\" from each file");
     puts("-6        Write 16-bit instead of 8-bit");
     puts("-4        Linear 16-bit, same as \"-6 -W -g 1 1\"");
     puts("-T        Write TIFF instead of PPM");

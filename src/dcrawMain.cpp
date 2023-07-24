@@ -119,6 +119,7 @@ typedef unsigned long long UINT64;
 #include "postprocessors/gamma.h"
 #include "persistence/readers/rawloaders/jpegRawLoaders.h"
 #include "persistence/readers/rawloaders/sonyRawLoaders.h"
+#include "persistence/readers/rawloaders/nikonRawLoaders.h"
 
 FILE *ofp;
 
@@ -126,8 +127,6 @@ char *meta_data;
 char xtrans[6][6];
 char xtrans_abs[6][6];
 char desc[512];
-char make[64];
-char model[64];
 char model2[64];
 char artist[64];
 float flash_used;
@@ -138,7 +137,6 @@ float focal_len;
 time_t timestamp;
 off_t strip_offset;
 off_t thumb_offset;
-off_t meta_offset;
 off_t profile_offset;
 unsigned shot_order;
 unsigned kodak_cbpp;
@@ -172,14 +170,12 @@ unsigned short iwidth;
 unsigned short fuji_width;
 unsigned short thumb_width;
 unsigned short thumb_height;
-unsigned short (*image)[4];
 unsigned short cblack[4102];
 unsigned short white[8][8];
 unsigned short cr2_slice[3];
 unsigned short sraw_mul[4];
 double pixel_aspect;
 int mask[8][4];
-float cam_mul[4];
 float pre_mul[4];
 float cmatrix[3][4];
 float rgb_cam[3][4];
@@ -616,64 +612,6 @@ canon_s2is() {
     return 0;
 }
 
-/*
-Construct decode tree according the specification in *source.
-The first 16 bytes specify how many codes should be 1-bit, 2-bit
-3-bit, etc.  Bytes after that are the leaf values.
-
-For example, if the source is
-
-{ 0,1,4,2,3,1,2,0,0,0,0,0,0,0,0,0,
-  0x04,0x03,0x05,0x06,0x02,0x07,0x01,0x08,0x09,0x00,0x0a,0x0b,0xff  },
-
-then the code is
-
-00		0x04
-010		0x03
-011		0x05
-100		0x06
-101		0x02
-1100		0x07
-1101		0x01
-11100		0x08
-11101		0x09
-11110		0x00
-111110		0x0a
-1111110		0x0b
-1111111		0xff
- */
-unsigned short *
-make_decoder_ref(const unsigned char **source) {
-    int max;
-    int len;
-    int h;
-    int i;
-    int j;
-    const unsigned char *count;
-    unsigned short *huff;
-
-    count = (*source += 16) - 17;
-    for ( max = 16; max && !count[max]; max-- );
-    huff = (unsigned short *)calloc(1 + (1 << max), sizeof *huff);
-    memoryError(huff, "make_decoder()");
-    huff[0] = max;
-    for ( h = len = 1; len <= max; len++ ) {
-        for ( i = 0; i < count[len]; i++, ++*source ) {
-            for ( j = 0; j < 1 << (max - len); j++ ) {
-                if ( h <= 1 << max ) {
-                    huff[h++] = len << 8 | **source;
-                }
-            }
-        }
-    }
-    return huff;
-}
-
-unsigned short *
-make_decoder(const unsigned char *source) {
-    return make_decoder_ref(&source);
-}
-
 void
 crw_init_tables(unsigned table, unsigned short *huff[2]) {
     static const unsigned char first_tree[3][29] = {
@@ -739,7 +677,7 @@ crw_init_tables(unsigned table, unsigned short *huff[2]) {
 }
 
 /*
-Return 0 if the image starts with compressed data,
+Return 0 if the GLOBAL_image starts with compressed data,
 1 if it starts with uncompressed low-order bits.
 
 In Canon compressed data, 0xff is always followed by 0x00.
@@ -1030,7 +968,7 @@ canon_sraw_load_raw() {
             ecol = THE_image.width & -2;
         }
         for ( row = 0; row < height; row += (jh.clrs >> 1) - 1 ) {
-            ip = (short (*)[4]) image + row * width;
+            ip = (short (*)[4]) GLOBAL_image + row * width;
             for ( col = scol; col < ecol; col += 2, jcol += jh.clrs ) {
                 if ((jcol %= jwide) == 0 ) {
                     rp = (short *) ljpeg_row(jrow++, &jh);
@@ -1053,7 +991,7 @@ canon_sraw_load_raw() {
     if ( unique_id >= 0x80000281 || (unique_id == 0x80000218 && ver > 1000006) ) {
         hue = jh.sraw << 1;
     }
-    ip = (short (*)[4]) image;
+    ip = (short (*)[4]) GLOBAL_image;
     rp = ip[0];
     for ( row = 0; row < height; row++, ip += width ) {
         if ( row & (jh.sraw >> 1))
@@ -1115,7 +1053,7 @@ adobe_copy_pixel(unsigned row, unsigned col, unsigned short **rp) {
     } else {
         if ( row < height && col < width ) {
             for ( c = 0; c < tiff_samples; c++ ) {
-                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[(*rp)[c]];
+                GLOBAL_image[row * width + col][c] = GAMMA_curveFunctionLookupTable[(*rp)[c]];
             }
         }
         *rp += tiff_samples;
@@ -1290,7 +1228,7 @@ pentax_load_raw() {
                           {0, 0}};
     unsigned short hpred[2];
 
-    fseek(GLOBAL_IO_ifp, meta_offset, SEEK_SET);
+    fseek(GLOBAL_IO_ifp, GLOBAL_meta_offset, SEEK_SET);
     dep = (read2bytes() + 12) & 15;
     fseek(GLOBAL_IO_ifp, 12, SEEK_CUR);
     for ( c = 0; c < dep; c++ ) {
@@ -1321,202 +1259,6 @@ pentax_load_raw() {
             }
         }
     }
-}
-
-void
-nikon_load_raw() {
-    static const unsigned char nikon_tree[][32] = {
-            {0, 1, 5, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0,    /* 12-bit lossy */
-                    5,    4,    3,    6,    2,    7, 1,  0, 8,  9,  11, 10, 12},
-            {0, 1, 5, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0,    /* 12-bit lossy after split */
-                    0x39, 0x5a, 0x38, 0x27, 0x16, 5, 4,  3, 2,  1,  0,  11, 12, 12},
-            {0, 1, 4, 2, 3, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /* 12-bit lossless */
-                    5,    4,    6,    3,    7,    2, 8,  1, 9,  0,  10, 11, 12},
-            {0, 1, 4, 3, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0,    /* 14-bit lossy */
-                    5,    6,    4,    7,    8,    3, 9,  2, 1,  0,  10, 11, 12, 13, 14},
-            {0, 1, 5, 1, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0,    /* 14-bit lossy after split */
-                    8,    0x5c, 0x4b, 0x3a, 0x29, 7, 6,  5, 4,  3,  2,  1,  0,  13, 14},
-            {0, 1, 4, 2, 2, 3, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,    /* 14-bit lossless */
-                    7,    6,    8,    5,    9,    4, 10, 3, 11, 12, 2,  0,  1,  13, 14}};
-    unsigned short *huff;
-    unsigned short ver0;
-    unsigned short ver1;
-    unsigned short vpred[2][2];
-    unsigned short hpred[2];
-    unsigned short csize;
-    int i;
-    int min;
-    int max;
-    int step = 0;
-    int tree = 0;
-    int split = 0;
-    int row;
-    int col;
-    int len;
-    int shl;
-    int diff;
-
-    fseek(GLOBAL_IO_ifp, meta_offset, SEEK_SET);
-    ver0 = fgetc(GLOBAL_IO_ifp);
-    ver1 = fgetc(GLOBAL_IO_ifp);
-    if ( ver0 == 0x49 || ver1 == 0x58 ) {
-        fseek(GLOBAL_IO_ifp, 2110, SEEK_CUR);
-    }
-    if ( ver0 == 0x46 ) {
-        tree = 2;
-    }
-    if ( THE_image.bitsPerSample == 14 ) {
-        tree += 3;
-    }
-    readShorts(vpred[0], 4);
-    max = 1 << THE_image.bitsPerSample & 0x7fff;
-    if ((csize = read2bytes()) > 1 ) {
-        step = max / (csize - 1);
-    }
-    if ( ver0 == 0x44 && ver1 == 0x20 && step > 0 ) {
-        for ( i = 0; i < csize; i++ ) {
-            GAMMA_curveFunctionLookupTable[i * step] = read2bytes();
-        }
-        for ( i = 0; i < max; i++ ) {
-            GAMMA_curveFunctionLookupTable[i] = (GAMMA_curveFunctionLookupTable[i - i % step] * (step - i % step) +
-                        GAMMA_curveFunctionLookupTable[i - i % step + step] * (i % step)) / step;
-        }
-        fseek(GLOBAL_IO_ifp, meta_offset + 562, SEEK_SET);
-        split = read2bytes();
-    } else {
-        if ( ver0 != 0x46 && csize <= 0x4001 ) {
-            readShorts(GAMMA_curveFunctionLookupTable, max = csize);
-        }
-    }
-    while ( GAMMA_curveFunctionLookupTable[max - 2] == GAMMA_curveFunctionLookupTable[max - 1] ) {
-        max--;
-    }
-    huff = make_decoder(nikon_tree[tree]);
-    fseek(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset, SEEK_SET);
-    getbits(-1);
-    for ( min = row = 0; row < height; row++ ) {
-        if ( split && row == split ) {
-            free(huff);
-            huff = make_decoder(nikon_tree[tree + 1]);
-            max += (min = 16) << 1;
-        }
-        for ( col = 0; col < THE_image.width; col++ ) {
-            i = gethuff(huff);
-            len = i & 15;
-            shl = i >> 4;
-            diff = ((getbits(len - shl) << 1) + 1) << shl >> 1;
-            if ((diff & (1 << (len - 1))) == 0 ) {
-                diff -= (1 << len) - !shl;
-            }
-            if ( col < 2 ) {
-                hpred[col] = vpred[row & 1][col] += diff;
-            } else {
-                hpred[col & 1] += diff;
-            }
-            if ( (unsigned short) (hpred[col & 1] + min) >= max ) {
-                inputOutputError();
-            }
-            RAW(row, col) = GAMMA_curveFunctionLookupTable[LIM((short)hpred[col & 1], 0, 0x3fff)];
-        }
-    }
-    free(huff);
-}
-
-void
-nikon_yuv_load_raw() {
-    int row;
-    int col;
-    int yuv[4];
-    int rgb[3];
-    int b;
-    int c;
-    UINT64 bitbuf = 0;
-
-    for ( row = 0; row < THE_image.height; row++ ) {
-        for ( col = 0; col < THE_image.width; col++ ) {
-            if ( !(b = col & 1)) {
-                bitbuf = 0;
-                for ( c = 0; c < 6; c++ ) {
-                    bitbuf |= (UINT64) fgetc(GLOBAL_IO_ifp) << c * 8;
-                }
-                for ( c = 0; c < 4; c++ ) {
-                    yuv[c] = (bitbuf >> c * 12 & 0xfff) - (c >> 1 << 11);
-                }
-            }
-            rgb[0] = yuv[b] + 1.370705 * yuv[3];
-            rgb[1] = yuv[b] - 0.337633 * yuv[2] - 0.698001 * yuv[3];
-            rgb[2] = yuv[b] + 1.732446 * yuv[2];
-            for ( c = 0; c < 3; c++ ) {
-                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 0xfff)] / cam_mul[c];
-            }
-        }
-    }
-}
-
-/*
-Returns 1 for a Coolpix 995, 0 for anything else.
-*/
-int
-nikon_e995() {
-    int i;
-    int histo[256];
-    const unsigned char often[] = {0x00, 0x55, 0xaa, 0xff};
-
-    memset(histo, 0, sizeof histo);
-    fseek(GLOBAL_IO_ifp, -2000, SEEK_END);
-    for ( i = 0; i < 2000; i++ ) {
-        histo[fgetc(GLOBAL_IO_ifp)]++;
-    }
-    for ( i = 0; i < 4; i++ ) {
-        if ( histo[often[i]] < 200 ) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-/*
-Returns 1 for a Coolpix 2100, 0 for anything else.
-*/
-int
-nikon_e2100() {
-    unsigned char t[12];
-    int i;
-
-    fseek(GLOBAL_IO_ifp, 0, SEEK_SET);
-    for ( i = 0; i < 1024; i++ ) {
-        fread(t, 1, 12, GLOBAL_IO_ifp);
-        if ( ((t[2] & t[4] & t[7] & t[9]) >> 4
-             & t[1] & t[6] & t[8] & t[11] & 3) != 3 ) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-void
-nikon_3700() {
-    int bits;
-    int i;
-    unsigned char dp[24];
-    static const struct {
-        int bits;
-        char make[12];
-        char model[15];
-    } table[] = {
-            {0x00, "Pentax",  "Optio 33WR"},
-            {0x03, "Nikon",   "E3200"},
-            {0x32, "Nikon",   "E3700"},
-            {0x33, "Olympus", "C740UZ"}};
-
-    fseek(GLOBAL_IO_ifp, 3072, SEEK_SET);
-    fread(dp, 1, 24, GLOBAL_IO_ifp);
-    bits = (dp[8] & 3) << 4 | (dp[20] & 3);
-    for ( i = 0; i < sizeof table / sizeof *table; i++ )
-        if ( bits == table[i].bits ) {
-            strcpy(make, table[i].make);
-            strcpy(model, table[i].model);
-        }
 }
 
 /*
@@ -1762,10 +1504,10 @@ phase_one_correct() {
     if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("Phase One correction...\n"));
     }
-    fseek(GLOBAL_IO_ifp, meta_offset, SEEK_SET);
+    fseek(GLOBAL_IO_ifp, GLOBAL_meta_offset, SEEK_SET);
     GLOBAL_endianOrder = read2bytes();
     fseek(GLOBAL_IO_ifp, 6, SEEK_CUR);
-    fseek(GLOBAL_IO_ifp, meta_offset + read4bytes(), SEEK_SET);
+    fseek(GLOBAL_IO_ifp, GLOBAL_meta_offset + read4bytes(), SEEK_SET);
     entries = read4bytes();
     read4bytes();
     while ( entries-- ) {
@@ -1773,7 +1515,7 @@ phase_one_correct() {
         len = read4bytes();
         data = read4bytes();
         save = ftell(GLOBAL_IO_ifp);
-        fseek(GLOBAL_IO_ifp, meta_offset + data, SEEK_SET);
+        fseek(GLOBAL_IO_ifp, GLOBAL_meta_offset + data, SEEK_SET);
         if ( tag == 0x419 ) {
             // Polynomial curve
             for ( read4bytes(), i = 0; i < 8; i++ ) {
@@ -1797,7 +1539,7 @@ phase_one_correct() {
                     }
                     GAMMA_curveFunctionLookupTable[i] = LIM(num + i, 0, 65535);
                 }
-                apply: // apply to whole image
+                apply: // apply to whole GLOBAL_image
                 for ( row = 0; row < THE_image.height; row++ ) {
                     for ( col = (tag & 1) * ph1.split_col; col < THE_image.width; col++ ) {
                         RAW(row, col) = GAMMA_curveFunctionLookupTable[RAW(row, col)];
@@ -2219,10 +1961,10 @@ hasselblad_load_raw() {
                     if ( THE_image.rawData && c == shot ) {
                         RAW(row, s) = upix;
                     }
-                    if ( image ) {
+                    if ( GLOBAL_image ) {
                         urow = row - top_margin + (c & 1);
                         ucol = col - left_margin - ((c >> 1) & 1);
-                        ip = &image[urow * width + ucol][f];
+                        ip = &GLOBAL_image[urow * width + ucol][f];
                         if ( urow < height && ucol < width ) {
                             *ip = c < 4 ? upix : (*ip + upix) >> 1;
                         }
@@ -2234,7 +1976,7 @@ hasselblad_load_raw() {
     }
     free(back[4]);
     ljpeg_end(&jh);
-    if ( image ) {
+    if ( GLOBAL_image ) {
         mix_green = 1;
     }
 }
@@ -2267,7 +2009,7 @@ leaf_hdr_load_raw() {
             readShorts(pixel, THE_image.width);
             if ( !filters && (row = r - top_margin) < height ) {
                 for ( col = 0; col < width; col++ ) {
-                    image[row * width + col][c] = pixel[col + left_margin];
+                    GLOBAL_image[row * width + col][c] = pixel[col + left_margin];
                 }
             }
         }
@@ -2328,7 +2070,7 @@ sinar_4shot_load_raw() {
                 if ( (c = col - left_margin - (shot & 1)) >= width ) {
                     continue;
                 }
-                image[r * width + c][(row & 1) * 3 ^ (~col & 1)] = pixel[col];
+                GLOBAL_image[r * width + c][(row & 1) * 3 ^ (~col & 1)] = pixel[col];
             }
         }
     }
@@ -2341,12 +2083,12 @@ imacon_full_load_raw() {
     int row;
     int col;
 
-    if ( !image ) {
+    if ( !GLOBAL_image ) {
         return;
     }
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
-            readShorts(image[row * width + col], 3);
+            readShorts(GLOBAL_image[row * width + col], 3);
         }
     }
 }
@@ -2431,7 +2173,7 @@ nokia_load_raw() {
     }
     free(data);
     ADOBE_maximum = 0x3ff;
-    if ( strcmp(make, "OmniVision") ) {
+    if ( strcmp(GLOBAL_make, "OmniVision") ) {
         return;
     }
     row = THE_image.height / 2;
@@ -2955,8 +2697,8 @@ lossy_dng_load_raw() {
     unsigned short cur[3][256];
     double coeff[9], tot;
 
-    if ( meta_offset ) {
-        fseek(GLOBAL_IO_ifp, meta_offset, SEEK_SET);
+    if ( GLOBAL_meta_offset ) {
+        fseek(GLOBAL_IO_ifp, GLOBAL_meta_offset, SEEK_SET);
         GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
         ntags = read4bytes();
         while ( ntags-- ) {
@@ -3010,7 +2752,7 @@ lossy_dng_load_raw() {
             pixel = (JSAMPLE (*)[3]) buf[0];
             for ( col = 0; col < cinfo.output_width && tcol + col < width; col++ ) {
                 for ( c = 0; c < 3; c++ ) {
-                    image[row * width + tcol + col][c] = cur[c][pixel[col][c]];
+                    GLOBAL_image[row * width + tcol + col][c] = cur[c][pixel[col][c]];
                 }
             }
         }
@@ -3092,7 +2834,7 @@ kodak_c330_load_raw() {
             rgb[2] = rgb[1] + cb;
             rgb[0] = rgb[1] + cr;
             for ( c = 0; c < 3; c++ ) {
-                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
+                GLOBAL_image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
             };
         }
     }
@@ -3127,7 +2869,7 @@ kodak_c603_load_raw() {
             rgb[2] = rgb[1] + cb;
             rgb[0] = rgb[1] + cr;
             for ( c = 0; c < 3; c++ ) {
-                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
+                GLOBAL_image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
             };
         }
     }
@@ -3298,7 +3040,7 @@ kodak_ycbcr_load_raw() {
     int rgb[3];
     unsigned short *ip;
 
-    if ( !image ) {
+    if ( !GLOBAL_image ) {
         return;
     }
     for ( row = 0; row < height; row += 2 ) {
@@ -3315,7 +3057,7 @@ kodak_ycbcr_load_raw() {
                 for ( j = 0; j < 2; j++ )
                     for ( k = 0; k < 2; k++ ) {
                         if ((y[j][k] = y[j][k ^ 1] + *bp++) >> 10 ) inputOutputError();
-                        ip = image[(row + j) * width + col + i + k];
+                        ip = GLOBAL_image[(row + j) * width + col + i + k];
                         for ( c = 0; c < 3; c++ ) {
                             ip[c] = GAMMA_curveFunctionLookupTable[LIM(y[j][k] + rgb[c], 0, 0xfff)];
                         }
@@ -3335,7 +3077,7 @@ kodak_rgb_load_raw() {
     int c;
     int i;
     int rgb[3];
-    unsigned short *ip = image[0];
+    unsigned short *ip = GLOBAL_image[0];
 
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col += 256 ) {
@@ -3359,7 +3101,7 @@ kodak_thumb_load_raw() {
     IMAGE_colors = thumb_misc >> 5;
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
-            readShorts(image[row * width + col], IMAGE_colors);
+            readShorts(GLOBAL_image[row * width + col], IMAGE_colors);
         }
     }
     ADOBE_maximum = (1 << (thumb_misc & 31)) - 1;
@@ -3886,7 +3628,7 @@ foveon_sd_load_raw() {
 
     for ( row = 0; row < height; row++ ) {
         memset(pred, 0, sizeof pred);
-        if ( !bit && !GLOBAL_loadFlags && atoi(model + 2) < 14 ) {
+        if ( !bit && !GLOBAL_loadFlags && atoi(GLOBAL_model + 2) < 14 ) {
             read4bytes();
         }
         for ( col = bit = 0; col < width; col++ ) {
@@ -3912,7 +3654,7 @@ foveon_sd_load_raw() {
                 }
             }
             for ( c = 0; c < 3; c++ ) {
-                image[row * width + col][c] = pred[c];
+                GLOBAL_image[row * width + col][c] = pred[c];
             }
         }
     }
@@ -3963,7 +3705,7 @@ foveon_dp_load_raw() {
                 } else {
                     hpred[col & 1] += diff;
                 }
-                image[row * width + col][c] = hpred[col & 1];
+                GLOBAL_image[row * width + col][c] = hpred[col & 1];
             }
         }
     }
@@ -3984,7 +3726,7 @@ foveon_load_camf() {
                      {512, 512}};
     unsigned short hpred[2];
 
-    fseek(GLOBAL_IO_ifp, meta_offset, SEEK_SET);
+    fseek(GLOBAL_IO_ifp, GLOBAL_meta_offset, SEEK_SET);
     type = read4bytes();
     read4bytes();
     read4bytes();
@@ -4189,7 +3931,7 @@ foveon_make_curves(short **curvep, float dq[3], float div[3], float filt) {
     }
 }
 
-#define image ((short (*)[4]) image)
+#define image ((short (*)[4]) GLOBAL_image)
 
 int
 foveon_apply_curve(short *foveonCurve, int i) {
@@ -4282,7 +4024,7 @@ foveon_interpolate() {
             for ( row = dstb[1]; row <= dstb[3]; row++ ) {
                 for ( col = dstb[0]; col <= dstb[2]; col++ ) {
                     for ( c = 0; c < 3; c++ ) {
-                        ddft[i + 1][c][1] += (short) image[row * width + col][c];
+                        ddft[i + 1][c][1] += (short)GLOBAL_image[row * width + col][c];
                     }
                 }
             }
@@ -4664,7 +4406,7 @@ foveon_interpolate() {
         }
     }
 
-    // Transform the image to a different colorspace
+    // Transform the GLOBAL_image to a different colorspace
     for ( pix = image[0]; pix < image[height * width]; pix += 4 ) {
         for ( c = 0; c < 3; c++ ) {
             pix[c] -= foveon_apply_curve(foveonCurve[c], pix[c]);
@@ -4689,7 +4431,7 @@ foveon_interpolate() {
         }
     }
 
-    // Smooth the image bottom-to-top and save at 1/4 scale
+    // Smooth the GLOBAL_image bottom-to-top and save at 1/4 scale
     foveonShrink = (short (*)[3]) calloc((height / 4), (width / 4) * sizeof *foveonShrink);
     memoryError(foveonShrink, "foveon_interpolate()");
     for ( row = height / 4; row--; ) {
@@ -4713,7 +4455,7 @@ foveon_interpolate() {
         }
     }
 
-    // From the 1/4-scale image, smooth right-to-left
+    // From the 1/4-scale GLOBAL_image, smooth right-to-left
     for ( row = 0; row < (height & ~3); row++ ) {
         ipix[0] = ipix[1] = ipix[2] = 0;
         if ( (row & 3) == 0 ) {
@@ -4838,7 +4580,7 @@ crop_masked_pixels() {
     }
     if ( TIFF_CALLBACK_loadRawData == &canon_600_load_raw ||
          TIFF_CALLBACK_loadRawData == &sony_load_raw ||
-         (TIFF_CALLBACK_loadRawData == &eight_bit_load_raw && strncmp(model, "DC2", 3)) ||
+         (TIFF_CALLBACK_loadRawData == &eight_bit_load_raw && strncmp(GLOBAL_model, "DC2", 3)) ||
          TIFF_CALLBACK_loadRawData == &kodak_262_load_raw ||
          (TIFF_CALLBACK_loadRawData == &packed_load_raw && (GLOBAL_loadFlags & 256))) {
         sides:
@@ -5335,7 +5077,7 @@ wavelet_denoise() {
     for ( c = 0; c < nc; c++ ) {
         // Denoise R,G1,B,G3 individually
         for ( i = 0; i < size; i++ ) {
-            fimg[i] = 256 * sqrt(image[i][c] << scale);
+            fimg[i] = 256 * sqrt(GLOBAL_image[i][c] << scale);
         }
         for ( hpass = lev = 0; lev < 5; lev++ ) {
             lpass = size * ((lev & 1) + 1);
@@ -5370,7 +5112,7 @@ wavelet_denoise() {
             hpass = lpass;
         }
         for ( i = 0; i < size; i++ ) {
-            image[i][c] = CLIP(SQR(fimg[i] + fimg[lpass + i]) / 0x10000);
+            GLOBAL_image[i][c] = CLIP(SQR(fimg[i] + fimg[lpass + i]) / 0x10000);
         }
     }
     if ( filters && IMAGE_colors == 3 ) {
@@ -5444,7 +5186,7 @@ scale_colors() {
         memcpy(pre_mul, OPTIONS_values->userMul, sizeof pre_mul);
     }
 
-    if ( OPTIONS_values->useAutoWb || (OPTIONS_values->useCameraWb && cam_mul[0] == -1)) {
+    if ( OPTIONS_values->useAutoWb || (OPTIONS_values->useCameraWb && GLOBAL_cam_mul[0] == -1)) {
         memset(dsum, 0, sizeof dsum);
         bottom = MIN (OPTIONS_values->greyBox[1] + OPTIONS_values->greyBox[3], height);
         right = MIN (OPTIONS_values->greyBox[0] + OPTIONS_values->greyBox[2], width);
@@ -5458,7 +5200,7 @@ scale_colors() {
                                 c = fcol(y, x);
                                 val = BAYER2(y, x);
                             } else {
-                                val = image[y * width + x][c];
+                                val = GLOBAL_image[y * width + x][c];
                             }
                             if ( val > ADOBE_maximum - 25 ) {
                                 goto skip_block;
@@ -5486,7 +5228,7 @@ scale_colors() {
             }
         }
     }
-    if ( OPTIONS_values->useCameraWb && cam_mul[0] != -1 ) {
+    if ( OPTIONS_values->useCameraWb && GLOBAL_cam_mul[0] != -1 ) {
         memset(sum, 0, sizeof sum);
         for ( row = 0; row < 8; row++ )
             for ( col = 0; col < 8; col++ ) {
@@ -5501,8 +5243,8 @@ scale_colors() {
                 pre_mul[c] = (float) sum[c + 4] / sum[c];
             }
         } else {
-            if ( cam_mul[0] && cam_mul[2] ) {
-                memcpy(pre_mul, cam_mul, sizeof pre_mul);
+            if ( GLOBAL_cam_mul[0] && GLOBAL_cam_mul[2] ) {
+                memcpy(pre_mul, GLOBAL_cam_mul, sizeof pre_mul);
             } else {
                 fprintf(stderr, _("%s: Cannot use camera white balance.\n"), CAMERA_IMAGE_information.inputFilename);
             }
@@ -5551,7 +5293,7 @@ scale_colors() {
     }
     size = iheight * iwidth;
     for ( i = 0; i < size * 4; i++ ) {
-        if ( !(val = ((unsigned short *) image)[i]) ) {
+        if ( !(val = ((unsigned short *) GLOBAL_image)[i]) ) {
             continue;
         }
         if ( cblack[4] && cblack[5] ) {
@@ -5560,7 +5302,7 @@ scale_colors() {
         }
         val -= cblack[i & 3];
         val *= scale_mul[i & 3];
-        ((unsigned short *)image)[i] = CLIP(val);
+        ((unsigned short *)GLOBAL_image)[i] = CLIP(val);
     }
     if ((OPTIONS_values->chromaticAberrationCorrection[0] != 1 ||
          OPTIONS_values->chromaticAberrationCorrection[2] != 1) && IMAGE_colors == 3 ) {
@@ -5574,7 +5316,7 @@ scale_colors() {
             img = (unsigned short *)malloc(size * sizeof *img);
             memoryError(img, "scale_colors()");
             for ( i = 0; i < size; i++ ) {
-                img[i] = image[i][c];
+                img[i] = GLOBAL_image[i][c];
             }
             for ( row = 0; row < iheight; row++ ) {
                 ur = fr = (row - iheight * 0.5) * OPTIONS_values->chromaticAberrationCorrection[c] + iheight * 0.5;
@@ -5589,7 +5331,7 @@ scale_colors() {
                     }
                     fc -= uc;
                     pix = img + ur * iwidth + uc;
-                    image[row * iwidth + col][c] =
+                    GLOBAL_image[row * iwidth + col][c] =
                             (pix[0] * (1 - fc) + pix[1] * fc) * (1 - fr) +
                             (pix[iwidth] * (1 - fc) + pix[iwidth + 1] * fc) * fr;
                 }
@@ -5613,7 +5355,7 @@ pre_interpolate() {
             if ( filters == 9 ) {
                 for ( row = 0; row < 3; row++ ) {
                     for ( col = 1; col < 4; col++ ) {
-                        if ( !(image[row * width + col][0] | image[row * width + col][2])) {
+                        if ( !(GLOBAL_image[row * width + col][0] | GLOBAL_image[row * width + col][2])) {
                             goto break2;
                         }
                     }
@@ -5621,7 +5363,7 @@ pre_interpolate() {
                 break2:
                 for ( ; row < height; row += 3 ) {
                     for ( col = (col - 1) % 3 + 1; col < width - 1; col += 3 ) {
-                        img = image + row * width + col;
+                        img = GLOBAL_image + row * width + col;
                         for ( c = 0; c < 3; c += 2 ) {
                             img[0][c] = (img[-1][c] + img[1][c]) >> 1;
                         }
@@ -5634,11 +5376,11 @@ pre_interpolate() {
             for ( row = 0; row < height; row++ ) {
                 for ( col = 0; col < width; col++ ) {
                     c = fcol(row, col);
-                    img[row * width + col][c] = image[(row >> 1) * iwidth + (col >> 1)][c];
+                    img[row * width + col][c] = GLOBAL_image[(row >> 1) * iwidth + (col >> 1)][c];
                 }
             }
-            free(image);
-            image = img;
+            free(GLOBAL_image);
+            GLOBAL_image = img;
             shrink = 0;
         }
     }
@@ -5649,7 +5391,7 @@ pre_interpolate() {
         } else {
             for ( row = FC(1, 0) >> 1; row < height; row += 2 ) {
                 for ( col = FC(row, 1) & 1; col < width; col += 2 ) {
-                    image[row * width + col][1] = image[row * width + col][3];
+                    GLOBAL_image[row * width + col][1] = GLOBAL_image[row * width + col][3];
                 }
             }
             filters &= ~((filters & 0x55555555) << 1);
@@ -5680,7 +5422,7 @@ border_interpolate(int border) {
                 for ( x = col - 1; x != col + 2; x++ ) {
                     if ( y < height && x < width ) {
                         f = fcol(y, x);
-                        sum[f] += image[y * width + x][f];
+                        sum[f] += GLOBAL_image[y * width + x][f];
                         sum[f + 4]++;
                     }
                 }
@@ -5688,7 +5430,7 @@ border_interpolate(int border) {
             f = fcol(row, col);
             for ( c = 0; c < IMAGE_colors; c++ ) {
                 if ( c != f && sum[c + 4] ) {
-                    image[row * width + col][c] = sum[c] / sum[c + 4];
+                    GLOBAL_image[row * width + col][c] = sum[c] / sum[c + 4];
                 }
             }
         }
@@ -5746,7 +5488,7 @@ lin_interpolate() {
     }
     for ( row = 1; row < height - 1; row++ ) {
         for ( col = 1; col < width - 1; col++ ) {
-            pix = image[row * width + col];
+            pix = GLOBAL_image[row * width + col];
             ip = code[row % size][col % size];
             memset(sum, 0, sizeof sum);
             for ( i = *ip++; i--; ip += 3 ) {
@@ -5890,7 +5632,7 @@ vng_interpolate() {
     for ( row = 2; row < height - 2; row++ ) {
         // Do VNG interpolation
         for ( col = 2; col < width - 2; col++ ) {
-            pix = image[row * width + col];
+            pix = GLOBAL_image[row * width + col];
             ip = code[row % prow][col % pcol];
             memset(gval, 0, sizeof gval);
             while ((g = ip[0]) != INT_MAX ) {
@@ -5917,7 +5659,7 @@ vng_interpolate() {
                 }
             }
             if ( gmax == 0 ) {
-                memcpy(brow[2][col], pix, sizeof *image);
+                memcpy(brow[2][col], pix, sizeof *GLOBAL_image);
                 continue;
             }
             thold = gmin + (gmax >> 1);
@@ -5946,15 +5688,15 @@ vng_interpolate() {
             }
         }
         if ( row > 3 ) {
-            // Write buffer to image
-            memcpy(image[(row - 2) * width + 2], brow[0] + 2, (width - 4) * sizeof *image);
+            // Write buffer to GLOBAL_image
+            memcpy(GLOBAL_image[(row - 2) * width + 2], brow[0] + 2, (width - 4) * sizeof *GLOBAL_image);
         }
         for ( g = 0; g < 4; g++ ) {
             brow[(g - 1) & 3] = brow[g];
         }
     }
-    memcpy(image[(row - 2) * width + 2], brow[0] + 2, (width - 4) * sizeof *image);
-    memcpy(image[(row - 1) * width + 2], brow[1] + 2, (width - 4) * sizeof *image);
+    memcpy(GLOBAL_image[(row - 2) * width + 2], brow[0] + 2, (width - 4) * sizeof *GLOBAL_image);
+    memcpy(GLOBAL_image[(row - 1) * width + 2], brow[1] + 2, (width - 4) * sizeof *GLOBAL_image);
     free(brow[4]);
     free(code[0][0]);
 }
@@ -5982,7 +5724,7 @@ ppg_interpolate() {
     // Fill in the green layer with gradients and pattern recognition:
     for ( row = 3; row < height - 3; row++ ) {
         for ( col = 3 + (FC(row, 3) & 1), c = FC(row, col); col < width - 3; col += 2 ) {
-            pix = image + row * width + col;
+            pix = GLOBAL_image + row * width + col;
             for ( i = 0; (d = dir[i]) > 0; i++ ) {
                 guess[i] = (pix[-d][1] + pix[0][c] + pix[d][1]) * 2
                            - pix[-2 * d][c] - pix[2 * d][c];
@@ -6000,7 +5742,7 @@ ppg_interpolate() {
     // Calculate red and blue for each green pixel:
     for ( row = 1; row < height - 1; row++ ) {
         for ( col = 1 + (FC(row, 2) & 1), c = FC(row, col + 1); col < width - 1; col += 2 ) {
-            pix = image + row * width + col;
+            pix = GLOBAL_image + row * width + col;
             for ( i = 0; (d = dir[i]) > 0; c = 2 - c, i++ ) {
                 pix[0][c] = CLIP((pix[-d][c] + pix[d][c] + 2 * pix[0][1]
                                   - pix[-d][1] - pix[d][1]) >> 1);
@@ -6011,7 +5753,7 @@ ppg_interpolate() {
     // Calculate blue for red pixels and vice versa:
     for ( row = 1; row < height - 1; row++ ) {
         for ( col = 1 + (FC(row, 1) & 1), c = 2 - FC(row, col); col < width - 1; col += 2 ) {
-            pix = image + row * width + col;
+            pix = GLOBAL_image + row * width + col;
             for ( i = 0; (d = dir[i] + dir[i + 1]) > 0; i++ ) {
                 diff[i] = ABS(pix[-d][c] - pix[d][c]) +
                           ABS(pix[-d][1] - pix[0][1]) +
@@ -6158,7 +5900,7 @@ xtrans_interpolate(int passes) {
     for ( row = 2; row < height - 2; row++ ) {
         for ( min = ~(max = 0), col = 2; col < width - 2; col++ ) {
             if ( fcol(row, col) == 1 && (min = ~(max = 0))) continue;
-            pix = image + row * width + col;
+            pix = GLOBAL_image + row * width + col;
             hex = allhex[row % 3][col % 3][0];
             if ( !max ) {
                 for ( c = 0; c < 6; c++ ) {
@@ -6194,7 +5936,7 @@ xtrans_interpolate(int passes) {
             mcol = MIN (left + TS, width - 3);
             for ( row = top; row < mrow; row++ ) {
                 for ( col = left; col < mcol; col++ ) {
-                    memcpy(rgb[0][row - top][col - left], image[row * width + col], 6);
+                    memcpy(rgb[0][row - top][col - left], GLOBAL_image[row * width + col], 6);
                 }
             }
             for ( c = 0; c < 3; c++ ) {
@@ -6207,7 +5949,7 @@ xtrans_interpolate(int passes) {
                     if ( (f = fcol(row, col)) == 1 ) {
                         continue;
                     }
-                    pix = image + row * width + col;
+                    pix = GLOBAL_image + row * width + col;
                     hex = allhex[row % 3][col % 3][0];
                     color[1][0] = 174 * (pix[hex[1]][1] + pix[hex[0]][1]) -
                                   46 * (pix[2 * hex[1]][1] + pix[2 * hex[0]][1]);
@@ -6237,7 +5979,7 @@ xtrans_interpolate(int passes) {
                     for ( row = top + 2; row < mrow - 2; row++ ) {
                         for ( col = left + 2; col < mcol - 2; col++ ) {
                             if ((f = fcol(row, col)) == 1 ) continue;
-                            pix = image + row * width + col;
+                            pix = GLOBAL_image + row * width + col;
                             hex = allhex[row % 3][col % 3][1];
                             for ( d = 3; d < 6; d++ ) {
                                 rix = &rgb[(d - 2) ^ !((row - sgrow) % 3)][row - top][col - left];
@@ -6409,7 +6151,7 @@ xtrans_interpolate(int passes) {
                         }
                     }
                     for ( c = 0; c < 3; c++ ) {
-                        image[(row + top) * width + col + left][c] = avg[c] / avg[3];
+                        GLOBAL_image[(row + top) * width + col + left][c] = avg[c] / avg[3];
                     }
                 }
             }
@@ -6470,7 +6212,7 @@ ahd_interpolate() {
             for ( row = top; row < top + TS && row < height - 2; row++ ) {
                 col = left + (FC(row, left) & 1);
                 for ( c = FC(row, col); col < left + TS && col < width - 2; col += 2 ) {
-                    pix = image + row * width + col;
+                    pix = GLOBAL_image + row * width + col;
                     val = ((pix[-1][1] + pix[0][c] + pix[1][1]) * 2
                            - pix[-2][c] - pix[2][c]) >> 2;
                     rgb[0][row - top][col - left][1] = ULIM(val, pix[-1][1], pix[1][1]);
@@ -6484,7 +6226,7 @@ ahd_interpolate() {
             for ( d = 0; d < 2; d++ ) {
                 for ( row = top + 1; row < top + TS - 1 && row < height - 3; row++ ) {
                     for ( col = left + 1; col < left + TS - 1 && col < width - 3; col++ ) {
-                        pix = image + row * width + col;
+                        pix = GLOBAL_image + row * width + col;
                         rix = &rgb[d][row - top][col - left];
                         lix = &lab[d][row - top][col - left];
                         if ( (c = 2 - FC(row, col)) == 1 ) {
@@ -6549,11 +6291,11 @@ ahd_interpolate() {
                     }
                     if ( hm[0] != hm[1] ) {
                         for ( c = 0; c < 3; c++ ) {
-                            image[row * width + col][c] = rgb[hm[1] > hm[0]][tr][tc][c];
+                            GLOBAL_image[row * width + col][c] = rgb[hm[1] > hm[0]][tr][tc][c];
                         }
                     } else {
                         for ( c = 0; c < 3; c++ ) {
-                            image[row * width + col][c] = (rgb[0][tr][tc][c] + rgb[1][tr][tc][c]) >> 1;
+                            GLOBAL_image[row * width + col][c] = (rgb[0][tr][tc][c] + rgb[1][tr][tc][c]) >> 1;
                         }
                     }
                 }
@@ -6583,11 +6325,11 @@ median_filter() {
             fprintf(stderr, _("Median filter pass %d...\n"), pass);
         }
         for ( c = 0; c < 3; c += 2 ) {
-            for ( pix = image; pix < image + width * height; pix++ ) {
+            for ( pix = GLOBAL_image; pix < GLOBAL_image + width * height; pix++ ) {
                 pix[0][3] = pix[0][c];
             }
-            for ( pix = image + width; pix < image + width * (height - 1); pix++ ) {
-                if ( (pix - image + 1) % width < 2 ) {
+            for ( pix = GLOBAL_image + width; pix < GLOBAL_image + width * (height - 1); pix++ ) {
+                if ((pix - GLOBAL_image + 1) % width < 2 ) {
                     continue;
                 }
                 for ( k = 0, i = -width; i <= width; i += width ) {
@@ -6639,7 +6381,7 @@ blend_highlights() {
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
             for ( c = 0; c < IMAGE_colors; c++ ) {
-                if ( image[row * width + col][c] > clip ) {
+                if ( GLOBAL_image[row * width + col][c] > clip ) {
                     break;
                 }
             }
@@ -6647,7 +6389,7 @@ blend_highlights() {
                 continue;
             }
             for ( c = 0; c < IMAGE_colors; c++ ) {
-                cam[0][c] = image[row * width + col][c];
+                cam[0][c] = GLOBAL_image[row * width + col][c];
                 cam[1][c] = MIN(cam[0][c], clip);
             }
             for ( i = 0; i < 2; i++ ) {
@@ -6669,7 +6411,7 @@ blend_highlights() {
                 }
             }
             for ( c = 0; c < IMAGE_colors; c++ ) {
-                image[row * width + col][c] = cam[0][c] / IMAGE_colors;
+                GLOBAL_image[row * width + col][c] = cam[0][c] / IMAGE_colors;
             }
         }
     }
@@ -6734,7 +6476,7 @@ recover_highlights() {
                     sum = wgt = count = 0;
                     for ( row = mrow * SCALE; row < (mrow + 1) * SCALE; row++ ) {
                         for ( col = mcol * SCALE; col < (mcol + 1) * SCALE; col++ ) {
-                            pixel = image[row * width + col];
+                            pixel = GLOBAL_image[row * width + col];
                             if ( pixel[c] / hsat[c] == 1 && pixel[kc] > 24000 ) {
                                 sum += pixel[c];
                                 wgt += pixel[kc];
@@ -6786,7 +6528,7 @@ recover_highlights() {
                 for ( mcol = 0; mcol < wide; mcol++ ) {
                     for ( row = mrow * SCALE; row < (mrow + 1) * SCALE; row++ ) {
                         for ( col = mcol * SCALE; col < (mcol + 1) * SCALE; col++ ) {
-                            pixel = image[row * width + col];
+                            pixel = GLOBAL_image[row * width + col];
                             if ( pixel[c] / hsat[c] > 1 ) {
                                 val = pixel[kc] * map[mrow * wide + mcol];
                                 if ( pixel[c] < val ) {
@@ -6896,7 +6638,7 @@ parse_makernote(int base, int uptag) {
     char buf[10];
 
     // The MakerNote might have its own TIFF header (possibly with its own byte-order!), or it might just be a table.
-    if ( !strcmp(make, "Nokia") ) {
+    if ( !strcmp(GLOBAL_make, "Nokia") ) {
         return;
     }
     fread(buf, 1, 10, GLOBAL_IO_ifp);
@@ -6918,7 +6660,7 @@ parse_makernote(int base, int uptag) {
             if ( wb[1] == 256 && wb[3] == 256 &&
                  wb[0] > 256 && wb[0] < 640 && wb[2] > 256 && wb[2] < 640 ) {
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c] = wb[c];
+                    GLOBAL_cam_mul[c] = wb[c];
                 }
             }
         }
@@ -6960,7 +6702,7 @@ parse_makernote(int base, int uptag) {
                             fseek(GLOBAL_IO_ifp, -4, SEEK_CUR);
                         } else {
                             fseek(GLOBAL_IO_ifp, -10, SEEK_CUR);
-                            if ( !strncmp(make, "SAMSUNG", 7) ) {
+                            if ( !strncmp(GLOBAL_make, "SAMSUNG", 7) ) {
                                 base = ftell(GLOBAL_IO_ifp);
                             }
                         }
@@ -6980,7 +6722,7 @@ parse_makernote(int base, int uptag) {
         tiff_get(base, &tag, &type, &len, &save);
         tag |= uptag << 16;
 
-        if ( tag == 2 && strstr(make, "NIKON") && !iso_speed ) {
+        if ( tag == 2 && strstr(GLOBAL_make, "NIKON") && !iso_speed ) {
             iso_speed = (read2bytes(), read2bytes());
         }
 
@@ -6998,7 +6740,7 @@ parse_makernote(int base, int uptag) {
             shot_order = (read2bytes(), read2bytes());
         }
 
-        if ( (tag == 4 || tag == 0x114) && !strncmp(make, "KONICA", 6) ) {
+        if ( (tag == 4 || tag == 0x114) && !strncmp(GLOBAL_make, "KONICA", 6) ) {
             fseek(GLOBAL_IO_ifp, tag == 4 ? 140 : 160, SEEK_CUR);
             switch ( read2bytes() ) {
                 case 72:
@@ -7021,13 +6763,13 @@ parse_makernote(int base, int uptag) {
             shot_order = read4bytes();
         }
 
-        if ( tag == 9 && !strcmp(make, "Canon") ) {
+        if ( tag == 9 && !strcmp(GLOBAL_make, "Canon") ) {
             fread(artist, 64, 1, GLOBAL_IO_ifp);
         }
 
         if ( tag == 0xc && len == 4 ) {
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[(c << 1 | c >> 1) & 3] = readDouble(type);
+                GLOBAL_cam_mul[(c << 1 | c >> 1) & 3] = readDouble(type);
             }
         }
 
@@ -7046,7 +6788,7 @@ parse_makernote(int base, int uptag) {
             unique_id = read4bytes();
         }
 
-        if ( tag == 0x11 && is_raw && !strncmp(make, "NIKON", 5)) {
+        if ( tag == 0x11 && is_raw && !strncmp(GLOBAL_make, "NIKON", 5)) {
             fseek(GLOBAL_IO_ifp, read4bytes() + base, SEEK_SET);
             parse_tiff_ifd(base);
         }
@@ -7059,17 +6801,17 @@ parse_makernote(int base, int uptag) {
             fread(buf, 1, 10, GLOBAL_IO_ifp);
             if ( !strncmp(buf, "NRW ", 4) ) {
                 fseek(GLOBAL_IO_ifp, strcmp(buf + 4, "0100") ? 46 : 1546, SEEK_CUR);
-                cam_mul[0] = read4bytes() << 2;
-                cam_mul[1] = read4bytes() + read4bytes();
-                cam_mul[2] = read4bytes() << 2;
+                GLOBAL_cam_mul[0] = read4bytes() << 2;
+                GLOBAL_cam_mul[1] = read4bytes() + read4bytes();
+                GLOBAL_cam_mul[2] = read4bytes() << 2;
             }
         }
 
         if ( tag == 0x15 && type == 2 && is_raw ) {
-            fread(model, 64, 1, GLOBAL_IO_ifp);
+            fread(GLOBAL_model, 64, 1, GLOBAL_IO_ifp);
         }
 
-        if ( strstr(make, "PENTAX") ) {
+        if ( strstr(GLOBAL_make, "PENTAX") ) {
             if ( tag == 0x1b ) {
                 tag = 0x1018;
             }
@@ -7088,7 +6830,7 @@ parse_makernote(int base, int uptag) {
             c = wbi < 18 ? "012347800000005896"[wbi] - '0' : 0;
             fseek(GLOBAL_IO_ifp, 8 + c * 32, SEEK_CUR);
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1) ^ 1] = read4bytes();
+                GLOBAL_cam_mul[c ^ (c >> 1) ^ 1] = read4bytes();
             }
         }
 
@@ -7122,7 +6864,7 @@ parse_makernote(int base, int uptag) {
         }
 
         if ( tag == 0x8c || tag == 0x96 ) {
-            meta_offset = ftell(GLOBAL_IO_ifp);
+            GLOBAL_meta_offset = ftell(GLOBAL_IO_ifp);
         }
 
         if ( tag == 0x97 ) {
@@ -7133,19 +6875,19 @@ parse_makernote(int base, int uptag) {
                 case 100:
                     fseek(GLOBAL_IO_ifp, 68, SEEK_CUR);
                     for ( c = 0; c < 4; c++ ) {
-                        cam_mul[(c >> 1) | ((c & 1) << 1)] = read2bytes();
+                        GLOBAL_cam_mul[(c >> 1) | ((c & 1) << 1)] = read2bytes();
                     }
                     break;
                 case 102:
                     fseek(GLOBAL_IO_ifp, 6, SEEK_CUR);
                     for ( c = 0; c < 4; c++ ) {
-                        cam_mul[c ^ (c >> 1)] = read2bytes();
+                        GLOBAL_cam_mul[c ^ (c >> 1)] = read2bytes();
                     }
                     break;
                 case 103:
                     fseek(GLOBAL_IO_ifp, 16, SEEK_CUR);
                     for ( c = 0; c < 4; c++ ) {
-                        cam_mul[c] = read2bytes();
+                        GLOBAL_cam_mul[c] = read2bytes();
                     }
                     break;
                 default:
@@ -7163,14 +6905,14 @@ parse_makernote(int base, int uptag) {
             GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
             fseek(GLOBAL_IO_ifp, 140, SEEK_CUR);
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[c] = read4bytes();
+                GLOBAL_cam_mul[c] = read4bytes();
             }
         }
 
         if ( tag == 0xa4 && type == 3 ) {
             fseek(GLOBAL_IO_ifp, wbi * 48, SEEK_CUR);
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[c] = read2bytes();
+                GLOBAL_cam_mul[c] = read2bytes();
             }
         }
 
@@ -7183,7 +6925,7 @@ parse_makernote(int base, int uptag) {
             }
             i = "66666>666;6A;:;55"[ver97 - 200] - '0';
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1) ^ (i & 1)] = unsignedShortEndianSwap(buf97 + (i & -2) + c * 2);
+                GLOBAL_cam_mul[c ^ (c >> 1) ^ (i & 1)] = unsignedShortEndianSwap(buf97 + (i & -2) + c * 2);
             }
         }
 
@@ -7199,12 +6941,12 @@ parse_makernote(int base, int uptag) {
 
         if ( tag == 0x201 && len == 4 ) {
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1)] = read2bytes();
+                GLOBAL_cam_mul[c ^ (c >> 1)] = read2bytes();
             }
         }
 
         if ( tag == 0x220 && type == 7 ) {
-            meta_offset = ftell(GLOBAL_IO_ifp);
+            GLOBAL_meta_offset = ftell(GLOBAL_IO_ifp);
         }
 
         if ( tag == 0x401 && type == 4 && len == 4 ) {
@@ -7231,8 +6973,8 @@ parse_makernote(int base, int uptag) {
 
         if ( tag == 0xe80 && len == 256 && type == 7 ) {
             fseek(GLOBAL_IO_ifp, 48, SEEK_CUR);
-            cam_mul[0] = read2bytes() * 508 * 1.078 / 0x10000;
-            cam_mul[2] = read2bytes() * 382 * 1.173 / 0x10000;
+            GLOBAL_cam_mul[0] = read2bytes() * 508 * 1.078 / 0x10000;
+            GLOBAL_cam_mul[2] = read2bytes() * 382 * 1.173 / 0x10000;
         }
 
         if ( tag == 0xf00 && type == 7 ) {
@@ -7263,18 +7005,18 @@ parse_makernote(int base, int uptag) {
         }
 
         if ( tag == 0x1017 || tag == 0x20400100 ) {
-            cam_mul[0] = read2bytes() / 256.0;
+            GLOBAL_cam_mul[0] = read2bytes() / 256.0;
         }
 
         if ( tag == 0x1018 || tag == 0x20400100 ) {
-            cam_mul[2] = read2bytes() / 256.0;
+            GLOBAL_cam_mul[2] = read2bytes() / 256.0;
         }
 
         if ( tag == 0x2011 && len == 2 ) {
             get2_256:
             GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-            cam_mul[0] = read2bytes() / 256.0;
-            cam_mul[2] = read2bytes() / 256.0;
+            GLOBAL_cam_mul[0] = read2bytes() / 256.0;
+            GLOBAL_cam_mul[2] = read2bytes() / 256.0;
         }
 
         if ( (tag | 0x70) == 0x2070 && (type == 4 || type == 13) ) {
@@ -7298,7 +7040,7 @@ parse_makernote(int base, int uptag) {
             i = len == 582 ? 50 : len == 653 ? 68 : len == 5120 ? 142 : 126;
             fseek(GLOBAL_IO_ifp, i, SEEK_CUR);
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1)] = read2bytes();
+                GLOBAL_cam_mul[c ^ (c >> 1)] = read2bytes();
             };
             for ( i += 18; i <= len; i += 10 ) {
                 read2bytes();
@@ -7313,19 +7055,19 @@ parse_makernote(int base, int uptag) {
 
         if ( tag == 0x4021 && read4bytes() && read4bytes() ) {
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c] = 1024;
+                GLOBAL_cam_mul[c] = 1024;
             }
         }
 
         if ( tag == 0xa021 ) {
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1)] = read4bytes();
+                GLOBAL_cam_mul[c ^ (c >> 1)] = read4bytes();
             }
         }
 
         if ( tag == 0xa028 ) {
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1)] -= read4bytes();
+                GLOBAL_cam_mul[c ^ (c >> 1)] -= read4bytes();
             }
         }
 
@@ -7382,7 +7124,7 @@ parse_exif(int base) {
     unsigned c;
     double expo;
 
-    kodak = !strncmp(make, "EASTMAN", 7) && numberOfRawImages < 3;
+    kodak = !strncmp(GLOBAL_make, "EASTMAN", 7) && numberOfRawImages < 3;
     entries = read2bytes();
     while ( entries-- ) {
         tiff_get(base, &tag, &type, &len, &save);
@@ -7541,7 +7283,7 @@ parse_mos(int offset) {
         if ( !strcmp(data, "ShootObj_back_type") ) {
             fscanf(GLOBAL_IO_ifp, "%d", &i);
             if ( (unsigned) i < sizeof mod / sizeof(*mod) ) {
-                strcpy(model, mod[i]);
+                strcpy(GLOBAL_model, mod[i]);
             }
         }
 
@@ -7579,12 +7321,12 @@ parse_mos(int offset) {
             GLOBAL_flipsMask = i - GLOBAL_flipsMask;
         }
 
-        if ( !strcmp(data, "NeutObj_neutrals") && !cam_mul[0] ) {
+        if ( !strcmp(data, "NeutObj_neutrals") && !GLOBAL_cam_mul[0] ) {
             for ( c = 0; c < 4; c++ ) {
                 fscanf(GLOBAL_IO_ifp, "%d", neut + c);
             }
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[c] = (float) neut[0] / neut[c + 1];
+                GLOBAL_cam_mul[c] = (float) neut[0] / neut[c + 1];
             }
         }
 
@@ -7646,7 +7388,7 @@ parse_kodak_ifd(int base) {
             // WB set in software
             fseek(GLOBAL_IO_ifp, 40, SEEK_CUR);
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c] = 2048.0 / read2bytes();
+                GLOBAL_cam_mul[c] = 2048.0 / read2bytes();
             }
             wbi = -2;
         }
@@ -7657,7 +7399,7 @@ parse_kodak_ifd(int base) {
 
         if ( tag == 2120 + wbi && wbi >= 0 ) {
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[c] = 2048.0 / readDouble(type);
+                GLOBAL_cam_mul[c] = 2048.0 / readDouble(type);
             }
         }
 
@@ -7672,7 +7414,7 @@ parse_kodak_ifd(int base) {
                 for ( num = i = 0; i < 4; i++ ) {
                     num += readDouble(type) * pow(wbtemp / 100.0, i);
                 }
-                cam_mul[c] = 2048 / (num * mul[c]);
+                GLOBAL_cam_mul[c] = 2048 / (num * mul[c]);
             }
         }
 
@@ -7690,7 +7432,7 @@ parse_kodak_ifd(int base) {
 
         if ( (unsigned) wbi < 7 && tag == wbtag[wbi] ) {
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[c] = read4bytes();
+                GLOBAL_cam_mul[c] = read4bytes();
             }
         }
 
@@ -7778,7 +7520,7 @@ int parse_tiff_ifd(int base) {
             case 17:
             case 18:
                 if ( type == 3 && len == 1 ) {
-                    cam_mul[(tag - 17) * 2] = read2bytes() / 256.0;
+                    GLOBAL_cam_mul[(tag - 17) * 2] = read2bytes() / 256.0;
                 }
                 break;
             case 23:
@@ -7795,15 +7537,15 @@ int parse_tiff_ifd(int base) {
             case 36:
             case 37:
             case 38:
-                cam_mul[tag - 36] = read2bytes();
+                GLOBAL_cam_mul[tag - 36] = read2bytes();
                 break;
             case 39:
-                if ( len < 50 || cam_mul[0] ) {
+                if ( len < 50 || GLOBAL_cam_mul[0] ) {
                     break;
                 }
                 fseek(GLOBAL_IO_ifp, 12, SEEK_CUR);
                 for ( c = 0; c < 3; c++ ) {
-                    cam_mul[c] = read2bytes();
+                    GLOBAL_cam_mul[c] = read2bytes();
                 }
                 break;
             case 46:
@@ -7859,11 +7601,11 @@ int parse_tiff_ifd(int base) {
                 break;
             case 271:
                 // Make
-                fgets(make, 64, GLOBAL_IO_ifp);
+                fgets(GLOBAL_make, 64, GLOBAL_IO_ifp);
                 break;
             case 272:
                 // Model
-                fgets(model, 64, GLOBAL_IO_ifp);
+                fgets(GLOBAL_model, 64, GLOBAL_IO_ifp);
                 break;
             case 280:
                 // Panasonic RW2 offset
@@ -7915,7 +7657,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 61454:
                 for ( c = 0; c < 3; c++ ) {
-                    cam_mul[(4 - c) % 3] = readInt(type);
+                    GLOBAL_cam_mul[(4 - c) % 3] = readInt(type);
                 }
                 break;
             case 305:
@@ -7959,7 +7701,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 330:
                 // SubIFDs
-                if ( !strcmp(model, "DSLR-A100") && ifdArray[ifd].width == 3872 ) {
+                if ( !strcmp(GLOBAL_model, "DSLR-A100") && ifdArray[ifd].width == 3872 ) {
                     TIFF_CALLBACK_loadRawData = &sony_arw_load_raw;
                     GLOBAL_IO_profileOffset = read4bytes() + base;
                     ifd++;
@@ -7975,7 +7717,7 @@ int parse_tiff_ifd(int base) {
                 }
                 break;
             case 400:
-                strcpy(make, "Sarnoff");
+                strcpy(GLOBAL_make, "Sarnoff");
                 ADOBE_maximum = 0xfff;
                 break;
             case 28688:
@@ -8003,15 +7745,15 @@ int parse_tiff_ifd(int base) {
                 break;
             case 29443:
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c ^ (c < 2)] = read2bytes();
+                    GLOBAL_cam_mul[c ^ (c < 2)] = read2bytes();
                 }
                 break;
             case 29459:
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c] = read2bytes();
+                    GLOBAL_cam_mul[c] = read2bytes();
                 }
-                i = (cam_mul[1] == 1024 && cam_mul[2] == 1024) << 1;
-                SWAP (cam_mul[i], cam_mul[i + 1])
+                i = (GLOBAL_cam_mul[1] == 1024 && GLOBAL_cam_mul[2] == 1024) << 1;
+                SWAP (GLOBAL_cam_mul[i], GLOBAL_cam_mul[i + 1])
                 break;
             case 33405:
                 // Model2
@@ -8064,7 +7806,7 @@ int parse_tiff_ifd(int base) {
             case 34306:
                 // Leaf white balance
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c ^ 1] = 4096.0 / read2bytes();
+                    GLOBAL_cam_mul[c ^ 1] = 4096.0 / read2bytes();
                 }
                 break;
             case 34307:
@@ -8092,7 +7834,7 @@ int parse_tiff_ifd(int base) {
                 // Leaf metadata
                 parse_mos(ftell(GLOBAL_IO_ifp));
             case 34303:
-                strcpy(make, "Leaf");
+                strcpy(GLOBAL_make, "Leaf");
                 break;
             case 34665:
                 // EXIF tag
@@ -8148,7 +7890,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 46275:
                 // Imacon tags
-                strcpy(make, "Imacon");
+                strcpy(GLOBAL_make, "Imacon");
                 GLOBAL_IO_profileOffset = ftell(GLOBAL_IO_ifp);
                 ima_len = len;
                 break;
@@ -8172,7 +7914,7 @@ int parse_tiff_ifd(int base) {
                 }
                 fseek(GLOBAL_IO_ifp, 52, SEEK_CUR);
                 for ( c = 0; c < 3; c++ ) {
-                    cam_mul[c] = readDouble(11);
+                    GLOBAL_cam_mul[c] = readDouble(11);
                 }
                 fseek(GLOBAL_IO_ifp, 114, SEEK_CUR);
                 GLOBAL_flipsMask = (read2bytes() >> 7) * 90;
@@ -8184,7 +7926,7 @@ int parse_tiff_ifd(int base) {
                     THE_image.height = height;
                     left_margin = top_margin = filters = GLOBAL_flipsMask = 0;
                 }
-                snprintf(model, 64, "Ixpress %d-Mp", height * width / 1000000);
+                snprintf(GLOBAL_model, 64, "Ixpress %d-Mp", height * width / 1000000);
                 TIFF_CALLBACK_loadRawData = &imacon_full_load_raw;
                 if ( filters ) {
                     if ( left_margin & 1 ) {
@@ -8203,14 +7945,14 @@ int parse_tiff_ifd(int base) {
                 fread(cbuf, 1, len, GLOBAL_IO_ifp);
                 for ( cp = cbuf - 1; cp && cp < cbuf + len; cp = strchr(cp, '\n') ) {
                     if ( !strncmp(++cp, "Neutral ", 8)) {
-                        sscanf(cp + 8, "%f %f %f", cam_mul, cam_mul + 1, cam_mul + 2);
+                        sscanf(cp + 8, "%f %f %f", GLOBAL_cam_mul, GLOBAL_cam_mul + 1, GLOBAL_cam_mul + 2);
                     }
                 }
                 free(cbuf);
                 break;
             case 50458:
-                if ( !make[0] ) {
-                    strcpy(make, "Hasselblad");
+                if ( !GLOBAL_make[0] ) {
+                    strcpy(GLOBAL_make, "Hasselblad");
                 }
                 break;
             case 50459:
@@ -8230,19 +7972,19 @@ int parse_tiff_ifd(int base) {
                 for ( c = 0; c < 4; c++ ) {
                     GLOBAL_dngVersion = (GLOBAL_dngVersion << 8) + fgetc(GLOBAL_IO_ifp);
                 }
-                if ( !make[0] ) {
-                    strcpy(make, "DNG");
+                if ( !GLOBAL_make[0] ) {
+                    strcpy(GLOBAL_make, "DNG");
                 }
                 is_raw = 1;
                 break;
             case 50708:
                 // UniqueCameraModel
-                if ( model[0] ) {
+                if ( GLOBAL_model[0] ) {
                     break;
                 }
-                fgets(make, 64, GLOBAL_IO_ifp);
-                if ( (cp = strchr(make, ' ')) ) {
-                    strcpy(model, cp + 1);
+                fgets(GLOBAL_make, 64, GLOBAL_IO_ifp);
+                if ( (cp = strchr(GLOBAL_make, ' ')) ) {
+                    strcpy(GLOBAL_model, cp + 1);
                     *cp = 0;
                 }
                 break;
@@ -8384,7 +8126,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 51009:
                 // OpcodeList2
-                meta_offset = ftell(GLOBAL_IO_ifp);
+                GLOBAL_meta_offset = ftell(GLOBAL_IO_ifp);
                 break;
             case 64772:
                 // Kodak P-series
@@ -8435,9 +8177,9 @@ int parse_tiff_ifd(int base) {
         cam_xyz_coeff(cmatrix, cam_xyz);
     }
     if ( asn[0] ) {
-        cam_mul[3] = 0;
+        GLOBAL_cam_mul[3] = 0;
         for ( c = 0; c < IMAGE_colors; c++ ) {
-            cam_mul[c] = 1 / asn[c];
+            GLOBAL_cam_mul[c] = 1 / asn[c];
         };
     }
     if ( !use_cm ) {
@@ -8559,11 +8301,11 @@ apply_tiff() {
                 goto slr;
             case 0:
             case 1:
-                if ( !strncmp(make, "OLYMPUS", 7) &&
+                if ( !strncmp(GLOBAL_make, "OLYMPUS", 7) &&
                      ifdArray[raw].bytes * 2 == THE_image.width * THE_image.height * 3 ) {
                     GLOBAL_loadFlags = 24;
                 }
-                if ( !strcmp(make, "SONY") && THE_image.bitsPerSample < 14 &&
+                if ( !strcmp(GLOBAL_make, "SONY") && THE_image.bitsPerSample < 14 &&
                      ifdArray[raw].bytes == THE_image.width * THE_image.height * 2 ) {
                     THE_image.bitsPerSample = 14;
                 }
@@ -8587,7 +8329,7 @@ apply_tiff() {
                         GLOBAL_loadFlags = 0;
                     case 16:
                         TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
-                        if ( !strncmp(make, "OLYMPUS", 7) &&
+                        if ( !strncmp(GLOBAL_make, "OLYMPUS", 7) &&
                              ifdArray[raw].bytes * 7 > THE_image.width * THE_image.height )
                             TIFF_CALLBACK_loadRawData = &olympus_load_raw;
                 }
@@ -8610,7 +8352,7 @@ apply_tiff() {
                 } else {
                     if ( THE_image.width * THE_image.height * 3 == ifdArray[raw].bytes * 2 ) {
                         TIFF_CALLBACK_loadRawData = &packed_load_raw;
-                        if ( model[0] == 'N' ) {
+                        if ( GLOBAL_model[0] == 'N' ) {
                             GLOBAL_loadFlags = 80;
                         }
                     } else {
@@ -8657,8 +8399,8 @@ apply_tiff() {
     if ( !GLOBAL_dngVersion ) {
         if ((tiff_samples == 3 && ifdArray[raw].bytes && THE_image.bitsPerSample != 14 &&
              (tiff_compress & -16) != 32768)
-            || (THE_image.bitsPerSample == 8 && strncmp(make, "Phase", 5) &&
-                !strcasestr(make, "Kodak") && !strstr(model2, "DEBUG RAW"))) {
+            || (THE_image.bitsPerSample == 8 && strncmp(GLOBAL_make, "Phase", 5) &&
+                !strcasestr(GLOBAL_make, "Kodak") && !strstr(model2, "DEBUG RAW"))) {
             is_raw = 0;
         }
     }
@@ -8687,7 +8429,7 @@ apply_tiff() {
                 if ( ifdArray[thm].bps <= 8 ) {
                     write_thumb = &ppm_thumb;
                 } else {
-                    if ( !strcmp(make, "Imacon") ) {
+                    if ( !strcmp(GLOBAL_make, "Imacon") ) {
                         write_thumb = &ppm16_thumb;
                     } else {
                         CALLBACK_loadThumbnailRawData = &kodak_thumb_load_raw;
@@ -8734,9 +8476,9 @@ parse_minolta(int base) {
             case 0x574247:
                 // WBG
                 read4bytes();
-                i = strcmp(model, "DiMAGE A200") ? 0 : 3;
+                i = strcmp(GLOBAL_model, "DiMAGE A200") ? 0 : 3;
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c ^ (c >> 1) ^ i] = read2bytes();
+                    GLOBAL_cam_mul[c ^ (c >> 1) ^ i] = read2bytes();
                 };
                 break;
             case 0x545457:
@@ -8885,9 +8627,9 @@ parse_ciff(int offset, int length, int depth) {
         }
 
         if ( type == 0x080a ) {
-            fread(make, 64, 1, GLOBAL_IO_ifp);
-            fseek(GLOBAL_IO_ifp, strlen(make) - 63, SEEK_CUR);
-            fread(model, 64, 1, GLOBAL_IO_ifp);
+            fread(GLOBAL_make, 64, 1, GLOBAL_IO_ifp);
+            fseek(GLOBAL_IO_ifp, strlen(GLOBAL_make) - 63, SEEK_CUR);
+            fread(GLOBAL_model, 64, 1, GLOBAL_IO_ifp);
         }
 
         if ( type == 0x1810 ) {
@@ -8931,13 +8673,13 @@ parse_ciff(int offset, int length, int depth) {
                 // Pro90, G1
                 fseek(GLOBAL_IO_ifp, 118, SEEK_CUR);
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c ^ 2] = read2bytes();
+                    GLOBAL_cam_mul[c ^ 2] = read2bytes();
                 }
             } else {
                 // G2, S30, S40
                 fseek(GLOBAL_IO_ifp, 98, SEEK_CUR);
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c ^ (c >> 1) ^ 1] = read2bytes();
+                    GLOBAL_cam_mul[c ^ (c >> 1) ^ 1] = read2bytes();
                 }
             }
         }
@@ -8947,17 +8689,17 @@ parse_ciff(int offset, int length, int depth) {
                 // EOS D30
                 fseek(GLOBAL_IO_ifp, 72, SEEK_CUR);
                 for ( c = 0; c < 4; c++ ) {
-                    cam_mul[c ^ (c >> 1)] = 1024.0 / read2bytes();
+                    GLOBAL_cam_mul[c ^ (c >> 1)] = 1024.0 / read2bytes();
                 }
                 if ( !wbi ) {
                     // use my auto white balance
-                    cam_mul[0] = -1;
+                    GLOBAL_cam_mul[0] = -1;
                 }
             } else {
-                if ( !cam_mul[0] ) {
+                if ( !GLOBAL_cam_mul[0] ) {
                     if ( read2bytes() == key[0] ) {
                         // Pro1, G6, S60, S70
-                        c = (strstr(model, "Pro1") ?
+                        c = (strstr(GLOBAL_model, "Pro1") ?
                              "012346000000000000" : "01345:000000006008")[wbi] - '0' + 2;
                     } else {                /* G3, G5, S45, S50 */
                         c = "023457000000006000"[wbi] - '0';
@@ -8965,10 +8707,10 @@ parse_ciff(int offset, int length, int depth) {
                     }
                     fseek(GLOBAL_IO_ifp, 78 + c * 8, SEEK_CUR);
                     for ( c = 0; c < 4; c++ ) {
-                        cam_mul[c ^ (c >> 1) ^ 1] = read2bytes() ^ key[c & 1];
+                        GLOBAL_cam_mul[c ^ (c >> 1) ^ 1] = read2bytes() ^ key[c & 1];
                     }
                     if ( !wbi ) {
-                        cam_mul[0] = -1;
+                        GLOBAL_cam_mul[0] = -1;
                     }
                 }
             }
@@ -8981,7 +8723,7 @@ parse_ciff(int offset, int length, int depth) {
             }
             fseek(GLOBAL_IO_ifp, 2 + wbi * 8, SEEK_CUR);
             for ( c = 0; c < 4; c++ ) {
-                cam_mul[c ^ (c >> 1)] = read2bytes();
+                GLOBAL_cam_mul[c ^ (c >> 1)] = read2bytes();
             }
         }
 
@@ -9086,8 +8828,8 @@ parse_rollei() {
     if ( mktime(&t) > 0 ) {
         timestamp = mktime(&t);
     }
-    strcpy(make, "Rollei");
-    strcpy(model, "d530flex");
+    strcpy(GLOBAL_make, "Rollei");
+    strcpy(GLOBAL_model, "d530flex");
     write_thumb = & rollei_thumb;
 }
 
@@ -9107,7 +8849,7 @@ parse_sinar_ia() {
         read4bytes();
         fread(str, 8, 1, GLOBAL_IO_ifp);
         if ( !strcmp(str, "META") ) {
-            meta_offset = off;
+            GLOBAL_meta_offset = off;
         }
         if ( !strcmp(str, "THUMB") ) {
             thumb_offset = off;
@@ -9116,11 +8858,11 @@ parse_sinar_ia() {
             GLOBAL_IO_profileOffset = off;
         }
     }
-    fseek(GLOBAL_IO_ifp, meta_offset + 20, SEEK_SET);
-    fread(make, 64, 1, GLOBAL_IO_ifp);
-    make[63] = 0;
-    if ( (cp = strchr(make, ' ')) ) {
-        strcpy(model, cp + 1);
+    fseek(GLOBAL_IO_ifp, GLOBAL_meta_offset + 20, SEEK_SET);
+    fread(GLOBAL_make, 64, 1, GLOBAL_IO_ifp);
+    GLOBAL_make[63] = 0;
+    if ( (cp = strchr(GLOBAL_make, ' ')) ) {
+        strcpy(GLOBAL_model, cp + 1);
         *cp = 0;
     }
     THE_image.width = read2bytes();
@@ -9174,7 +8916,7 @@ parse_phase_one(int base) {
                 break;
             case 0x107:
                 for ( c = 0; c < 3; c++ ) {
-                    cam_mul[c] = readDouble(11);
+                    GLOBAL_cam_mul[c] = readDouble(11);
                 }
                 break;
             case 0x108:
@@ -9202,7 +8944,7 @@ parse_phase_one(int base) {
                 GLOBAL_IO_profileOffset = data + base;
                 break;
             case 0x110:
-                meta_offset = data + base;
+                GLOBAL_meta_offset = data + base;
                 meta_length = len;
                 break;
             case 0x112:
@@ -9233,9 +8975,9 @@ parse_phase_one(int base) {
                 ph1.black_row = data + base;
                 break;
             case 0x301:
-                model[63] = 0;
-                fread(model, 1, 63, GLOBAL_IO_ifp);
-                if ( (cp = strstr(model, " camera")) ) {
+                GLOBAL_model[63] = 0;
+                fread(GLOBAL_model, 1, 63, GLOBAL_IO_ifp);
+                if ( (cp = strstr(GLOBAL_model, " camera")) ) {
                     *cp = 0;
                 }
                 break;
@@ -9247,22 +8989,22 @@ parse_phase_one(int base) {
 
     TIFF_CALLBACK_loadRawData = ph1.format < 3 ? &phase_one_load_raw : &phase_one_load_raw_c;
     ADOBE_maximum = 0xffff;
-    strcpy(make, "Phase One");
-    if ( model[0] ) {
+    strcpy(GLOBAL_make, "Phase One");
+    if ( GLOBAL_model[0] ) {
         return;
     }
     switch ( THE_image.height ) {
         case 2060:
-            strcpy(model, "LightPhase");
+            strcpy(GLOBAL_model, "LightPhase");
             break;
         case 2682:
-            strcpy(model, "H 10");
+            strcpy(GLOBAL_model, "H 10");
             break;
         case 4128:
-            strcpy(model, "H 20");
+            strcpy(GLOBAL_model, "H 20");
             break;
         case 5488:
-            strcpy(model, "H 25");
+            strcpy(GLOBAL_model, "H 25");
             break;
             break;
         default:
@@ -9309,7 +9051,7 @@ parse_fuji(int offset) {
                     } else {
                         if ( tag == 0x2ff0 ) {
                             for ( c = 0; c < 4; c++ ) {
-                                cam_mul[c ^ 1] = read2bytes();
+                                GLOBAL_cam_mul[c ^ 1] = read2bytes();
                             }
                         } else {
                             if ( tag == 0xc000 && len > 20000 ) {
@@ -9561,8 +9303,8 @@ parse_smal(int offset, int fsize) {
     }
     THE_image.height = height = read2bytes();
     THE_image.width = width = read2bytes();
-    strcpy(make, "SMaL");
-    snprintf(model, 64, "v%d %dx%d", ver, width, height);
+    strcpy(GLOBAL_make, "SMaL");
+    snprintf(GLOBAL_model, 64, "v%d %dx%d", ver, width, height);
     if ( ver == 6 ) {
         TIFF_CALLBACK_loadRawData = &smal_v6_load_raw;
     }
@@ -9601,8 +9343,8 @@ parse_cine() {
             TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
     }
     fseek(GLOBAL_IO_ifp, off_setup + 792, SEEK_SET);
-    strcpy(make, "CINE");
-    snprintf(model, 64, "%d", read4bytes());
+    strcpy(GLOBAL_make, "CINE");
+    snprintf(GLOBAL_model, 64, "%d", read4bytes());
     fseek(GLOBAL_IO_ifp, 12, SEEK_CUR);
     switch ((i = read4bytes()) & 0xffffff ) {
         case 3:
@@ -9628,8 +9370,8 @@ parse_cine() {
         case 0:
             GLOBAL_flipsMask = 2;
     }
-    cam_mul[0] = readDouble(11);
-    cam_mul[2] = readDouble(11);
+    GLOBAL_cam_mul[0] = readDouble(11);
+    GLOBAL_cam_mul[2] = readDouble(11);
     ADOBE_maximum = ~(-1 << read4bytes());
     fseek(GLOBAL_IO_ifp, 668, SEEK_CUR);
     CAMERA_IMAGE_information.shutterSpeed = read4bytes() / 1000000000.0;
@@ -9766,7 +9508,7 @@ parse_foveon() {
                 break;
             case 0x464d4143:
                 // CAMF
-                meta_offset = off + 8;
+                GLOBAL_meta_offset = off + 8;
                 meta_length = len - 28;
                 break;
             case 0x504f5250:
@@ -9787,10 +9529,10 @@ parse_foveon() {
                         iso_speed = atoi(value);
                     }
                     if ( !strcmp(name, "CAMMANUF") ) {
-                        strcpy(make, value);
+                        strcpy(GLOBAL_make, value);
                     }
                     if ( !strcmp(name, "CAMMODEL") ) {
-                        strcpy(model, value);
+                        strcpy(GLOBAL_model, value);
                     }
                     if ( !strcmp(name, "WB_DESC") ) {
                         strcpy(model2, value);
@@ -11418,7 +11160,7 @@ tiffIdentify() {
     cameraFlip = GLOBAL_flipsMask = filters = UINT_MAX; // unknown
     THE_image.height = THE_image.width = fuji_width = fuji_layout = cr2_slice[0] = 0;
     ADOBE_maximum = height = width = top_margin = left_margin = 0;
-    GLOBAL_bayerPatternLabels[0] = desc[0] = artist[0] = make[0] = model[0] = model2[0] = 0;
+    GLOBAL_bayerPatternLabels[0] = desc[0] = artist[0] = GLOBAL_make[0] = GLOBAL_model[0] = model2[0] = 0;
     iso_speed = CAMERA_IMAGE_information.shutterSpeed = aperture = focal_len = unique_id = 0;
     numberOfRawImages = 0;
     memset(ifdArray, 0, sizeof ifdArray);
@@ -11429,7 +11171,7 @@ tiffIdentify() {
     thumb_offset = thumb_length = thumb_width = thumb_height = 0;
     TIFF_CALLBACK_loadRawData = CALLBACK_loadThumbnailRawData = 0;
     write_thumb = &jpeg_thumb;
-    GLOBAL_IO_profileOffset = meta_offset = meta_length = THE_image.bitsPerSample = tiff_compress = 0;
+    GLOBAL_IO_profileOffset = GLOBAL_meta_offset = meta_length = THE_image.bitsPerSample = tiff_compress = 0;
     kodak_cbpp = GLOBAL_IO_zeroAfterFf = GLOBAL_dngVersion = GLOBAL_loadFlags = 0;
     timestamp = shot_order = tiff_samples = ADOBE_black = is_foveon = 0;
     mix_green = profile_length = GLOBAL_IO_dataError = zero_is_bad = 0;
@@ -11437,7 +11179,7 @@ tiffIdentify() {
     tile_width = tile_length = 0;
 
     for ( i = 0; i < 4; i++ ) {
-        cam_mul[i] = i == 1;
+        GLOBAL_cam_mul[i] = i == 1;
         pre_mul[i] = i < 3;
         for ( c = 0; c < 3; c++ ) {
             cmatrix[c][i] = 0;
@@ -11482,24 +11224,24 @@ tiffIdentify() {
         }
         thumb_offset = 0;
     } else if ( !memcmp(head + 25, "ARECOYK", 7) ) {
-        strcpy(make, "Contax");
-        strcpy(model, "N Digital");
+        strcpy(GLOBAL_make, "Contax");
+        strcpy(GLOBAL_model, "N Digital");
         fseek(GLOBAL_IO_ifp, 33, SEEK_SET);
         get_timestamp(1);
         fseek(GLOBAL_IO_ifp, 60, SEEK_SET);
         for ( c = 0; c < 4; c++ ) {
-            cam_mul[c ^ (c >> 1)] = read4bytes();
+            GLOBAL_cam_mul[c ^ (c >> 1)] = read4bytes();
         }
     } else if ( !strcmp(head, "PXN") ) {
-        strcpy(make, "Logitech");
-        strcpy(model, "Fotoman Pixtura");
+        strcpy(GLOBAL_make, "Logitech");
+        strcpy(GLOBAL_model, "Fotoman Pixtura");
     } else if ( !strcmp(head, "qktk") ) {
-        strcpy(make, "Apple");
-        strcpy(model, "QuickTake 100");
+        strcpy(GLOBAL_make, "Apple");
+        strcpy(GLOBAL_model, "QuickTake 100");
         TIFF_CALLBACK_loadRawData = &quicktake_100_load_raw;
     } else if ( !strcmp(head, "qktn") ) {
-        strcpy(make, "Apple");
-        strcpy(model, "QuickTake 150");
+        strcpy(GLOBAL_make, "Apple");
+        strcpy(GLOBAL_model, "QuickTake 150");
         TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
     } else if ( !memcmp(head, "FUJIFILM", 8) ) {
         fseek(GLOBAL_IO_ifp, 84, SEEK_SET);
@@ -11537,8 +11279,8 @@ tiffIdentify() {
         is_raw = 0;
     } else if ( !memcmp(head, "\0\001\0\001\0@", 6) ) {
         fseek(GLOBAL_IO_ifp, 6, SEEK_SET);
-        fread(make, 1, 8, GLOBAL_IO_ifp);
-        fread(model, 1, 8, GLOBAL_IO_ifp);
+        fread(GLOBAL_make, 1, 8, GLOBAL_IO_ifp);
+        fread(GLOBAL_model, 1, 8, GLOBAL_IO_ifp);
         fread(model2, 1, 16, GLOBAL_IO_ifp);
                                                     GLOBAL_IO_profileOffset = read2bytes();
                                                     read2bytes();
@@ -11547,7 +11289,7 @@ tiffIdentify() {
         TIFF_CALLBACK_loadRawData = &nokia_load_raw;
         filters = 0x61616161;
     } else if ( !memcmp(head, "NOKIARAW", 8) ) {
-        strcpy(make, "NOKIA");
+        strcpy(GLOBAL_make, "NOKIA");
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         fseek(GLOBAL_IO_ifp, 300, SEEK_SET);
                                                         GLOBAL_IO_profileOffset = read4bytes();
@@ -11569,9 +11311,9 @@ tiffIdentify() {
         fseek(GLOBAL_IO_ifp, 20, SEEK_SET);
         width = read4bytes();
         height = read4bytes();
-        strcpy(make, "ARRI");
+        strcpy(GLOBAL_make, "ARRI");
         fseek(GLOBAL_IO_ifp, 668, SEEK_SET);
-        fread(model, 1, 64, GLOBAL_IO_ifp);
+        fread(GLOBAL_model, 1, 64, GLOBAL_IO_ifp);
                                                             GLOBAL_IO_profileOffset = 4096;
         TIFF_CALLBACK_loadRawData = &packed_load_raw;
         GLOBAL_loadFlags = 88;
@@ -11579,17 +11321,17 @@ tiffIdentify() {
     } else if ( !memcmp(head, "XPDS", 4) ) {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         fseek(GLOBAL_IO_ifp, 0x800, SEEK_SET);
-        fread(make, 1, 41, GLOBAL_IO_ifp);
+        fread(GLOBAL_make, 1, 41, GLOBAL_IO_ifp);
                                                                 THE_image.height = read2bytes();
                                                                 THE_image.width = read2bytes();
         fseek(GLOBAL_IO_ifp, 56, SEEK_CUR);
-        fread(model, 1, 30, GLOBAL_IO_ifp);
+        fread(GLOBAL_model, 1, 30, GLOBAL_IO_ifp);
                                                                 GLOBAL_IO_profileOffset = 0x10000;
         TIFF_CALLBACK_loadRawData = &canon_rmf_load_raw;
         gamma_curve(0, 12.25, 1, 1023);
     } else if ( !memcmp(head + 4, "RED1", 4) ) {
-        strcpy(make, "Red");
-        strcpy(model, "One");
+        strcpy(GLOBAL_make, "Red");
+        strcpy(GLOBAL_model, "One");
         parse_redcine();
         TIFF_CALLBACK_loadRawData = &redcine_load_raw;
         gamma_curve(1 / 2.4, 12.92, 1, 4095);
@@ -11606,11 +11348,11 @@ tiffIdentify() {
         parse_cine();
     }
 
-    if ( make[0] == 0 ) {
+    if ( GLOBAL_make[0] == 0 ) {
         for ( zero_fsize = i = 0; i < sizeof table / sizeof *table; i++ ) {
             if ( fsize == table[i].fsize ) {
-                strcpy(make, table[i].make);
-                strcpy(model, table[i].model);
+                strcpy(GLOBAL_make, table[i].make);
+                strcpy(GLOBAL_model, table[i].model);
                 GLOBAL_flipsMask = table[i].flags >> 2;
                 zero_is_bad = table[i].flags & 2;
                 if ( table[i].flags & 1 ) {
@@ -11636,7 +11378,7 @@ tiffIdentify() {
                     case 10:
                     case 12:
                         GLOBAL_loadFlags |= 512;
-                        if ( !strcmp(make, "Canon")) GLOBAL_loadFlags |= 256;
+                        if ( !strcmp(GLOBAL_make, "Canon")) GLOBAL_loadFlags |= 256;
                         TIFF_CALLBACK_loadRawData = &packed_load_raw;
                         break;
                     case 16:
@@ -11654,16 +11396,16 @@ tiffIdentify() {
         fsize = 0;
     }
 
-    if ( make[0] == 0 ) {
+    if ( GLOBAL_make[0] == 0 ) {
         parse_smal(0, flen);
     }
 
-    if ( make[0] == 0 ) {
+    if ( GLOBAL_make[0] == 0 ) {
         parse_jpeg(0);
-        if ( !(strncmp(model, "ov", 2) && strncmp(model, "RP_OV", 5)) &&
+        if ( !(strncmp(GLOBAL_model, "ov", 2) && strncmp(GLOBAL_model, "RP_OV", 5)) &&
              !fseek(GLOBAL_IO_ifp, -6404096, SEEK_END) &&
              fread(head, 1, 32, GLOBAL_IO_ifp) && !strcmp(head, "BRCMn")) {
-            strcpy(make, "OmniVision");
+            strcpy(GLOBAL_make, "OmniVision");
             GLOBAL_IO_profileOffset = ftell(GLOBAL_IO_ifp) + 0x8000 - 32;
             width = THE_image.width;
             THE_image.width = 2611;
@@ -11675,36 +11417,36 @@ tiffIdentify() {
     }
 
     for ( i = 0; i < sizeof corp / sizeof *corp; i++ ) {
-        if ( strcasestr(make, corp[i])) {
+        if ( strcasestr(GLOBAL_make, corp[i])) {
             // Simplify company names
-            strcpy(make, corp[i]);
+            strcpy(GLOBAL_make, corp[i]);
         }
     }
 
-    if ((!strcmp(make, "Kodak") || !strcmp(make, "Leica")) &&
-        ((cp = strcasestr(model, " DIGITAL CAMERA")) ||
-         (cp = strstr(model, "FILE VERSION"))))
+    if ((!strcmp(GLOBAL_make, "Kodak") || !strcmp(GLOBAL_make, "Leica")) &&
+        ((cp = strcasestr(GLOBAL_model, " DIGITAL CAMERA")) ||
+         (cp = strstr(GLOBAL_model, "FILE VERSION"))))
         *cp = 0;
 
-    if ( !strncasecmp(model, "PENTAX", 6))
-        strcpy(make, "Pentax");
+    if ( !strncasecmp(GLOBAL_model, "PENTAX", 6))
+        strcpy(GLOBAL_make, "Pentax");
 
-    cp = make + strlen(make);        /* Remove trailing spaces */
+    cp = GLOBAL_make + strlen(GLOBAL_make);        /* Remove trailing spaces */
     while ( *--cp == ' ' ) *cp = 0;
 
-    cp = model + strlen(model);
+    cp = GLOBAL_model + strlen(GLOBAL_model);
     while ( *--cp == ' ' ) *cp = 0;
 
-    i = strlen(make);            /* Remove make from model */
-    if ( !strncasecmp(model, make, i) && model[i++] == ' ' )
-        memmove(model, model + i, 64 - i);
+    i = strlen(GLOBAL_make);            /* Remove make from model */
+    if ( !strncasecmp(GLOBAL_model, GLOBAL_make, i) && GLOBAL_model[i++] == ' ' )
+        memmove(GLOBAL_model, GLOBAL_model + i, 64 - i);
 
-    if ( !strncmp(model, "FinePix ", 8))
-        strcpy(model, model + 8);
+    if ( !strncmp(GLOBAL_model, "FinePix ", 8))
+        strcpy(GLOBAL_model, GLOBAL_model + 8);
 
-    if ( !strncmp(model, "Digital Camera ", 15))
-        strcpy(model, model + 15);
-    desc[511] = artist[63] = make[63] = model[63] = model2[63] = 0;
+    if ( !strncmp(GLOBAL_model, "Digital Camera ", 15))
+        strcpy(GLOBAL_model, GLOBAL_model + 15);
+    desc[511] = artist[63] = GLOBAL_make[63] = GLOBAL_model[63] = model2[63] = 0;
 
     if ( !is_raw ) goto notraw;
 
@@ -11725,56 +11467,56 @@ tiffIdentify() {
         filters = 0x16161616;
     }
 
-    if ( THE_image.height == 2868 && (!strcmp(model, "K-r") || !strcmp(model, "K-x"))) {
+    if ( THE_image.height == 2868 && (!strcmp(GLOBAL_model, "K-r") || !strcmp(GLOBAL_model, "K-x"))) {
         width = 4309;
         filters = 0x16161616;
     }
 
-    if ( THE_image.height == 3136 && !strcmp(model, "K-7")) {
+    if ( THE_image.height == 3136 && !strcmp(GLOBAL_model, "K-7")) {
         height = 3122;
         width = 4684;
         filters = 0x16161616;
         top_margin = 2;
     }
 
-    if ( THE_image.height == 3284 && !strncmp(model, "K-5", 3)) {
+    if ( THE_image.height == 3284 && !strncmp(GLOBAL_model, "K-5", 3)) {
         left_margin = 10;
         width = 4950;
         filters = 0x16161616;
     }
 
-    if ( THE_image.height == 3300 && !strncmp(model, "K-50", 4)) {
+    if ( THE_image.height == 3300 && !strncmp(GLOBAL_model, "K-50", 4)) {
         height = 3288, width = 4952;
         left_margin = 0;
         top_margin = 12;
     }
 
-    if ( THE_image.height == 3664 && !strncmp(model, "K-S", 3)) {
+    if ( THE_image.height == 3664 && !strncmp(GLOBAL_model, "K-S", 3)) {
         width = 5492;
         left_margin = 0;
     }
 
-    if ( THE_image.height == 4032 && !strcmp(model, "K-3")) {
+    if ( THE_image.height == 4032 && !strcmp(GLOBAL_model, "K-3")) {
         height = 4032;
         width = 6040;
         left_margin = 4;
     }
 
-    if ( THE_image.height == 4060 && !strcmp(model, "KP")) {
+    if ( THE_image.height == 4060 && !strcmp(GLOBAL_model, "KP")) {
         height = 4032;
         width = 6032;
         left_margin = 52;
         top_margin = 28;
     }
 
-    if ( THE_image.height == 4950 && !strcmp(model, "K-1")) {
+    if ( THE_image.height == 4950 && !strcmp(GLOBAL_model, "K-1")) {
         height = 4932;
         width = 7380;
         left_margin = 4;
         top_margin = 18;
     }
 
-    if ( THE_image.height == 5552 && !strcmp(model, "645D")) {
+    if ( THE_image.height == 5552 && !strcmp(GLOBAL_model, "645D")) {
         height = 5502;
         width = 7328;
         left_margin = 48;
@@ -11806,7 +11548,7 @@ tiffIdentify() {
         goto dng_skip;
     }
 
-    if ( !strcmp(make, "Canon") && !fsize && THE_image.bitsPerSample != 15 ) {
+    if ( !strcmp(GLOBAL_make, "Canon") && !fsize && THE_image.bitsPerSample != 15 ) {
         if ( !TIFF_CALLBACK_loadRawData )
             TIFF_CALLBACK_loadRawData = &lossless_jpeg_load_raw;
         for ( i = 0; i < sizeof canon / sizeof *canon; i++ )
@@ -11830,37 +11572,37 @@ tiffIdentify() {
     for ( i = 0; i < sizeof unique / sizeof *unique; i++ )
         if ( unique_id == 0x80000000 + unique[i].id ) {
             adobe_coeff("Canon", unique[i].model);
-            if ( model[4] == 'K' && strlen(model) == 8 )
-                strcpy(model, unique[i].model);
+            if ( GLOBAL_model[4] == 'K' && strlen(GLOBAL_model) == 8 )
+                strcpy(GLOBAL_model, unique[i].model);
         }
 
     for ( i = 0; i < sizeof sonique / sizeof *sonique; i++ )
         if ( unique_id == sonique[i].id )
-            strcpy(model, sonique[i].model);
+            strcpy(GLOBAL_model, sonique[i].model);
 
     for ( i = 0; i < sizeof panalias / sizeof *panalias; i++ )
         if ( panalias[i][0] == '@' ) orig = panalias[i] + 1;
         else
-            if ( !strcmp(model, panalias[i]))
+            if ( !strcmp(GLOBAL_model, panalias[i]))
                 adobe_coeff("Panasonic", orig);
 
-    if ( !strcmp(make, "Nikon")) {
+    if ( !strcmp(GLOBAL_make, "Nikon")) {
         if ( !TIFF_CALLBACK_loadRawData )
             TIFF_CALLBACK_loadRawData = &packed_load_raw;
-        if ( model[0] == 'E' )
+        if ( GLOBAL_model[0] == 'E' )
             GLOBAL_loadFlags |= !GLOBAL_IO_profileOffset << 2 | 2;
     }
 
     // Set parameters based on camera name (for non-DNG files)
 
-    if ( !strcmp(model, "KAI-0340")
+    if ( !strcmp(GLOBAL_model, "KAI-0340")
          && find_green(16, 16, 3840, 5120) < 25 ) {
         height = 480;
         top_margin = filters = 0;
-        strcpy(model, "C603");
+        strcpy(GLOBAL_model, "C603");
     }
 
-    if ( !strcmp(make, "Sony") && THE_image.width > 3888 )
+    if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width > 3888 )
         ADOBE_black = 128 << (THE_image.bitsPerSample - 12);
 
     //-------------------------------------------------------------------------------------------------------------
@@ -11869,7 +11611,7 @@ tiffIdentify() {
         if ( height > width ) pixel_aspect = 2;
         filters = 0;
         simple_coeff(0);
-    } else if ( !strcmp(make, "Canon") && THE_image.bitsPerSample == 15 ) {
+    } else if ( !strcmp(GLOBAL_make, "Canon") && THE_image.bitsPerSample == 15 ) {
         switch ( width ) {
         case 3344:
         width -= 66;
@@ -11887,28 +11629,28 @@ tiffIdentify() {
         filters = 0;
             tiff_samples = IMAGE_colors = 3;
         TIFF_CALLBACK_loadRawData = &canon_sraw_load_raw;
-    } else if ( !strcmp(model, "PowerShot 600") ) {
+    } else if ( !strcmp(GLOBAL_model, "PowerShot 600") ) {
         height = 613;
         width = 854;
                 THE_image.width = 896;
                 IMAGE_colors = 4;
         filters = 0xe1e4e1e4;
         TIFF_CALLBACK_loadRawData = &canon_600_load_raw;
-    } else if ( !strcmp(model, "PowerShot A5") ||
-        !strcmp(model, "PowerShot A5 Zoom") ) {
+    } else if ( !strcmp(GLOBAL_model, "PowerShot A5") ||
+                !strcmp(GLOBAL_model, "PowerShot A5 Zoom") ) {
         height = 773;
         width = 960;
                     THE_image.width = 992;
         pixel_aspect = 256 / 235.0;
         filters = 0x1e4e1e4e;
         goto canon_a5;
-    } else if ( !strcmp(model, "PowerShot A50") ) {
+    } else if ( !strcmp(GLOBAL_model, "PowerShot A50") ) {
         height = 968;
         width = 1290;
                         THE_image.width = 1320;
         filters = 0x1b4e4b1e;
         goto canon_a5;
-    } else if ( !strcmp(model, "PowerShot Pro70") ) {
+    } else if ( !strcmp(GLOBAL_model, "PowerShot Pro70") ) {
         height = 1024;
         width = 1552;
         filters = 0x1e4b4e1b;
@@ -11917,75 +11659,75 @@ tiffIdentify() {
                             THE_image.bitsPerSample = 10;
         TIFF_CALLBACK_loadRawData = &packed_load_raw;
         GLOBAL_loadFlags = 264;
-    } else if ( !strcmp(model, "PowerShot Pro90 IS") ||
-        !strcmp(model, "PowerShot G1")) {
+    } else if ( !strcmp(GLOBAL_model, "PowerShot Pro90 IS") ||
+                !strcmp(GLOBAL_model, "PowerShot G1")) {
                                 IMAGE_colors = 4;
         filters = 0xb4b4b4b4;
-    } else if ( !strcmp(model, "PowerShot A610") ) {
+    } else if ( !strcmp(GLOBAL_model, "PowerShot A610") ) {
         if ( canon_s2is() ) {
-            strcpy(model + 10, "S2 IS");
+            strcpy(GLOBAL_model + 10, "S2 IS");
         }
-    } else if ( !strcmp(model, "PowerShot SX220 HS") ) {
+    } else if ( !strcmp(GLOBAL_model, "PowerShot SX220 HS") ) {
         mask[1][3] = -4;
-    } else if ( !strcmp(model, "EOS D2000C") ) {
+    } else if ( !strcmp(GLOBAL_model, "EOS D2000C") ) {
         filters = 0x61616161;
                                             ADOBE_black = GAMMA_curveFunctionLookupTable[200];
-    } else if ( !strcmp(model, "EOS 80D") ) {
+    } else if ( !strcmp(GLOBAL_model, "EOS 80D") ) {
         top_margin -= 2;
         height += 2;
-    } else if ( !strcmp(model, "D1") ) {
-        cam_mul[0] *= 256 / 527.0;
-        cam_mul[2] *= 256 / 317.0;
-    } else if ( !strcmp(model, "D1X") ) {
+    } else if ( !strcmp(GLOBAL_model, "D1") ) {
+                                                    GLOBAL_cam_mul[0] *= 256 / 527.0;
+                                                    GLOBAL_cam_mul[2] *= 256 / 317.0;
+    } else if ( !strcmp(GLOBAL_model, "D1X") ) {
         width -= 4;
         pixel_aspect = 0.5;
-    } else if ( !strcmp(model, "D40X") || !strcmp(model, "D60") || !strcmp(model, "D80") || !strcmp(model, "D3000") ) {
+    } else if ( !strcmp(GLOBAL_model, "D40X") || !strcmp(GLOBAL_model, "D60") || !strcmp(GLOBAL_model, "D80") || !strcmp(GLOBAL_model, "D3000") ) {
         height -= 3;
         width -= 4;
-    } else if ( !strcmp(model, "D3") || !strcmp(model, "D3S") || !strcmp(model, "D700") ) {
+    } else if ( !strcmp(GLOBAL_model, "D3") || !strcmp(GLOBAL_model, "D3S") || !strcmp(GLOBAL_model, "D700") ) {
         width -= 4;
         left_margin = 2;
-    } else if ( !strcmp(model, "D3100") ) {
+    } else if ( !strcmp(GLOBAL_model, "D3100") ) {
         width -= 28;
         left_margin = 6;
-    } else if ( !strcmp(model, "D5000") || !strcmp(model, "D90") ) {
+    } else if ( !strcmp(GLOBAL_model, "D5000") || !strcmp(GLOBAL_model, "D90") ) {
         width -= 42;
-    } else if ( !strcmp(model, "D5100") || !strcmp(model, "D7000") || !strcmp(model, "COOLPIX A") ) {
+    } else if ( !strcmp(GLOBAL_model, "D5100") || !strcmp(GLOBAL_model, "D7000") || !strcmp(GLOBAL_model, "COOLPIX A") ) {
         width -= 44;
-    } else if ( !strcmp(model, "D3200") || !strncmp(model, "D6", 2) || !strncmp(model, "D800", 4) ) {
+    } else if ( !strcmp(GLOBAL_model, "D3200") || !strncmp(GLOBAL_model, "D6", 2) || !strncmp(GLOBAL_model, "D800", 4) ) {
         width -= 46;
-    } else if ( !strcmp(model, "D4") || !strcmp(model, "Df") ) {
+    } else if ( !strcmp(GLOBAL_model, "D4") || !strcmp(GLOBAL_model, "Df") ) {
         width -= 52;
         left_margin = 2;
-    } else if ( !strncmp(model, "D40", 3) || !strncmp(model, "D50", 3) || !strncmp(model, "D70", 3) ) {
+    } else if ( !strncmp(GLOBAL_model, "D40", 3) || !strncmp(GLOBAL_model, "D50", 3) || !strncmp(GLOBAL_model, "D70", 3) ) {
        width--;
-    } else if ( !strcmp(model, "D100") ) {
+    } else if ( !strcmp(GLOBAL_model, "D100") ) {
     if ( GLOBAL_loadFlags )
         THE_image.width = (width += 3) + 3;
-    } else if ( !strcmp(model, "D200") ) {
+    } else if ( !strcmp(GLOBAL_model, "D200") ) {
         left_margin = 1;
         width -= 4;
         filters = 0x94949494;
-    } else if ( !strncmp(model, "D2H", 3) ) {
+    } else if ( !strncmp(GLOBAL_model, "D2H", 3) ) {
         left_margin = 6;
         width -= 14;
-    } else if ( !strncmp(model, "D2X", 3) ) {
+    } else if ( !strncmp(GLOBAL_model, "D2X", 3) ) {
         if ( width == 3264 ) {
             width -= 32;
         } else {
             width -= 8;
         }
-    } else if ( !strncmp(model, "D300", 4) ) {
+    } else if ( !strncmp(GLOBAL_model, "D300", 4) ) {
         width -= 32;
-    } else if ( !strncmp(model, "COOLPIX B", 9) ) {
+    } else if ( !strncmp(GLOBAL_model, "COOLPIX B", 9) ) {
         GLOBAL_loadFlags = 24;
-    } else if ( !strncmp(model, "COOLPIX P", 9) && THE_image.width != 4032 ) {
+    } else if ( !strncmp(GLOBAL_model, "COOLPIX P", 9) && THE_image.width != 4032 ) {
         GLOBAL_loadFlags = 24;
         filters = 0x94949494;
-        if ( model[9] == '7' && iso_speed >= 400 ) {
+        if ( GLOBAL_model[9] == '7' && iso_speed >= 400 ) {
             ADOBE_black = 255;
         }
-    } else if ( !strncmp(model, "1 ", 2) ) {
+    } else if ( !strncmp(GLOBAL_model, "1 ", 2) ) {
         height -= 2;
     } else if ( fsize == 1581060 ) {
         simple_coeff(3);
@@ -11993,13 +11735,13 @@ tiffIdentify() {
         pre_mul[1] = 1.0943;
         pre_mul[3] = 1.1103;
     } else if ( fsize == 3178560 ) {
-        cam_mul[0] *= 4;
-        cam_mul[2] *= 4;
+                                                                                                                                GLOBAL_cam_mul[0] *= 4;
+                                                                                                                                GLOBAL_cam_mul[2] *= 4;
     } else if ( fsize == 4771840 ) {
         if ( !timestamp && nikon_e995() ) {
-            strcpy(model, "E995");
+            strcpy(GLOBAL_model, "E995");
         }
-        if ( strcmp(model, "E995") ) {
+        if ( strcmp(GLOBAL_model, "E995") ) {
             filters = 0xb4b4b4b4;
             simple_coeff(3);
             pre_mul[0] = 1.196;
@@ -12008,9 +11750,9 @@ tiffIdentify() {
         }
     } else if ( fsize == 2940928 ) {
         if ( !timestamp && !nikon_e2100() ) {
-            strcpy(model, "E2500");
+            strcpy(GLOBAL_model, "E2500");
         }
-        if ( !strcmp(model, "E2500") ) {
+        if ( !strcmp(GLOBAL_model, "E2500") ) {
             height -= 2;
             GLOBAL_loadFlags = 6;
             IMAGE_colors = 4;
@@ -12020,14 +11762,14 @@ tiffIdentify() {
         if ( !timestamp ) {
             nikon_3700();
         }
-        if ( model[0] == 'E' && atoi(model + 1) < 3700 ) {
+        if ( GLOBAL_model[0] == 'E' && atoi(GLOBAL_model + 1) < 3700 ) {
             filters = 0x49494949;
         }
-        if ( !strcmp(model, "Optio 33WR") ) {
+        if ( !strcmp(GLOBAL_model, "Optio 33WR") ) {
             GLOBAL_flipsMask = 1;
             filters = 0x16161616;
         }
-        if ( make[0] == 'O' ) {
+        if ( GLOBAL_make[0] == 'O' ) {
             i = find_green(12, 32, 1188864, 3576832);
             c = find_green(12, 32, 2383920, 2387016);
             if ( abs(i) < abs(c)) {
@@ -12040,22 +11782,22 @@ tiffIdentify() {
         }
     } else if ( fsize == 5869568 ) {
         if ( !timestamp && minolta_z2() ) {
-            strcpy(make, "Minolta");
-            strcpy(model, "DiMAGE Z2");
+            strcpy(GLOBAL_make, "Minolta");
+            strcpy(GLOBAL_model, "DiMAGE Z2");
         }
-        GLOBAL_loadFlags = 6 + 24 * (make[0] == 'M');
+        GLOBAL_loadFlags = 6 + 24 * (GLOBAL_make[0] == 'M');
     } else if ( fsize == 6291456 ) {
         fseek(GLOBAL_IO_ifp, 0x300000, SEEK_SET);
         if ( (GLOBAL_endianOrder = guess_byte_order(0x10000)) == BIG_ENDIAN_ORDER ) {
             height -= (top_margin = 16);
             width -= (left_margin = 28);
             ADOBE_maximum = 0xf5c0;
-            strcpy(make, "ISG");
-            model[0] = 0;
+            strcpy(GLOBAL_make, "ISG");
+            GLOBAL_model[0] = 0;
         }
-    } else if ( !strcmp(make, "Fujifilm") ) {
-        if ( !strcmp(model + 7, "S2Pro") ) {
-            strcpy(model, "S2Pro");
+    } else if ( !strcmp(GLOBAL_make, "Fujifilm") ) {
+        if ( !strcmp(GLOBAL_model + 7, "S2Pro") ) {
+            strcpy(GLOBAL_model, "S2Pro");
             height = 2144;
             width = 2880;
             GLOBAL_flipsMask = 6;
@@ -12074,7 +11816,7 @@ tiffIdentify() {
         if ( width == 4936 ) {
             left_margin = 4;
         }
-        if ( !strcmp(model, "HS50EXR") || !strcmp(model, "F900EXR") ) {
+        if ( !strcmp(GLOBAL_model, "HS50EXR") || !strcmp(GLOBAL_model, "F900EXR") ) {
             width += 2;
             left_margin = 0;
             filters = 0x16161616;
@@ -12087,37 +11829,37 @@ tiffIdentify() {
                 ((char *) xtrans)[c] = xtrans_abs[(c / 6 + top_margin) % 6][(c + left_margin) % 6];
             }
         }
-    } else if ( !strcmp(model, "KD-400Z") ) {
+    } else if ( !strcmp(GLOBAL_model, "KD-400Z") ) {
         height = 1712;
         width = 2312;
                                                                                                                                                             THE_image.width = 2336;
         goto konica_400z;
-    } else if ( !strcmp(model, "KD-510Z") ) {
+    } else if ( !strcmp(GLOBAL_model, "KD-510Z") ) {
         goto konica_510z;
-    } else if ( !strcasecmp(make, "Minolta") ) {
+    } else if ( !strcasecmp(GLOBAL_make, "Minolta") ) {
         if ( !TIFF_CALLBACK_loadRawData && (ADOBE_maximum = 0xfff) ) {
             TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
         }
-        if ( !strncmp(model, "DiMAGE A", 8) ) {
-            if ( !strcmp(model, "DiMAGE A200") ) {
+        if ( !strncmp(GLOBAL_model, "DiMAGE A", 8) ) {
+            if ( !strcmp(GLOBAL_model, "DiMAGE A200") ) {
                 filters = 0x49494949;
             }
             THE_image.bitsPerSample = 12;
             TIFF_CALLBACK_loadRawData = &packed_load_raw;
-        } else if ( !strncmp(model, "ALPHA", 5) || !strncmp(model, "DYNAX", 5) || !strncmp(model, "MAXXUM", 6) ) {
-            snprintf(model + 20, 40, "DYNAX %-10s", model + 6 + (model[0] == 'M'));
-            adobe_coeff(make, model + 20);
+        } else if ( !strncmp(GLOBAL_model, "ALPHA", 5) || !strncmp(GLOBAL_model, "DYNAX", 5) || !strncmp(GLOBAL_model, "MAXXUM", 6) ) {
+            snprintf(GLOBAL_model + 20, 40, "DYNAX %-10s", GLOBAL_model + 6 + (GLOBAL_model[0] == 'M'));
+            adobe_coeff(GLOBAL_make, GLOBAL_model + 20);
             TIFF_CALLBACK_loadRawData = &packed_load_raw;
-        } else if ( !strncmp(model, "DiMAGE G", 8) ) {
-            if ( model[8] == '4' ) {
+        } else if ( !strncmp(GLOBAL_model, "DiMAGE G", 8) ) {
+            if ( GLOBAL_model[8] == '4' ) {
                 height = 1716;
                 width = 2304;
-            } else if ( model[8] == '5' ) {
+            } else if ( GLOBAL_model[8] == '5' ) {
                 konica_510z:
                 height = 1956;
                 width = 2607;
                     THE_image.width = 2624;
-            } else if ( model[8] == '6' ) {
+            } else if ( GLOBAL_model[8] == '6' ) {
                 height = 2136;
                 width = 2848;
             }
@@ -12128,16 +11870,16 @@ tiffIdentify() {
                     ADOBE_maximum = 0x3df;
             GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
         }
-    } else if ( !strcmp(model, "*ist D") ) {
+    } else if ( !strcmp(GLOBAL_model, "*ist D") ) {
         TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
                                                                                                                                                                         GLOBAL_IO_dataError = -1;
-    } else if ( !strcmp(model, "*ist DS") ) {
+    } else if ( !strcmp(GLOBAL_model, "*ist DS") ) {
         height -= 2;
-    } else if ( !strcmp(make, "Samsung") && THE_image.width == 4704 ) {
+    } else if ( !strcmp(GLOBAL_make, "Samsung") && THE_image.width == 4704 ) {
         height -= top_margin = 8;
         width -= 2 * (left_margin = 8);
         GLOBAL_loadFlags = 256;
-    } else if ( !strcmp(make, "Samsung") && THE_image.height == 3714 ) {
+    } else if ( !strcmp(GLOBAL_make, "Samsung") && THE_image.height == 3714 ) {
         height -= top_margin = 18;
         left_margin = THE_image.width - (width = 5536);
         if ( THE_image.width != 5600 ) {
@@ -12145,7 +11887,7 @@ tiffIdentify() {
         }
         filters = 0x61616161;
                                                                                                                                                                                     IMAGE_colors = 3;
-    } else if ( !strcmp(make, "Samsung") && THE_image.width == 5632 ) {
+    } else if ( !strcmp(GLOBAL_make, "Samsung") && THE_image.width == 5632 ) {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         height = 3694;
         top_margin = 2;
@@ -12153,15 +11895,15 @@ tiffIdentify() {
         if ( THE_image.bitsPerSample == 12 ) {
             GLOBAL_loadFlags = 80;
         }
-    } else if ( !strcmp(make, "Samsung") && THE_image.width == 5664 ) {
+    } else if ( !strcmp(GLOBAL_make, "Samsung") && THE_image.width == 5664 ) {
         height -= top_margin = 17;
         left_margin = 96;
         width = 5544;
         filters = 0x49494949;
-    } else if ( !strcmp(make, "Samsung") && THE_image.width == 6496 ) {
+    } else if ( !strcmp(GLOBAL_make, "Samsung") && THE_image.width == 6496 ) {
         filters = 0x61616161;
                                                                                                                                                                                                 ADOBE_black = 1 << (THE_image.bitsPerSample - 7);
-    } else if ( !strcmp(model, "EX1") ) {
+    } else if ( !strcmp(GLOBAL_model, "EX1") ) {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         height -= 20;
         top_margin = 2;
@@ -12170,7 +11912,7 @@ tiffIdentify() {
             width -= 46;
             top_margin = 8;
         }
-    } else if ( !strcmp(model, "WB2000") ) {
+    } else if ( !strcmp(GLOBAL_model, "WB2000") ) {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         height -= 3;
         top_margin = 2;
@@ -12179,22 +11921,22 @@ tiffIdentify() {
             width -= 56;
             top_margin = 8;
         }
-    } else if ( strstr(model, "WB550") ) {
-        strcpy(model, "WB550");
-    } else if ( !strcmp(model, "EX2F") ) {
+    } else if ( strstr(GLOBAL_model, "WB550") ) {
+        strcpy(GLOBAL_model, "WB550");
+    } else if ( !strcmp(GLOBAL_model, "EX2F") ) {
         height = 3045;
         width = 4070;
         top_margin = 3;
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         filters = 0x49494949;
         TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
-    } else if ( !strcmp(model, "STV680 VGA") ) {
+    } else if ( !strcmp(GLOBAL_model, "STV680 VGA") ) {
                                                                                                                                                                                                                     ADOBE_black = 16;
-    } else if ( !strcmp(model, "N95") ) {
+    } else if ( !strcmp(GLOBAL_model, "N95") ) {
         height = THE_image.height - (top_margin = 2);
-    } else if ( !strcmp(model, "640x480") ) {
+    } else if ( !strcmp(GLOBAL_model, "640x480") ) {
         gamma_curve(0.45, 4.5, 1, 255);
-    } else if ( !strcmp(make, "Hasselblad") ) {
+    } else if ( !strcmp(GLOBAL_make, "Hasselblad") ) {
         if ( TIFF_CALLBACK_loadRawData == &lossless_jpeg_load_raw ) {
             TIFF_CALLBACK_loadRawData = &hasselblad_load_raw;
         }
@@ -12223,7 +11965,7 @@ tiffIdentify() {
                         ADOBE_black += GLOBAL_loadFlags = 256;
                         ADOBE_maximum = 0x8101;
         } else if ( THE_image.width == 4090 ) {
-            strcpy(model, "V96C");
+            strcpy(GLOBAL_model, "V96C");
             height -= (top_margin = 6);
             width -= (left_margin = 3) + 7;
             filters = 0x61616161;
@@ -12234,7 +11976,7 @@ tiffIdentify() {
                 filters = 0;
             }
         }
-    } else if ( !strcmp(make, "Sinar") ) {
+    } else if ( !strcmp(GLOBAL_make, "Sinar") ) {
         if ( !TIFF_CALLBACK_loadRawData ) {
             TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
         }
@@ -12242,7 +11984,7 @@ tiffIdentify() {
             filters = 0;
         }
                                                                                                                                                                                                                                     ADOBE_maximum = 0x3fff;
-    } else if ( !strcmp(make, "Leaf") ) {
+    } else if ( !strcmp(GLOBAL_make, "Leaf") ) {
                                                                                                                                                                                                                                         ADOBE_maximum = 0x3fff;
         fseek(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset, SEEK_SET);
         if ( ljpeg_start(&jh, 1) && jh.bits == 15 ) {
@@ -12259,21 +12001,21 @@ tiffIdentify() {
             if ( tiff_samples == 1 ) {
                 filters = 1;
                 strcpy(GLOBAL_bayerPatternLabels, "RBTG");
-                strcpy(model, "CatchLight");
+                strcpy(GLOBAL_model, "CatchLight");
                 top_margin = 8;
                 left_margin = 18;
                 height = 2032;
                 width = 2016;
             } else {
-                strcpy(model, "DCB2");
+                strcpy(GLOBAL_model, "DCB2");
                 top_margin = 10;
                 left_margin = 16;
                 height = 2028;
                 width = 2022;
             }
         } else if ( width + height == 3144 + 2060 ) {
-            if ( !model[0] ) {
-                strcpy(model, "Cantare");
+            if ( !GLOBAL_model[0] ) {
+                strcpy(GLOBAL_model, "Cantare");
             }
             if ( width > height ) {
                 top_margin = 6;
@@ -12288,23 +12030,23 @@ tiffIdentify() {
                 height = 3072;
                 filters = 0x16161616;
             }
-            if ( !cam_mul[0] || model[0] == 'V' ) {
+            if ( !GLOBAL_cam_mul[0] || GLOBAL_model[0] == 'V' ) {
                 filters = 0;
             } else {
                 is_raw = tiff_samples;
             }
         } else if ( width == 2116 ) {
-            strcpy(model, "Valeo 6");
+            strcpy(GLOBAL_model, "Valeo 6");
             height -= 2 * (top_margin = 30);
             width -= 2 * (left_margin = 55);
             filters = 0x49494949;
         } else if ( width == 3171 ) {
-            strcpy(model, "Valeo 6");
+            strcpy(GLOBAL_model, "Valeo 6");
             height -= 2 * (top_margin = 24);
             width -= 2 * (left_margin = 24);
             filters = 0x16161616;
         }
-    } else if ( !strcmp(make, "Leica") || !strcmp(make, "Panasonic") ) {
+    } else if ( !strcmp(GLOBAL_make, "Leica") || !strcmp(GLOBAL_make, "Panasonic") ) {
         if ((flen - GLOBAL_IO_profileOffset) / (THE_image.width * 8 / 7) == THE_image.height ) {
             TIFF_CALLBACK_loadRawData = &panasonic_load_raw;
         }
@@ -12325,13 +12067,13 @@ tiffIdentify() {
             }
         }
         filters = 0x01010101 * (unsigned char) "\x94\x61\x49\x16"[((filters - 1) ^ (left_margin & 1) ^ (top_margin << 1)) & 3];
-    } else if ( !strcmp(model, "C770UZ") ) {
+    } else if ( !strcmp(GLOBAL_model, "C770UZ") ) {
         height = 1718;
         width = 2304;
         filters = 0x16161616;
         TIFF_CALLBACK_loadRawData = &packed_load_raw;
         GLOBAL_loadFlags = 30;
-    } else if ( !strcmp(make, "Olympus") ) {
+    } else if ( !strcmp(GLOBAL_make, "Olympus") ) {
         height += height & 1;
         if ( exif_cfa ) {
             filters = exif_cfa;
@@ -12350,33 +12092,33 @@ tiffIdentify() {
             GLOBAL_loadFlags = 4;
         }
                                                                                                                                                                                                                                                     THE_image.bitsPerSample = 12;
-        if ( !strcmp(model, "E-300") || !strcmp(model, "E-500") ) {
+        if ( !strcmp(GLOBAL_model, "E-300") || !strcmp(GLOBAL_model, "E-500") ) {
             width -= 20;
             if ( TIFF_CALLBACK_loadRawData == &unpacked_load_raw ) {
                 ADOBE_maximum = 0xfc3;
                 memset(cblack, 0, sizeof cblack);
             }
-        } else if ( !strcmp(model, "E-330") ) {
+        } else if ( !strcmp(GLOBAL_model, "E-330") ) {
             width -= 30;
             if ( TIFF_CALLBACK_loadRawData == &unpacked_load_raw ) {
                 ADOBE_maximum = 0xf79;
             }
-        } else if ( !strcmp(model, "SP550UZ") ) {
+        } else if ( !strcmp(GLOBAL_model, "SP550UZ") ) {
             thumb_length = flen - (thumb_offset = 0xa39800);
             thumb_height = 480;
             thumb_width = 640;
-        } else if ( !strcmp(model, "TG-4") ) {
+        } else if ( !strcmp(GLOBAL_model, "TG-4") ) {
             width -= 16;
-        } else if ( !strcmp(model, "TG-5") ) {
+        } else if ( !strcmp(GLOBAL_model, "TG-5") ) {
             width -= 6;
         }
-    } else if ( !strcmp(model, "N Digital") ) {
+    } else if ( !strcmp(GLOBAL_model, "N Digital") ) {
         height = 2047;
         width = 3072;
         filters = 0x61616161;
                                                                                                                                                                                                                                                         GLOBAL_IO_profileOffset = 0x1a00;
         TIFF_CALLBACK_loadRawData = &packed_load_raw;
-    } else if ( !strcmp(model, "DSC-F828") ) {
+    } else if ( !strcmp(GLOBAL_model, "DSC-F828") ) {
         width = 3288;
         left_margin = 5;
         mask[1][3] = -17;
@@ -12385,41 +12127,41 @@ tiffIdentify() {
         filters = 0x9c9c9c9c;
                                                                                                                                                                                                                                                             IMAGE_colors = 4;
         strcpy(GLOBAL_bayerPatternLabels, "RGBE");
-    } else if ( !strcmp(model, "DSC-V3") ) {
+    } else if ( !strcmp(GLOBAL_model, "DSC-V3") ) {
         width = 3109;
         left_margin = 59;
         mask[0][1] = 9;
                                                                                                                                                                                                                                                                 GLOBAL_IO_profileOffset = 787392;
         TIFF_CALLBACK_loadRawData = &sony_load_raw;
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 3984 ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 3984 ) {
         width = 3925;
         GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 4288 ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 4288 ) {
         width -= 32;
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 4600 ) {
-        if ( !strcmp(model, "DSLR-A350") ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 4600 ) {
+        if ( !strcmp(GLOBAL_model, "DSLR-A350") ) {
             height -= 4;
         }
                                                                                                                                                                                                                                                                             ADOBE_black = 0;
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 4928 ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 4928 ) {
         if ( height < 3280 ) {
             width -= 8;
         }
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 5504 ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 5504 ) {
         width -= height > 3664 ? 8 : 32;
-        if ( !strncmp(model, "DSC", 3) ) {
+        if ( !strncmp(GLOBAL_model, "DSC", 3) ) {
             ADOBE_black = 200 << (THE_image.bitsPerSample - 12);
         }
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 6048 ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 6048 ) {
         width -= 24;
-        if ( strstr(model, "RX1") || strstr(model, "A99") ) {
+        if ( strstr(GLOBAL_model, "RX1") || strstr(GLOBAL_model, "A99") ) {
             width -= 6;
         }
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 7392 ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 7392 ) {
         width -= 30;
-    } else if ( !strcmp(make, "Sony") && THE_image.width == 8000 ) {
+    } else if ( !strcmp(GLOBAL_make, "Sony") && THE_image.width == 8000 ) {
         width -= 32;
-    } else if ( !strcmp(model, "DSLR-A100") ) {
+    } else if ( !strcmp(GLOBAL_model, "DSLR-A100") ) {
         if ( width == 3880 ) {
             height--;
             width = ++THE_image.width;
@@ -12430,11 +12172,11 @@ tiffIdentify() {
             GLOBAL_loadFlags = 2;
         }
         filters = 0x61616161;
-    } else if ( !strcmp(model, "PIXL") ) {
+    } else if ( !strcmp(GLOBAL_model, "PIXL") ) {
         height -= top_margin = 4;
         width -= left_margin = 32;
         gamma_curve(0, 7, 1, 255);
-    } else if ( !strcmp(model, "C603") || !strcmp(model, "C330") || !strcmp(model, "12MP") ) {
+    } else if ( !strcmp(GLOBAL_model, "C603") || !strcmp(GLOBAL_model, "C330") || !strcmp(GLOBAL_model, "12MP") ) {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         if ( filters && GLOBAL_IO_profileOffset ) {
             fseek(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset < 4096 ? 168 : 5252, SEEK_SET);
@@ -12443,42 +12185,42 @@ tiffIdentify() {
             gamma_curve(0, 3.875, 1, 255);
         }
         TIFF_CALLBACK_loadRawData = filters ?
-                &eight_bit_load_raw : strcmp(model, "C330") ? &kodak_c603_load_raw : &kodak_c330_load_raw;
+                &eight_bit_load_raw : strcmp(GLOBAL_model, "C330") ? &kodak_c603_load_raw : &kodak_c330_load_raw;
         GLOBAL_loadFlags = THE_image.bitsPerSample > 16;
                                                                                                                                                                                                                                                                                                             THE_image.bitsPerSample = 8;
-    } else if ( !strncasecmp(model, "EasyShare", 9) ) {
+    } else if ( !strncasecmp(GLOBAL_model, "EasyShare", 9) ) {
                                                                                                                                                                                                                                                                                                                 GLOBAL_IO_profileOffset = GLOBAL_IO_profileOffset < 0x15000 ? 0x15000 : 0x17000;
         TIFF_CALLBACK_loadRawData = &packed_load_raw;
-    } else if ( !strcasecmp(make, "Kodak") ) {
+    } else if ( !strcasecmp(GLOBAL_make, "Kodak") ) {
         if ( filters == UINT_MAX ) {
             filters = 0x61616161;
         }
-        if ( !strncmp(model, "NC2000", 6) || !strncmp(model, "EOSDCS", 6) ||
-             !strncmp(model, "DCS4", 4) ) {
+        if ( !strncmp(GLOBAL_model, "NC2000", 6) || !strncmp(GLOBAL_model, "EOSDCS", 6) ||
+             !strncmp(GLOBAL_model, "DCS4", 4) ) {
             width -= 4;
             left_margin = 2;
-            if ( model[6] == ' ' ) {
-                model[6] = 0;
+            if ( GLOBAL_model[6] == ' ' ) {
+                GLOBAL_model[6] = 0;
             }
-            if ( !strcmp(model, "DCS460A") ) {
+            if ( !strcmp(GLOBAL_model, "DCS460A") ) {
                 goto bw;
             }
-        } else if ( !strcmp(model, "DCS660M") ) {
+        } else if ( !strcmp(GLOBAL_model, "DCS660M") ) {
                 ADOBE_black = 214;
             goto bw;
-        } else if ( !strcmp(model, "DCS760M") ) {
+        } else if ( !strcmp(GLOBAL_model, "DCS760M") ) {
             bw:
                     IMAGE_colors = 1;
             filters = 0;
         }
-        if ( !strcmp(model + 4, "20X") ) {
+        if ( !strcmp(GLOBAL_model + 4, "20X") ) {
             strcpy(GLOBAL_bayerPatternLabels, "MYCY");
         }
-        if ( strstr(model, "DC25") ) {
-            strcpy(model, "DC25");
+        if ( strstr(GLOBAL_model, "DC25") ) {
+            strcpy(GLOBAL_model, "DC25");
             GLOBAL_IO_profileOffset = 15424;
         }
-        if ( !strncmp(model, "DC2", 3) ) {
+        if ( !strncmp(GLOBAL_model, "DC2", 3) ) {
             THE_image.height = 2 + (height = 242);
             if ( flen < 100000 ) {
                 THE_image.width = 256;
@@ -12497,26 +12239,26 @@ tiffIdentify() {
             pre_mul[2] = 1.209;
             pre_mul[3] = 1.036;
             TIFF_CALLBACK_loadRawData = &eight_bit_load_raw;
-        } else if ( !strcmp(model, "40") ) {
-            strcpy(model, "DC40");
+        } else if ( !strcmp(GLOBAL_model, "40") ) {
+            strcpy(GLOBAL_model, "DC40");
             height = 512;
             width = 768;
                 GLOBAL_IO_profileOffset = 1152;
             TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
                 THE_image.bitsPerSample = 12;
-        } else if ( strstr(model, "DC50") ) {
-            strcpy(model, "DC50");
+        } else if ( strstr(GLOBAL_model, "DC50") ) {
+            strcpy(GLOBAL_model, "DC50");
             height = 512;
             width = 768;
                     GLOBAL_IO_profileOffset = 19712;
             TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
-        } else if ( strstr(model, "DC120") ) {
-            strcpy(model, "DC120");
+        } else if ( strstr(GLOBAL_model, "DC120") ) {
+            strcpy(GLOBAL_model, "DC120");
             height = 976;
             width = 848;
             pixel_aspect = height / 0.75 / width;
             TIFF_CALLBACK_loadRawData = tiff_compress == 7 ? &kodak_jpeg_load_raw : &kodak_dc120_load_raw;
-        } else if ( !strcmp(model, "DCS200") ) {
+        } else if ( !strcmp(GLOBAL_model, "DCS200") ) {
             thumb_height = 128;
             thumb_width = 192;
             thumb_offset = 6144;
@@ -12524,16 +12266,16 @@ tiffIdentify() {
             write_thumb = &layer_thumb;
                             ADOBE_black = 17;
         }
-    } else if ( !strcmp(model, "Fotoman Pixtura") ) {
+    } else if ( !strcmp(GLOBAL_model, "Fotoman Pixtura") ) {
         height = 512;
         width = 768;
                                                                                                                                                                                                                                                                                                                         GLOBAL_IO_profileOffset = 3632;
         TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
         filters = 0x61616161;
         simple_coeff(2);
-    } else if ( !strncmp(model, "QuickTake", 9) ) {
+    } else if ( !strncmp(GLOBAL_model, "QuickTake", 9) ) {
         if ( head[5] ) {
-            strcpy(model + 10, "200");
+            strcpy(GLOBAL_model + 10, "200");
         }
         fseek(GLOBAL_IO_ifp, 544, SEEK_SET);
         height = read2bytes();
@@ -12545,7 +12287,7 @@ tiffIdentify() {
             GLOBAL_flipsMask = ~read2bytes() & 3 ? 5 : 6;
         }
         filters = 0x61616161;
-    } else if ( !strcmp(make, "Rollei") && !TIFF_CALLBACK_loadRawData ) {
+    } else if ( !strcmp(GLOBAL_make, "Rollei") && !TIFF_CALLBACK_loadRawData ) {
         switch ( THE_image.width ) {
             case 1316:
                 height = 1030;
@@ -12565,8 +12307,8 @@ tiffIdentify() {
     }
     //-------------------------------------------------------------------------------------------------------------
 
-    if ( !model[0] ) {
-        snprintf(model, 64, "%dx%d", width, height);
+    if ( !GLOBAL_model[0] ) {
+        snprintf(GLOBAL_model, 64, "%dx%d", width, height);
     }
 
     if ( filters == UINT_MAX) {
@@ -12588,7 +12330,7 @@ tiffIdentify() {
     }
 
     if ( GLOBAL_colorTransformForRaw ) {
-        adobe_coeff(make, model);
+        adobe_coeff(GLOBAL_make, GLOBAL_model);
     }
 
     if ( TIFF_CALLBACK_loadRawData == &kodak_radc_load_raw ) {
@@ -12725,7 +12467,7 @@ apply_profile(const char *input, const char *output) {
     }
     hTransform = cmsCreateTransform(hInProfile, TYPE_RGBA_16,
                                     hOutProfile, TYPE_RGBA_16, INTENT_PERCEPTUAL, 0);
-    cmsDoTransform(hTransform, image, image, width * height);
+    cmsDoTransform(hTransform, GLOBAL_image, GLOBAL_image, width * height);
     GLOBAL_colorTransformForRaw = 1;        /* Don't use rgb_cam with a profile */
     cmsDeleteTransform(hTransform);
     cmsCloseProfile(hOutProfile);
@@ -12846,7 +12588,7 @@ convert_to_rgb() {
     }
 
     memset(histogram, 0, sizeof histogram);
-    for ( img = image[0], row = 0; row < height; row++ ) {
+    for ( img = GLOBAL_image[0], row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++, img += 4 ) {
             if ( !GLOBAL_colorTransformForRaw ) {
                 out[0] = out[1] = out[2] = 0;
@@ -12897,7 +12639,7 @@ fuji_rotate() {
         return;
     }
     if ( OPTIONS_values->verbose ) {
-        fprintf(stderr, _("Rotating image 45 degrees...\n"));
+        fprintf(stderr, _("Rotating GLOBAL_image 45 degrees...\n"));
     }
     fuji_width = (fuji_width - 1 + shrink) >> shrink;
     step = sqrt(0.5);
@@ -12915,7 +12657,7 @@ fuji_rotate() {
             }
             fr = r - ur;
             fc = c - uc;
-            pix = image + ur * width + uc;
+            pix = GLOBAL_image + ur * width + uc;
             for ( i = 0; i < IMAGE_colors; i++ ) {
                 img[row * wide + col][i] =
                         (pix[0][i] * (1 - fc) + pix[1][i] * fc) * (1 - fr) +
@@ -12923,10 +12665,10 @@ fuji_rotate() {
             }
         }
     }
-    free(image);
+    free(GLOBAL_image);
     width = wide;
     height = high;
-    image = img;
+    GLOBAL_image = img;
     fuji_width = 0;
 }
 
@@ -12946,7 +12688,7 @@ stretch() {
         return;
     }
     if ( OPTIONS_values->verbose ) {
-        fprintf(stderr, _("Stretching the image...\n"));
+        fprintf(stderr, _("Stretching the GLOBAL_image...\n"));
     }
     if ( pixel_aspect < 1 ) {
         newdim = height / pixel_aspect + 0.5;
@@ -12954,7 +12696,7 @@ stretch() {
         memoryError(img, "stretch()");
         for ( rc = row = 0; row < newdim; row++, rc += pixel_aspect ) {
             frac = rc - (c = rc);
-            pix0 = pix1 = image[c * width];
+            pix0 = pix1 = GLOBAL_image[c * width];
             if ( c + 1 < height ) {
                 pix1 += width * 4;
             }
@@ -12971,7 +12713,7 @@ stretch() {
         memoryError(img, "stretch()");
         for ( rc = col = 0; col < newdim; col++, rc += 1 / pixel_aspect ) {
             frac = rc - (c = rc);
-            pix0 = pix1 = image[c];
+            pix0 = pix1 = GLOBAL_image[c];
             if ( c + 1 < width ) {
                 pix1 += 4;
             }
@@ -12983,8 +12725,8 @@ stretch() {
         }
         width = newdim;
     }
-    free(image);
-    image = img;
+    free(GLOBAL_image);
+    GLOBAL_image = img;
 }
 
 int
@@ -13090,8 +12832,8 @@ tiff_head(struct tiff_hdr *th, int full) {
     th->rat[6] *= aperture;
     th->rat[8] *= focal_len;
     strncpy(th->desc, desc, 512);
-    strncpy(th->make, make, 64);
-    strncpy(th->model, model, 64);
+    strncpy(th->make, GLOBAL_make, 64);
+    strncpy(th->model, GLOBAL_model, 64);
     strcpy(th->soft, "dcraw v"DCRAW_VERSION);
     t = localtime(&timestamp);
     snprintf(th->date, 20, "%04d:%02d:%02d %02d:%02d:%02d",
@@ -13243,11 +12985,11 @@ write_ppm_tiff() {
         for ( col = 0; col < width; col++, soff += cstep ) {
             if ( OPTIONS_values->outputBitsPerPixel == 8 ) {
                 for ( c = 0; c < IMAGE_colors; c++ ) {
-                    ppm[col * IMAGE_colors + c] = GAMMA_curveFunctionLookupTable[image[soff][c]] >> 8;
+                    ppm[col * IMAGE_colors + c] = GAMMA_curveFunctionLookupTable[GLOBAL_image[soff][c]] >> 8;
                 }
             } else {
                 for ( c = 0; c < IMAGE_colors; c++ ) {
-                    ppm2[col * IMAGE_colors + c] = GAMMA_curveFunctionLookupTable[image[soff][c]];
+                    ppm2[col * IMAGE_colors + c] = GAMMA_curveFunctionLookupTable[GLOBAL_image[soff][c]];
                 }
             }
         }
@@ -13287,7 +13029,7 @@ main(int argc, const char **argv) {
 
     if ( OPTIONS_values->write_to_stdout ) {
         if ( isatty(1) ) {
-            fprintf(stderr, _("Will not write an image to the terminal!\n"));
+            fprintf(stderr, _("Will not write an GLOBAL_image to the terminal!\n"));
             return 1;
         }
 #if defined(WIN32) || defined(DJGPP) || defined(__CYGWIN__)
@@ -13300,7 +13042,7 @@ main(int argc, const char **argv) {
     for ( ; arg < argc; arg++ ) {
         status = 1;
         THE_image.rawData = 0;
-        image = 0;
+        GLOBAL_image = 0;
         GLOBAL_outputIccProfile = 0;
         meta_data = ofname = 0;
         ofp = stdout;
@@ -13362,7 +13104,7 @@ main(int argc, const char **argv) {
                 goto next;
             } else {
                 if ( CALLBACK_loadThumbnailRawData ) {
-                    // Will work over RAW image on following code
+                    // Will work over RAW GLOBAL_image on following code
                     TIFF_CALLBACK_loadRawData = CALLBACK_loadThumbnailRawData;
                     GLOBAL_IO_profileOffset = thumb_offset;
                     height = thumb_height;
@@ -13380,10 +13122,10 @@ main(int argc, const char **argv) {
             height += height & 1;
             width += width & 1;
         }
-        if ( OPTIONS_values->identify_only && OPTIONS_values->verbose && make[0] ) {
+        if ( OPTIONS_values->identify_only && OPTIONS_values->verbose && GLOBAL_make[0] ) {
             printf(_("\nFilename: %s\n"), CAMERA_IMAGE_information.inputFilename);
             printf(_("Timestamp: %s"), ctime(&timestamp));
-            printf(_("Camera: %s %s\n"), make, model);
+            printf(_("Camera: %s %s\n"), GLOBAL_make, GLOBAL_model);
             if ( artist[0] ) {
                 printf(_("Owner: %s\n"), artist);
             }
@@ -13465,15 +13207,15 @@ main(int argc, const char **argv) {
                 for ( c = 0; c < IMAGE_colors; c++ ) {
                     printf(" %f", pre_mul[c]);
                 }
-                if ( cam_mul[0] > 0 ) {
+                if ( GLOBAL_cam_mul[0] > 0 ) {
                     printf(_("\nCamera multipliers:"));
                     for ( c = 0; c < 4; c++ ) {
-                        printf(" %f", cam_mul[c]);
+                        printf(" %f", GLOBAL_cam_mul[c]);
                     }
                 }
                 putchar('\n');
             } else {
-                printf(_("%s is a %s %s image.\n"), CAMERA_IMAGE_information.inputFilename, make, model);
+                printf(_("%s is a %s %s GLOBAL_image.\n"), CAMERA_IMAGE_information.inputFilename, GLOBAL_make, GLOBAL_model);
             }
             next:
             fclose(GLOBAL_IO_ifp);
@@ -13487,14 +13229,14 @@ main(int argc, const char **argv) {
             THE_image.rawData = (unsigned short *) calloc((THE_image.height + 7), THE_image.width * 2);
             memoryError(THE_image.rawData, "main()");
         } else {
-            image = (unsigned short (*)[4]) calloc(iheight, iwidth * sizeof *image);
-            memoryError(image, "main()");
+            GLOBAL_image = (unsigned short (*)[4]) calloc(iheight, iwidth * sizeof *GLOBAL_image);
+            memoryError(GLOBAL_image, "main()");
         }
         if ( OPTIONS_values->verbose ) {
-            fprintf(stderr, _("Loading %s %s image from %s ...\n"), make, model, CAMERA_IMAGE_information.inputFilename);
+            fprintf(stderr, _("Loading %s %s GLOBAL_image from %s ...\n"), GLOBAL_make, GLOBAL_model, CAMERA_IMAGE_information.inputFilename);
         }
         if ( OPTIONS_values->shotSelect >= is_raw ) {
-            fprintf(stderr, _("%s: \"-s %d\" requests a nonexistent image!\n"), CAMERA_IMAGE_information.inputFilename, OPTIONS_values->shotSelect);
+            fprintf(stderr, _("%s: \"-s %d\" requests a nonexistent GLOBAL_image!\n"), CAMERA_IMAGE_information.inputFilename, OPTIONS_values->shotSelect);
         }
         fseeko(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset, SEEK_SET);
         if ( THE_image.rawData && OPTIONS_values->readFromStdin ) {
@@ -13511,8 +13253,8 @@ main(int argc, const char **argv) {
         iheight = (height + shrink) >> shrink;
         iwidth = (width + shrink) >> shrink;
         if ( THE_image.rawData ) {
-            image = (unsigned short (*)[4]) calloc(iheight, iwidth * sizeof *image);
-            memoryError(image, "main()");
+            GLOBAL_image = (unsigned short (*)[4]) calloc(iheight, iwidth * sizeof *GLOBAL_image);
+            memoryError(GLOBAL_image, "main()");
             crop_masked_pixels();
             free(THE_image.rawData);
         }
@@ -13562,8 +13304,8 @@ main(int argc, const char **argv) {
         if ( is_foveon ) {
             if ( OPTIONS_values->documentMode || TIFF_CALLBACK_loadRawData == &foveon_dp_load_raw ) {
                 for ( i = 0; i < height * width * 4; i++ ) {
-                    if ((short) image[0][i] < 0 ) {
-                        image[0][i] = 0;
+                    if ((short) GLOBAL_image[0][i] < 0 ) {
+                        GLOBAL_image[0][i] = 0;
                     }
                 }
             } else {
@@ -13590,7 +13332,7 @@ main(int argc, const char **argv) {
         }
         if ( mix_green ) {
             for ( IMAGE_colors = 3, i = 0; i < height * width; i++ ) {
-                image[i][1] = (image[i][1] + image[i][3]) >> 1;
+                GLOBAL_image[i][1] = (GLOBAL_image[i][1] + GLOBAL_image[i][3]) >> 1;
             }
         }
         if ( !is_foveon && IMAGE_colors == 3 ) {
@@ -13671,8 +13413,8 @@ main(int argc, const char **argv) {
         if ( GLOBAL_outputIccProfile ) {
             free(GLOBAL_outputIccProfile);
         }
-        if ( image ) {
-            free(image);
+        if ( GLOBAL_image ) {
+            free(GLOBAL_image);
         }
         if ( OPTIONS_values->multiOut ) {
             if ( ++OPTIONS_values->shotSelect < is_raw ) arg--;

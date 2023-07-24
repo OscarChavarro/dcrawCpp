@@ -1,5 +1,5 @@
 # dcrawCpp
-A modernized CPP version of [DCRAW](https://www.dechifro.org/dcraw/) image loading software from Dave Coffin.
+A modernized CPP version of [DCRAW](https://www.dechifro.org/dcraw/) GLOBAL_image loading software from Dave Coffin.
 
 ## Why to have this fork?
 
@@ -51,11 +51,11 @@ like this:
 ./bin/dcraw -v share/sampleImages/Sony/ILCE-7RM4/14bitsUncompressed.arw
 ```
 
-in this example, given raw image taken from a mirrorless camera will be converted to a simple .ppm file
+in this example, given raw GLOBAL_image taken from a mirrorless camera will be converted to a simple .ppm file
 that will be located in the same folder as the source. Note that in the conversion process, there are several
 steps involved:
-- Original raw files from cameras are usually binary variants of TIFF file format specification: container files with several different pieces of information inside: multiple images (i.e. raw image from sensor in Bayer tile layout + preview images of several sizes, GPS information, camera exif metadata, etc.)
+- Original raw files from cameras are usually binary variants of TIFF file format specification: container files with several different pieces of information inside: multiple images (i.e. raw GLOBAL_image from sensor in Bayer tile layout + preview images of several sizes, GPS information, camera exif metadata, etc.)
 - Since sensor data comes in some sort of tiling, program needs to do a de-mosaic process, involving an interpolation step and a color transformation.
-- Program converts the image data from several available color spaces in to RGB.
-- Program modifies the image, using color aberration, white balance and gamma function corrections.
-- Program writes final image in to output PPM/PNG file.
+- Program converts the GLOBAL_image data from several available color spaces in to RGB.
+- Program modifies the GLOBAL_image, using color aberration, white balance and gamma function corrections.
+- Program writes final GLOBAL_image in to output PPM/PNG file.
