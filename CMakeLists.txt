@@ -68,7 +68,7 @@ add_executable(dcraw
         src/postprocessors/histogram.cpp
         src/postprocessors/histogram.h
         src/thumbnailExport.cpp
-        src/thumbnailExport.h)
+        src/thumbnailExport.h src/persistence/readers/rawloaders/jpegRawLoaders.cpp src/persistence/readers/rawloaders/jpegRawLoaders.h)
 target_link_libraries(dcraw PRIVATE jasper jpeg tiff lcms2)
 
 if(UNIX AND NOT APPLE)

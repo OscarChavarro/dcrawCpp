@@ -115,6 +115,10 @@ typedef unsigned long long UINT64;
 #include "common/CameraImageInformation.h"
 #include "thumbnailExport.h"
 #include "common/util.h"
+#include "colorRepresentation/adobeCoeff.h"
+#include "postprocessors/gamma.h"
+#include "persistence/readers/rawloaders/jpegRawLoaders.h"
+#include "persistence/readers/rawloaders/sonyRawLoaders.h"
 
 FILE *ofp;
 
@@ -148,8 +152,6 @@ unsigned fuji_layout;
 unsigned numberOfRawImages;
 unsigned tiff_samples;
 unsigned tiff_compress;
-unsigned black;
-unsigned maximum;
 unsigned mix_green;
 unsigned zero_is_bad;
 unsigned is_raw;
@@ -173,7 +175,6 @@ unsigned short thumb_height;
 unsigned short (*image)[4];
 unsigned short cblack[4102];
 unsigned short white[8][8];
-unsigned short curve[0x10000];
 unsigned short cr2_slice[3];
 unsigned short sraw_mul[4];
 double pixel_aspect;
@@ -231,57 +232,6 @@ struct ph1 {
     float tag_210;
 };
 struct ph1 ph1;
-
-/*
-In order to inline this calculation, I make the risky
-assumption that all filter patterns can be described
-by a repeating pattern of eight rows and two columns
-
-Do not use the FC or BAYER macros with the Leaf CatchLight,
-because its pattern is 16x16, not 2x8.
-
-Return values are either 0/1/2/3 = G/M/C/Y or 0/1/2/3 = R/G1/B/G2
-
-PowerShot 600	PowerShot A50	PowerShot Pro70	Pro90 & G1
-0xe1e4e1e4:	0x1b4e4b1e:	0x1e4b4e1b:	0xb4b4b4b4:
-
-  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5
-0 G M G M G M	0 C Y C Y C Y	0 Y C Y C Y C	0 G M G M G M
-1 C Y C Y C Y	1 M G M G M G	1 M G M G M G	1 Y C Y C Y C
-2 M G M G M G	2 Y C Y C Y C	2 C Y C Y C Y
-3 C Y C Y C Y	3 G M G M G M	3 G M G M G M
-        4 C Y C Y C Y	4 Y C Y C Y C
-PowerShot A5	5 G M G M G M	5 G M G M G M
-0x1e4e1e4e:	6 Y C Y C Y C	6 C Y C Y C Y
-        7 M G M G M G	7 M G M G M G
-  0 1 2 3 4 5
-0 C Y C Y C Y
-1 G M G M G M
-2 C Y C Y C Y
-3 M G M G M G
-
-All RGB cameras use one of these Bayer grids:
-
-0x16161616:	0x61616161:	0x49494949:	0x94949494:
-
-  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5
-0 B G B G B G	0 G R G R G R	0 G B G B G B	0 R G R G R G
-1 G R G R G R	1 B G B G B G	1 R G R G R G	1 G B G B G B
-2 B G B G B G	2 G R G R G R	2 G B G B G B	2 R G R G R G
-3 G R G R G R	3 B G B G B G	3 R G R G R G	3 G B G B G B
-*/
-
-#define RAW(row, col) \
-    THE_image.rawData[(row)*THE_image.width+(col)]
-
-#define FC(row, col) \
-    (filters >> ((((row) << 1 & 14) + ((col) & 1)) << 1) & 3)
-
-#define BAYER(row, col) \
-    image[((row) >> shrink)*iwidth + ((col) >> shrink)][FC(row,col)]
-
-#define BAYER2(row, col) \
-    image[((row) >> shrink)*iwidth + ((col) >> shrink)][fcol(row,col)]
 
 int
 fcol(int row, int col) {
@@ -404,7 +354,7 @@ cubic_spline(const int *x_, const int *y_, const int len) {
                         + (c[j] * 0.5) * v * v + ((c[j + 1] - c[j]) / (6 * d[j])) * v * v * v;
             }
         }
-        curve[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 : (unsigned short) (y_out * 65535.0 + 0.5));
+        GAMMA_curveFunctionLookupTable[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 : (unsigned short) (y_out * 65535.0 + 0.5));
     }
     free(A);
 }
@@ -640,7 +590,7 @@ canon_600_correct() {
 
     for ( row = 0; row < height; row++ )
         for ( col = 0; col < width; col++ ) {
-            if ( (val = BAYER(row, col) - black) < 0 ) {
+            if ((val = BAYER(row, col) - ADOBE_black) < 0 ) {
                 val = 0;
             }
             val = val * mul[row & 3][col & 1] >> 9;
@@ -649,8 +599,8 @@ canon_600_correct() {
     canon_600_fixed_wb(1311);
     canon_600_auto_wb();
     canon_600_coeff();
-    maximum = (0x3ff - black) * 1109 >> 9;
-    black = 0;
+    ADOBE_maximum = (0x3ff - ADOBE_black) * 1109 >> 9;
+    ADOBE_black = 0;
 }
 
 int
@@ -837,7 +787,7 @@ canon_load_raw() {
 
     crw_init_tables(tiff_compress, huff);
     lowbits = canon_has_lowbits();
-    if ( !lowbits ) maximum = 0x3ff;
+    if ( !lowbits ) ADOBE_maximum = 0x3ff;
     fseek(GLOBAL_IO_ifp, 540 + lowbits * THE_image.height * THE_image.width / 4, SEEK_SET);
     GLOBAL_IO_zeroAfterFf = 1;
     getbits(-1);
@@ -898,23 +848,6 @@ canon_load_raw() {
         free(huff[c]);
     }
 }
-
-struct jhead {
-    int algo;
-    int bits;
-    int high;
-    int wide;
-    int clrs;
-    int sraw;
-    int psv;
-    int restart;
-    int vpred[6];
-    unsigned short quant[64];
-    unsigned short idct[64];
-    unsigned short *huff[20];
-    unsigned short *free[20];
-    unsigned short *row;
-};
 
 int
 ljpeg_start(struct jhead *jh, int info_only) {
@@ -1015,96 +948,6 @@ ljpeg_end(struct jhead *jh) {
     free(jh->row);
 }
 
-int
-ljpeg_diff(unsigned short *huff) {
-    int len;
-    int diff;
-
-    len = gethuff(huff);
-    if ( len == 16 && (!GLOBAL_dngVersion || GLOBAL_dngVersion >= 0x1010000) ) {
-        return -32768;
-    }
-    diff = getbits(len);
-    if ( (diff & (1 << (len - 1))) == 0 ) {
-        diff -= (1 << len) - 1;
-    }
-    return diff;
-}
-
-unsigned short *
-ljpeg_row(int jrow, struct jhead *jh) {
-    int col;
-    int c;
-    int diff;
-    int pred;
-    int spred = 0;
-    unsigned short mark = 0;
-    unsigned short *row[3];
-
-    if ( jrow * jh->wide % jh->restart == 0 ) {
-        for ( c = 0; c < 6; c++ ) {
-            jh->vpred[c] = 1 << (jh->bits - 1);
-        }
-        if ( jrow ) {
-            fseek(GLOBAL_IO_ifp, -2, SEEK_CUR);
-            do mark = (mark << 8) + (c = fgetc(GLOBAL_IO_ifp));
-            while ( c != EOF && mark >> 4 != 0xffd );
-        }
-        getbits(-1);
-    }
-    for ( c = 0; c < 3; c++ ) {
-        row[c] = jh->row + jh->wide * jh->clrs * ((jrow + c) & 1);
-    }
-    for ( col = 0; col < jh->wide; col++ ) {
-        for ( c = 0; c < jh->clrs; c++ ) {
-            diff = ljpeg_diff(jh->huff[c]);
-            if ( jh->sraw && c <= jh->sraw && (col | c)) {
-                pred = spred;
-            } else {
-                if ( col ) {
-                    pred = row[0][-jh->clrs];
-                } else {
-                    pred = (jh->vpred[c] += diff) - diff;
-                }
-            }
-            if ( jrow && col )
-                switch ( jh->psv ) {
-                    case 1:
-                        break;
-                    case 2:
-                        pred = row[1][0];
-                        break;
-                    case 3:
-                        pred = row[1][-jh->clrs];
-                        break;
-                    case 4:
-                        pred = pred + row[1][0] - row[1][-jh->clrs];
-                        break;
-                    case 5:
-                        pred = pred + ((row[1][0] - row[1][-jh->clrs]) >> 1);
-                        break;
-                    case 6:
-                        pred = row[1][0] + ((pred - row[1][-jh->clrs]) >> 1);
-                        break;
-                    case 7:
-                        pred = (pred + row[1][0]) >> 1;
-                        break;
-                    default:
-                        pred = 0;
-                }
-            if ( (**row = pred + diff) >> jh->bits ) {
-                inputOutputError();
-            }
-            if ( c <= jh->sraw ) {
-                spred = **row;
-            }
-            row[0]++;
-            row[1]++;
-        }
-    }
-    return row[2];
-}
-
 void
 lossless_jpeg_load_raw() {
     int jwide;
@@ -1130,7 +973,7 @@ lossless_jpeg_load_raw() {
             row = jrow & 1 ? height - 1 - jrow / 2 : jrow / 2;
         }
         for ( jcol = 0; jcol < jwide; jcol++ ) {
-            val = curve[*rp++];
+            val = GAMMA_curveFunctionLookupTable[*rp++];
             if ( cr2_slice[0] ) {
                 jidx = jrow * jwide + jcol;
                 i = jidx / (cr2_slice[1] * THE_image.height);
@@ -1254,7 +1097,7 @@ canon_sraw_load_raw() {
         }
     }
     ljpeg_end(&jh);
-    maximum = 0x3fff;
+    ADOBE_maximum = 0x3fff;
 }
 
 void
@@ -1266,13 +1109,13 @@ adobe_copy_pixel(unsigned row, unsigned col, unsigned short **rp) {
     }
     if ( THE_image.rawData ) {
         if ( row < THE_image.height && col < THE_image.width ) {
-            RAW(row, col) = curve[**rp];
+            RAW(row, col) = GAMMA_curveFunctionLookupTable[**rp];
         }
         *rp += tiff_samples;
     } else {
         if ( row < height && col < width ) {
             for ( c = 0; c < tiff_samples; c++ ) {
-                image[row * width + col][c] = curve[(*rp)[c]];
+                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[(*rp)[c]];
             }
         }
         *rp += tiff_samples;
@@ -1532,20 +1375,20 @@ nikon_load_raw() {
     }
     if ( ver0 == 0x44 && ver1 == 0x20 && step > 0 ) {
         for ( i = 0; i < csize; i++ ) {
-            curve[i * step] = read2bytes();
+            GAMMA_curveFunctionLookupTable[i * step] = read2bytes();
         }
         for ( i = 0; i < max; i++ ) {
-            curve[i] = (curve[i - i % step] * (step - i % step) +
-                        curve[i - i % step + step] * (i % step)) / step;
+            GAMMA_curveFunctionLookupTable[i] = (GAMMA_curveFunctionLookupTable[i - i % step] * (step - i % step) +
+                        GAMMA_curveFunctionLookupTable[i - i % step + step] * (i % step)) / step;
         }
         fseek(GLOBAL_IO_ifp, meta_offset + 562, SEEK_SET);
         split = read2bytes();
     } else {
         if ( ver0 != 0x46 && csize <= 0x4001 ) {
-            readShorts(curve, max = csize);
+            readShorts(GAMMA_curveFunctionLookupTable, max = csize);
         }
     }
-    while ( curve[max - 2] == curve[max - 1] ) {
+    while ( GAMMA_curveFunctionLookupTable[max - 2] == GAMMA_curveFunctionLookupTable[max - 1] ) {
         max--;
     }
     huff = make_decoder(nikon_tree[tree]);
@@ -1573,7 +1416,7 @@ nikon_load_raw() {
             if ( (unsigned short) (hpred[col & 1] + min) >= max ) {
                 inputOutputError();
             }
-            RAW(row, col) = curve[LIM((short)hpred[col & 1], 0, 0x3fff)];
+            RAW(row, col) = GAMMA_curveFunctionLookupTable[LIM((short)hpred[col & 1], 0, 0x3fff)];
         }
     }
     free(huff);
@@ -1604,7 +1447,7 @@ nikon_yuv_load_raw() {
             rgb[1] = yuv[b] - 0.337633 * yuv[2] - 0.698001 * yuv[3];
             rgb[2] = yuv[b] + 1.732446 * yuv[2];
             for ( c = 0; c < 3; c++ ) {
-                image[row * width + col][c] = curve[LIM(rgb[c], 0, 0xfff)] / cam_mul[c];
+                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 0xfff)] / cam_mul[c];
             }
         }
     }
@@ -1792,7 +1635,7 @@ rollei_load_raw() {
             THE_image.rawData[todo[i]] = (todo[i + 1] & 0x3ff);
         }
     }
-    maximum = 0x3ff;
+    ADOBE_maximum = 0x3ff;
 }
 
 int
@@ -1939,7 +1782,7 @@ phase_one_correct() {
             poly[3] += (ph1.tag_210 - poly[7]) * poly[6] + 1;
             for ( i = 0; i < 0x10000; i++ ) {
                 num = (poly[5] * i + poly[3]) * i + poly[1];
-                curve[i] = LIM(num, 0, 65535);
+                GAMMA_curveFunctionLookupTable[i] = LIM(num, 0, 65535);
             }
             goto apply; // apply to right half
         } else {
@@ -1952,12 +1795,12 @@ phase_one_correct() {
                     for ( num = 0, j = 4; j--; ) {
                         num = num * i + poly[j];
                     }
-                    curve[i] = LIM(num + i, 0, 65535);
+                    GAMMA_curveFunctionLookupTable[i] = LIM(num + i, 0, 65535);
                 }
                 apply: // apply to whole image
                 for ( row = 0; row < THE_image.height; row++ ) {
                     for ( col = (tag & 1) * ph1.split_col; col < THE_image.width; col++ ) {
-                        RAW(row, col) = curve[RAW(row, col)];
+                        RAW(row, col) = GAMMA_curveFunctionLookupTable[RAW(row, col)];
                     }
                 }
             } else {
@@ -2056,7 +1899,7 @@ phase_one_correct() {
                                                       row < (qr ? THE_image.height : ph1.split_row); row++ ) {
                                                     for ( col = (qc ? ph1.split_col : 0);
                                                           col < (qc ? THE_image.width : ph1.split_col); col++ ) {
-                                                        RAW(row, col) = curve[RAW(row, col)];
+                                                        RAW(row, col) = GAMMA_curveFunctionLookupTable[RAW(row, col)];
                                                     }
                                                 }
                                             }
@@ -2123,7 +1966,7 @@ phase_one_correct() {
                                                               row < (qr ? THE_image.height : ph1.split_row); row++ ) {
                                                             for ( col = (qc ? ph1.split_col : 0);
                                                                   col < (qc ? THE_image.width : ph1.split_col); col++ ) {
-                                                                RAW(row, col) = curve[RAW(row, col)];
+                                                                RAW(row, col) = GAMMA_curveFunctionLookupTable[RAW(row, col)];
                                                             }
                                                         }
                                                     }
@@ -2269,7 +2112,7 @@ phase_one_load_raw_c() {
         readShorts((unsigned short *) rblack[0], THE_image.width * 2);
     }
     for ( i = 0; i < 256; i++ ) {
-        curve[i] = i * i / 3.969 + 0.5;
+        GAMMA_curveFunctionLookupTable[i] = i * i / 3.969 + 0.5;
     }
     for ( row = 0; row < THE_image.height; row++ ) {
         fseek(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset + offset[row], SEEK_SET);
@@ -2297,7 +2140,7 @@ phase_one_load_raw_c() {
                 inputOutputError();
             }
             if ( ph1.format == 5 && pixel[col] < 256 ) {
-                pixel[col] = curve[pixel[col]];
+                pixel[col] = GAMMA_curveFunctionLookupTable[pixel[col]];
             }
         }
         for ( col = 0; col < THE_image.width; col++ ) {
@@ -2310,7 +2153,7 @@ phase_one_load_raw_c() {
         }
     }
     free(pixel);
-    maximum = 0xfffc - ph1.black;
+    ADOBE_maximum = 0xfffc - ph1.black;
 }
 
 void
@@ -2430,7 +2273,7 @@ leaf_hdr_load_raw() {
         }
     }
     if ( !filters ) {
-        maximum = 0xffff;
+        ADOBE_maximum = 0xffff;
         GLOBAL_colorTransformForRaw = 1;
         free(pixel);
     }
@@ -2442,7 +2285,7 @@ unpacked_load_raw() {
     int col;
     int bits = 0;
 
-    while ( 1 << ++bits < maximum );
+    while ( 1 << ++bits < ADOBE_maximum );
     readShorts(THE_image.rawData, THE_image.width * THE_image.height);
     for ( row = 0; row < THE_image.height; row++ ) {
         for ( col = 0; col < THE_image.width; col++ ) {
@@ -2587,7 +2430,7 @@ nokia_load_raw() {
         }
     }
     free(data);
-    maximum = 0x3ff;
+    ADOBE_maximum = 0x3ff;
     if ( strcmp(make, "OmniVision") ) {
         return;
     }
@@ -2621,11 +2464,11 @@ canon_rmf_load_raw() {
                         orow += THE_image.height;
                     }
                 }
-                RAW(orow, ocol) = curve[bits >> (10 * c + 2) & 0x3ff];
+                RAW(orow, ocol) = GAMMA_curveFunctionLookupTable[bits >> (10 * c + 2) & 0x3ff];
             }
         }
     }
-    maximum = curve[0x3ff];
+    ADOBE_maximum = GAMMA_curveFunctionLookupTable[0x3ff];
 }
 
 unsigned
@@ -2808,7 +2651,7 @@ minolta_rd175_load_raw() {
             }
         }
     }
-    maximum = 0xff << 1;
+    ADOBE_maximum = 0xff << 1;
 }
 
 void
@@ -2895,7 +2738,7 @@ quicktake_100_load_raw() {
             RAW(row, col) = curve[pixel[row + 2][col + 2]];
         }
     }
-    maximum = 0x3ff;
+    ADOBE_maximum = 0x3ff;
 }
 
 #define radc_token(tree) ((signed char) getbithuff(8,huff[tree]))
@@ -2948,7 +2791,7 @@ kodak_radc_load_raw() {
 
     for ( i = 2; i < 12; i += 2 ) {
         for ( c = pt[i - 2]; c <= pt[i]; c++ ) {
-            curve[c] = (float)
+            GAMMA_curveFunctionLookupTable[c] = (float)
                                (c - pt[i - 2]) / (pt[i] - pt[i - 2]) * (pt[i + 1] - pt[i - 1]) + pt[i - 1] + 0.5;
         }
     }
@@ -3032,9 +2875,9 @@ kodak_radc_load_raw() {
         }
     }
     for ( i = 0; i < height * width; i++ ) {
-        THE_image.rawData[i] = curve[THE_image.rawData[i]];
+        THE_image.rawData[i] = GAMMA_curveFunctionLookupTable[THE_image.rawData[i]];
     }
-    maximum = 0x3fff;
+    ADOBE_maximum = 0x3fff;
 }
 
 #undef FORYX
@@ -3095,7 +2938,7 @@ kodak_jpeg_load_raw() {
     }
     jpeg_finish_decompress(&cinfo);
     jpeg_destroy_decompress(&cinfo);
-    maximum = 0xff << 1;
+    ADOBE_maximum = 0xff << 1;
 }
 
 void
@@ -3146,7 +2989,7 @@ lossy_dng_load_raw() {
     } else {
         gamma_curve(1 / 2.4, 12.92, 1, 255);
         for ( c = 0; c < 3; c++ ) {
-            memcpy(cur[c], curve, sizeof cur[0]);
+            memcpy(cur[c], GAMMA_curveFunctionLookupTable, sizeof cur[0]);
         };
     }
     cinfo.err = jpeg_std_error(&jerr);
@@ -3177,7 +3020,7 @@ lossy_dng_load_raw() {
         }
     }
     jpeg_destroy_decompress(&cinfo);
-    maximum = 0xffff;
+    ADOBE_maximum = 0xffff;
 }
 
 #endif
@@ -3198,7 +3041,7 @@ kodak_dc120_load_raw() {
             RAW(row, col) = (unsigned short) pixel[(col + shift) % 848];
         }
     }
-    maximum = 0xff;
+    ADOBE_maximum = 0xff;
 }
 
 void
@@ -3214,11 +3057,11 @@ eight_bit_load_raw() {
             inputOutputError();
         }
         for ( col = 0; col < THE_image.width; col++ ) {
-            RAW(row, col) = curve[pixel[col]];
+            RAW(row, col) = GAMMA_curveFunctionLookupTable[pixel[col]];
         }
     }
     free(pixel);
-    maximum = curve[0xff];
+    ADOBE_maximum = GAMMA_curveFunctionLookupTable[0xff];
 }
 
 void
@@ -3249,12 +3092,12 @@ kodak_c330_load_raw() {
             rgb[2] = rgb[1] + cb;
             rgb[0] = rgb[1] + cr;
             for ( c = 0; c < 3; c++ ) {
-                image[row * width + col][c] = curve[LIM(rgb[c], 0, 255)];
+                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
             };
         }
     }
     free(pixel);
-    maximum = curve[0xff];
+    ADOBE_maximum = GAMMA_curveFunctionLookupTable[0xff];
 }
 
 void
@@ -3284,12 +3127,12 @@ kodak_c603_load_raw() {
             rgb[2] = rgb[1] + cb;
             rgb[0] = rgb[1] + cr;
             for ( c = 0; c < 3; c++ ) {
-                image[row * width + col][c] = curve[LIM(rgb[c], 0, 255)];
+                image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
             };
         }
     }
     free(pixel);
-    maximum = curve[0xff];
+    ADOBE_maximum = GAMMA_curveFunctionLookupTable[0xff];
 }
 
 void
@@ -3349,7 +3192,7 @@ kodak_262_load_raw() {
             if ( val >> 8 ) {
                 inputOutputError();
             }
-            val = curve[pixel[pi++]];
+            val = GAMMA_curveFunctionLookupTable[pixel[pi++]];
             RAW(row, col) = val;
         }
     }
@@ -3430,7 +3273,7 @@ kodak_65000_load_raw() {
             len = MIN (256, width - col);
             ret = kodak_65000_decode(buf, len);
             for ( i = 0; i < len; i++ ) {
-                if ( (RAW(row, col + i) = curve[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12 ) {
+                if ( (RAW(row, col + i) = GAMMA_curveFunctionLookupTable[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12 ) {
                     inputOutputError();
                 }
             }
@@ -3474,7 +3317,7 @@ kodak_ycbcr_load_raw() {
                         if ((y[j][k] = y[j][k ^ 1] + *bp++) >> 10 ) inputOutputError();
                         ip = image[(row + j) * width + col + i + k];
                         for ( c = 0; c < 3; c++ ) {
-                            ip[c] = curve[LIM(y[j][k] + rgb[c], 0, 0xfff)];
+                            ip[c] = GAMMA_curveFunctionLookupTable[LIM(y[j][k] + rgb[c], 0, 0xfff)];
                         }
                     }
             }
@@ -3519,149 +3362,7 @@ kodak_thumb_load_raw() {
             readShorts(image[row * width + col], IMAGE_colors);
         }
     }
-    maximum = (1 << (thumb_misc & 31)) - 1;
-}
-
-void
-sony_decrypt(unsigned *data, int len, int start, int key) {
-    static unsigned pad[128];
-    static unsigned p;
-
-    if ( start ) {
-        for ( p = 0; p < 4; p++ ) {
-            pad[p] = key = key * 48828125 + 1;
-        }
-        pad[3] = pad[3] << 1 | (pad[0] ^ pad[2]) >> 31;
-        for ( p = 4; p < 127; p++ ) {
-            pad[p] = (pad[p - 4] ^ pad[p - 2]) << 1 | (pad[p - 3] ^ pad[p - 1]) >> 31;
-        }
-        for ( p = 0; p < 127; p++ ) {
-            pad[p] = htonl(pad[p]);
-        }
-    }
-    while ( len-- && p++ ) {
-        *data++ ^= pad[(p - 1) & 127] = pad[p & 127] ^ pad[(p + 64) & 127];
-    }
-}
-
-void
-sony_load_raw() {
-    unsigned char head[40];
-    unsigned short *pixel;
-    unsigned i;
-    unsigned key;
-    unsigned row;
-    unsigned col;
-
-    fseek(GLOBAL_IO_ifp, 200896, SEEK_SET);
-    fseek(GLOBAL_IO_ifp, (unsigned)fgetc(GLOBAL_IO_ifp) * 4 - 1, SEEK_CUR);
-    GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
-    key = read4bytes();
-    fseek(GLOBAL_IO_ifp, 164600, SEEK_SET);
-    fread(head, 1, 40, GLOBAL_IO_ifp);
-    sony_decrypt((unsigned *)head, 10, 1, key);
-    for ( i = 26; i-- > 22; ) {
-        key = key << 8 | head[i];
-    }
-    fseek(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset, SEEK_SET);
-    for ( row = 0; row < THE_image.height; row++ ) {
-        pixel = THE_image.rawData + row * THE_image.width;
-        if ( fread(pixel, 2, THE_image.width, GLOBAL_IO_ifp) < THE_image.width ) {
-            inputOutputError();
-        }
-        sony_decrypt((unsigned *)pixel, THE_image.width / 2, !row, key);
-        for ( col = 0; col < THE_image.width; col++ ) {
-            if ( (pixel[col] = ntohs(pixel[col])) >> 14 ) {
-                inputOutputError();
-            }
-        }
-    }
-    maximum = 0x3ff0;
-}
-
-void
-sony_arw_load_raw() {
-    unsigned short huff[32770];
-    static const unsigned short tab[18] =
-            {0xf11, 0xf10, 0xe0f, 0xd0e, 0xc0d, 0xb0c, 0xa0b, 0x90a, 0x809,
-             0x708, 0x607, 0x506, 0x405, 0x304, 0x303, 0x300, 0x202, 0x201};
-    int i;
-    int c;
-    int n;
-    int col;
-    int row;
-    int sum = 0;
-
-    huff[0] = 15;
-    for ( n = i = 0; i < 18; i++ ) {
-        for ( c = 0; c < 32768 >> (tab[i] >> 8); c++ ) {
-            huff[++n] = tab[i];
-        }
-    }
-    getbits(-1);
-    for ( col = THE_image.width; col--; ) {
-        for ( row = 0; row < THE_image.height + 1; row += 2 ) {
-            if ( row == THE_image.height ) {
-                row = 1;
-            }
-            if ( (sum += ljpeg_diff(huff)) >> 12 ) {
-                inputOutputError();
-            }
-            if ( row < height ) {
-                RAW(row, col) = sum;
-            }
-        }
-    }
-}
-
-void
-sony_arw2_load_raw() {
-    unsigned char *data;
-    unsigned char *dp;
-    unsigned short pix[16];
-    int row;
-    int col;
-    int val;
-    int max;
-    int min;
-    int imax;
-    int imin;
-    int sh;
-    int bit;
-    int i;
-
-    data = (unsigned char *)malloc(THE_image.width + 1);
-    memoryError(data, "sony_arw2_load_raw()");
-    for ( row = 0; row < THE_image.height; row++ ) {
-        fread(data, 1, THE_image.width, GLOBAL_IO_ifp);
-        for ( dp = data, col = 0; col < THE_image.width - 30; dp += 16 ) {
-            max = 0x7ff & (val = unsignedEndianSwap(dp));
-            min = 0x7ff & val >> 11;
-            imax = 0x0f & val >> 22;
-            imin = 0x0f & val >> 26;
-            for ( sh = 0; sh < 4 && 0x80 << sh <= max - min; sh++ );
-            for ( bit = 30, i = 0; i < 16; i++ ) {
-                if ( i == imax ) {
-                    pix[i] = max;
-                } else {
-                    if ( i == imin ) {
-                        pix[i] = min;
-                    } else {
-                        pix[i] = ((unsignedShortEndianSwap(dp + (bit >> 3)) >> (bit & 7) & 0x7f) << sh) + min;
-                        if ( pix[i] > 0x7ff ) {
-                            pix[i] = 0x7ff;
-                        }
-                        bit += 7;
-                    }
-                }
-            }
-            for ( i = 0; i < 16; i++, col += 2 ) {
-                RAW(row, col) = curve[pix[i] << 1] >> 2;
-            }
-            col -= col & 1 ? 1 : 31;
-        }
-    }
-    free(data);
+    ADOBE_maximum = (1 << (thumb_misc & 31)) - 1;
 }
 
 void
@@ -3919,7 +3620,7 @@ smal_decode_segment(unsigned seg[2][2], int holes) {
             pix += 2;
         }
     }
-    maximum = 0xff;
+    ADOBE_maximum = 0xff;
 }
 
 void
@@ -5164,8 +4865,8 @@ crop_masked_pixels() {
         }
     }
     if ( TIFF_CALLBACK_loadRawData == &canon_600_load_raw && width < THE_image.width ) {
-        black = (mblack[0] + mblack[1] + mblack[2] + mblack[3]) /
-                (mblack[4] + mblack[5] + mblack[6] + mblack[7]) - 4;
+        ADOBE_black = (mblack[0] + mblack[1] + mblack[2] + mblack[3]) /
+                      (mblack[4] + mblack[5] + mblack[6] + mblack[7]) - 4;
         canon_600_correct();
     } else {
         if ( zero < mblack[4] && mblack[5] && mblack[6] && mblack[7] ) {
@@ -5380,7 +5081,7 @@ subtract(const char *fname) {
     free(pixel);
     fclose(fp);
     memset(cblack, 0, sizeof cblack);
-    black = 0;
+    ADOBE_black = 0;
 }
 
 void
@@ -5420,9 +5121,9 @@ gamma_curve(double pwr, double ts, int mode, int imax) {
         return;
     }
     for ( i = 0; i < 0x10000; i++ ) {
-        curve[i] = 0xffff;
+        GAMMA_curveFunctionLookupTable[i] = 0xffff;
         if ( (r = (double) i / imax) < 1 ) {
-            curve[i] = 0x10000 * (mode
+            GAMMA_curveFunctionLookupTable[i] = 0x10000 * (mode
                                   ? (r < g[3] ? r * g[1] : (g[0] ? pow(r, g[0]) * (1 + g[4]) - g[4] : log(r) * g[2] +
                                                                                                       1))
                                   : (r < g[2] ? r / g[1] : (g[0] ? pow((r + g[4]) / (1 + g[4]), 1 / g[0]) : exp(
@@ -5529,12 +5230,12 @@ colorcheck()
                 c = FC(row, col);
                 if ( c >= IMAGE_colors ) c -= 2;
                 gmb_cam[sq][c] += BAYER2(row, col);
-                BAYER2(row, col) = black + (BAYER2(row, col) - black) / 2;
+                BAYER2(row, col) = ADOBE_black + (BAYER2(row, col) - ADOBE_black) / 2;
                 count[c]++;
             }
         }
         for ( c = 0; c < IMAGE_colors; c++ ) {
-            gmb_cam[sq][c] = gmb_cam[sq][c]/count[c] - black;
+            gmb_cam[sq][c] = gmb_cam[sq][c]/count[c] - ADOBE_black;
         }
         gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
         gmb_xyz[sq][1] = gmb_xyY[sq][2];
@@ -5559,7 +5260,7 @@ colorcheck()
             }
         }
         if ( OPTIONS_values->verbose ) {
-            printf ("    { \"%s %s\", %d,\n\t{", make, model, black);
+            printf ("    { \"%s %s\", %d,\n\t{", make, model, ADOBE_black);
             num = 10000 / (cam_xyz[1][0] + cam_xyz[1][1] + cam_xyz[1][2]);
             for ( c = 0; c < IMAGE_colors; c++ ) {
                 for ( j = 0; j < 3; j++ ) {
@@ -5615,11 +5316,11 @@ wavelet_denoise() {
         fprintf(stderr, _("Wavelet denoising...\n"));
     }
 
-    while ( maximum << scale < 0x10000 ) {
+    while ( ADOBE_maximum << scale < 0x10000 ) {
         scale++;
     }
-    maximum <<= --scale;
-    black <<= scale;
+    ADOBE_maximum <<= --scale;
+    ADOBE_black <<= scale;
     for ( c = 0; c < 4; c++ ) {
         cblack[c] <<= scale;
     }
@@ -5759,7 +5460,7 @@ scale_colors() {
                             } else {
                                 val = image[y * width + x][c];
                             }
-                            if ( val > maximum - 25 ) {
+                            if ( val > ADOBE_maximum - 25 ) {
                                 goto skip_block;
                             }
                             if ( (val -= cblack[c]) < 0 ) {
@@ -5813,12 +5514,12 @@ scale_colors() {
     if ( pre_mul[3] == 0 ) {
         pre_mul[3] = IMAGE_colors < 4 ? pre_mul[1] : 1;
     }
-    dark = black;
-    sat = maximum;
+    dark = ADOBE_black;
+    sat = ADOBE_maximum;
     if ( OPTIONS_values->threshold ) {
         wavelet_denoise();
     }
-    maximum -= black;
+    ADOBE_maximum -= ADOBE_black;
     for ( dmin = DBL_MAX, dmax = c = 0; c < 4; c++ ) {
         if ( dmin > pre_mul[c] ) {
             dmin = pre_mul[c];
@@ -5831,7 +5532,7 @@ scale_colors() {
         dmax = dmin;
     }
     for ( c = 0; c < 4; c++ ) {
-        scale_mul[c] = (pre_mul[c] /= dmax) * 65535.0 / maximum;
+        scale_mul[c] = (pre_mul[c] /= dmax) * 65535.0 / ADOBE_maximum;
     }
     if ( OPTIONS_values->verbose ) {
         fprintf(stderr,
@@ -6453,7 +6154,7 @@ xtrans_interpolate(int passes) {
         }
     }
 
-    // Set green1 and green3 to the minimum and maximum allowed values:
+    // Set green1 and green3 to the minimum and ADOBE_maximum allowed values:
     for ( row = 2; row < height - 2; row++ ) {
         for ( min = ~(max = 0), col = 2; col < width - 2; col++ ) {
             if ( fcol(row, col) == 1 && (min = ~(max = 0))) continue;
@@ -7907,11 +7608,11 @@ linear_table(unsigned len) {
     if ( len > 0x1000 ) {
         len = 0x1000;
     }
-    readShorts(curve, len);
+    readShorts(GAMMA_curveFunctionLookupTable, len);
     for ( i = len; i < 0x1000; i++ ) {
-        curve[i] = curve[i - 1];
+        GAMMA_curveFunctionLookupTable[i] = GAMMA_curveFunctionLookupTable[i - 1];
     }
-    maximum = curve[0xfff];
+    ADOBE_maximum = GAMMA_curveFunctionLookupTable[0xfff];
 }
 
 void
@@ -8275,7 +7976,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 400:
                 strcpy(make, "Sarnoff");
-                maximum = 0xfff;
+                ADOBE_maximum = 0xfff;
                 break;
             case 28688:
                 for ( c = 0; c < 4; c++ ) {
@@ -8283,7 +7984,7 @@ int parse_tiff_ifd(int base) {
                 }
                 for ( i = 0; i < 5; i++ ) {
                     for ( j = sony_curve[i] + 1; j <= sony_curve[i + 1]; j++ ) {
-                        curve[j] = curve[j - 1] + (1 << i);
+                        GAMMA_curveFunctionLookupTable[j] = GAMMA_curveFunctionLookupTable[j - 1] + (1 << i);
                     }
                 }
                 break;
@@ -8491,7 +8192,7 @@ int parse_tiff_ifd(int base) {
                     }
                     TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
                 }
-                maximum = 0xffff;
+                ADOBE_maximum = 0xffff;
                 break;
             case 50454:
                 // Sinar tag
@@ -8520,7 +8221,7 @@ int parse_tiff_ifd(int base) {
                 GLOBAL_endianOrder = read2bytes();
                 fseek(GLOBAL_IO_ifp, j + (read2bytes(), read4bytes()), SEEK_SET);
                 parse_tiff_ifd(j);
-                maximum = 0xffff;
+                ADOBE_maximum = 0xffff;
                 numberOfRawImages = c;
                 GLOBAL_endianOrder = i;
                 break;
@@ -8593,7 +8294,7 @@ int parse_tiff_ifd(int base) {
                 for ( c = 0; c < cblack[4] * cblack[5]; c++ ) {
                     cblack[6 + c] = readDouble(type);
                 }
-                black = 0;
+                ADOBE_black = 0;
                 break;
             case 50715:
                 // BlackLevelDeltaH
@@ -8602,11 +8303,11 @@ int parse_tiff_ifd(int base) {
                 for ( num = i = 0; i < (len & 0xffff); i++ ) {
                     num += readDouble(type);
                 }
-                black += num / len + 0.5;
+                ADOBE_black += num / len + 0.5;
                 break;
             case 50717:
                 // WhiteLevel
-                maximum = readInt(type);
+                ADOBE_maximum = readInt(type);
                 break;
             case 50718:
                 // DefaultScale
@@ -8679,7 +8380,7 @@ int parse_tiff_ifd(int base) {
                 for ( i = 0; i < len && i < 32; i++ ) {
                     ((int *) mask)[i] = readInt(type);
                 }
-                black = 0;
+                ADOBE_black = 0;
                 break;
             case 51009:
                 // OpcodeList2
@@ -8841,7 +8542,7 @@ apply_tiff() {
             case 32767:
                 if ( ifdArray[raw].bytes == THE_image.width * THE_image.height ) {
                     THE_image.bitsPerSample = 12;
-                    maximum = 4095;
+                    ADOBE_maximum = 4095;
                     TIFF_CALLBACK_loadRawData = &sony_arw2_load_raw;
                     break;
                 }
@@ -9428,7 +9129,7 @@ parse_sinar_ia() {
     thumb_width = (read4bytes(), read2bytes());
     thumb_height = read2bytes();
     write_thumb = &ppm_thumb;
-    maximum = 0x3fff;
+    ADOBE_maximum = 0x3fff;
 }
 
 void
@@ -9545,7 +9246,7 @@ parse_phase_one(int base) {
     }
 
     TIFF_CALLBACK_loadRawData = ph1.format < 3 ? &phase_one_load_raw : &phase_one_load_raw_c;
-    maximum = 0xffff;
+    ADOBE_maximum = 0xffff;
     strcpy(make, "Phase One");
     if ( model[0] ) {
         return;
@@ -9929,7 +9630,7 @@ parse_cine() {
     }
     cam_mul[0] = readDouble(11);
     cam_mul[2] = readDouble(11);
-    maximum = ~(-1 << read4bytes());
+    ADOBE_maximum = ~(-1 << read4bytes());
     fseek(GLOBAL_IO_ifp, 668, SEEK_CUR);
     CAMERA_IMAGE_information.shutterSpeed = read4bytes() / 1000000000.0;
     fseek(GLOBAL_IO_ifp, off_image, SEEK_SET);
@@ -11281,10 +10982,10 @@ adobe_coeff(const char *adobeMake, const char *adobeModel) {
     for ( i = 0; i < sizeof table / sizeof *table; i++ ) {
         if ( !strncmp(name, table[i].prefix, strlen(table[i].prefix))) {
             if ( table[i].black ) {
-                black = (unsigned short) table[i].black;
+                ADOBE_black = (unsigned short) table[i].black;
             }
             if ( table[i].maximum ) {
-                maximum = (unsigned short) table[i].maximum;
+                ADOBE_maximum = (unsigned short) table[i].maximum;
             }
             if ( table[i].trans[0] ) {
                 for ( GLOBAL_colorTransformForRaw = j = 0; j < 12; j++ )
@@ -11716,7 +11417,7 @@ tiffIdentify() {
 
     cameraFlip = GLOBAL_flipsMask = filters = UINT_MAX; // unknown
     THE_image.height = THE_image.width = fuji_width = fuji_layout = cr2_slice[0] = 0;
-    maximum = height = width = top_margin = left_margin = 0;
+    ADOBE_maximum = height = width = top_margin = left_margin = 0;
     GLOBAL_bayerPatternLabels[0] = desc[0] = artist[0] = make[0] = model[0] = model2[0] = 0;
     iso_speed = CAMERA_IMAGE_information.shutterSpeed = aperture = focal_len = unique_id = 0;
     numberOfRawImages = 0;
@@ -11730,7 +11431,7 @@ tiffIdentify() {
     write_thumb = &jpeg_thumb;
     GLOBAL_IO_profileOffset = meta_offset = meta_length = THE_image.bitsPerSample = tiff_compress = 0;
     kodak_cbpp = GLOBAL_IO_zeroAfterFf = GLOBAL_dngVersion = GLOBAL_loadFlags = 0;
-    timestamp = shot_order = tiff_samples = black = is_foveon = 0;
+    timestamp = shot_order = tiff_samples = ADOBE_black = is_foveon = 0;
     mix_green = profile_length = GLOBAL_IO_dataError = zero_is_bad = 0;
     pixel_aspect = is_raw = GLOBAL_colorTransformForRaw = 1;
     tile_width = tile_length = 0;
@@ -11748,7 +11449,7 @@ tiffIdentify() {
 
     IMAGE_colors = 3;
     for ( i = 0; i < 0x10000; i++ ) {
-        curve[i] = i;
+        GAMMA_curveFunctionLookupTable[i] = i;
     }
 
     GLOBAL_endianOrder = read2bytes();
@@ -11944,7 +11645,7 @@ tiffIdentify() {
                         THE_image.bitsPerSample -= GLOBAL_loadFlags = GLOBAL_loadFlags >> 1 & 7;
                         TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
                 }
-                maximum = (1 << THE_image.bitsPerSample) - (1 << table[i].max);
+                ADOBE_maximum = (1 << THE_image.bitsPerSample) - (1 << table[i].max);
             }
         }
     }
@@ -12160,7 +11861,7 @@ tiffIdentify() {
     }
 
     if ( !strcmp(make, "Sony") && THE_image.width > 3888 )
-        black = 128 << (THE_image.bitsPerSample - 12);
+        ADOBE_black = 128 << (THE_image.bitsPerSample - 12);
 
     //-------------------------------------------------------------------------------------------------------------
     if ( is_foveon ) {
@@ -12228,7 +11929,7 @@ tiffIdentify() {
         mask[1][3] = -4;
     } else if ( !strcmp(model, "EOS D2000C") ) {
         filters = 0x61616161;
-        black = curve[200];
+                                            ADOBE_black = GAMMA_curveFunctionLookupTable[200];
     } else if ( !strcmp(model, "EOS 80D") ) {
         top_margin -= 2;
         height += 2;
@@ -12282,7 +11983,7 @@ tiffIdentify() {
         GLOBAL_loadFlags = 24;
         filters = 0x94949494;
         if ( model[9] == '7' && iso_speed >= 400 ) {
-            black = 255;
+            ADOBE_black = 255;
         }
     } else if ( !strncmp(model, "1 ", 2) ) {
         height -= 2;
@@ -12348,7 +12049,7 @@ tiffIdentify() {
         if ( (GLOBAL_endianOrder = guess_byte_order(0x10000)) == BIG_ENDIAN_ORDER ) {
             height -= (top_margin = 16);
             width -= (left_margin = 28);
-            maximum = 0xf5c0;
+            ADOBE_maximum = 0xf5c0;
             strcpy(make, "ISG");
             model[0] = 0;
         }
@@ -12394,7 +12095,7 @@ tiffIdentify() {
     } else if ( !strcmp(model, "KD-510Z") ) {
         goto konica_510z;
     } else if ( !strcasecmp(make, "Minolta") ) {
-        if ( !TIFF_CALLBACK_loadRawData && (maximum = 0xfff) ) {
+        if ( !TIFF_CALLBACK_loadRawData && (ADOBE_maximum = 0xfff) ) {
             TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
         }
         if ( !strncmp(model, "DiMAGE A", 8) ) {
@@ -12424,7 +12125,7 @@ tiffIdentify() {
             filters = 0x61616161;
             konica_400z:
             TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
-            maximum = 0x3df;
+                    ADOBE_maximum = 0x3df;
             GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
         }
     } else if ( !strcmp(model, "*ist D") ) {
@@ -12459,7 +12160,7 @@ tiffIdentify() {
         filters = 0x49494949;
     } else if ( !strcmp(make, "Samsung") && THE_image.width == 6496 ) {
         filters = 0x61616161;
-        black = 1 << (THE_image.bitsPerSample - 7);
+                                                                                                                                                                                                ADOBE_black = 1 << (THE_image.bitsPerSample - 7);
     } else if ( !strcmp(model, "EX1") ) {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         height -= 20;
@@ -12488,7 +12189,7 @@ tiffIdentify() {
         filters = 0x49494949;
         TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
     } else if ( !strcmp(model, "STV680 VGA") ) {
-        black = 16;
+                                                                                                                                                                                                                    ADOBE_black = 16;
     } else if ( !strcmp(model, "N95") ) {
         height = THE_image.height - (top_margin = 2);
     } else if ( !strcmp(model, "640x480") ) {
@@ -12519,8 +12220,8 @@ tiffIdentify() {
             width = 8964;
             top_margin = 8;
             left_margin = 40;
-            black += GLOBAL_loadFlags = 256;
-            maximum = 0x8101;
+                        ADOBE_black += GLOBAL_loadFlags = 256;
+                        ADOBE_maximum = 0x8101;
         } else if ( THE_image.width == 4090 ) {
             strcpy(model, "V96C");
             height -= (top_margin = 6);
@@ -12540,12 +12241,12 @@ tiffIdentify() {
         if ( is_raw > 1 && !OPTIONS_values->shotSelect && !OPTIONS_values->halfSizePreInterpolation ) {
             filters = 0;
         }
-        maximum = 0x3fff;
+                                                                                                                                                                                                                                    ADOBE_maximum = 0x3fff;
     } else if ( !strcmp(make, "Leaf") ) {
-        maximum = 0x3fff;
+                                                                                                                                                                                                                                        ADOBE_maximum = 0x3fff;
         fseek(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset, SEEK_SET);
         if ( ljpeg_start(&jh, 1) && jh.bits == 15 ) {
-            maximum = 0x1fff;
+            ADOBE_maximum = 0x1fff;
         }
         if ( tiff_samples > 1 ) {
             filters = 0;
@@ -12652,13 +12353,13 @@ tiffIdentify() {
         if ( !strcmp(model, "E-300") || !strcmp(model, "E-500") ) {
             width -= 20;
             if ( TIFF_CALLBACK_loadRawData == &unpacked_load_raw ) {
-                maximum = 0xfc3;
+                ADOBE_maximum = 0xfc3;
                 memset(cblack, 0, sizeof cblack);
             }
         } else if ( !strcmp(model, "E-330") ) {
             width -= 30;
             if ( TIFF_CALLBACK_loadRawData == &unpacked_load_raw ) {
-                maximum = 0xf79;
+                ADOBE_maximum = 0xf79;
             }
         } else if ( !strcmp(model, "SP550UZ") ) {
             thumb_length = flen - (thumb_offset = 0xa39800);
@@ -12699,7 +12400,7 @@ tiffIdentify() {
         if ( !strcmp(model, "DSLR-A350") ) {
             height -= 4;
         }
-        black = 0;
+                                                                                                                                                                                                                                                                            ADOBE_black = 0;
     } else if ( !strcmp(make, "Sony") && THE_image.width == 4928 ) {
         if ( height < 3280 ) {
             width -= 8;
@@ -12707,7 +12408,7 @@ tiffIdentify() {
     } else if ( !strcmp(make, "Sony") && THE_image.width == 5504 ) {
         width -= height > 3664 ? 8 : 32;
         if ( !strncmp(model, "DSC", 3) ) {
-            black = 200 << (THE_image.bitsPerSample - 12);
+            ADOBE_black = 200 << (THE_image.bitsPerSample - 12);
         }
     } else if ( !strcmp(make, "Sony") && THE_image.width == 6048 ) {
         width -= 24;
@@ -12737,7 +12438,7 @@ tiffIdentify() {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         if ( filters && GLOBAL_IO_profileOffset ) {
             fseek(GLOBAL_IO_ifp, GLOBAL_IO_profileOffset < 4096 ? 168 : 5252, SEEK_SET);
-            readShorts(curve, 256);
+            readShorts(GAMMA_curveFunctionLookupTable, 256);
         } else {
             gamma_curve(0, 3.875, 1, 255);
         }
@@ -12763,7 +12464,7 @@ tiffIdentify() {
                 goto bw;
             }
         } else if ( !strcmp(model, "DCS660M") ) {
-            black = 214;
+                ADOBE_black = 214;
             goto bw;
         } else if ( !strcmp(model, "DCS760M") ) {
             bw:
@@ -12821,7 +12522,7 @@ tiffIdentify() {
             thumb_offset = 6144;
             thumb_misc = 360;
             write_thumb = &layer_thumb;
-            black = 17;
+                            ADOBE_black = 17;
         }
     } else if ( !strcmp(model, "Fotoman Pixtura") ) {
         height = 512;
@@ -12915,8 +12616,8 @@ tiffIdentify() {
         THE_image.bitsPerSample = 12;
     }
 
-    if ( !maximum ) {
-        maximum = (1 << THE_image.bitsPerSample) - 1;
+    if ( !ADOBE_maximum ) {
+        ADOBE_maximum = (1 << THE_image.bitsPerSample) - 1;
     }
 
     if ( !TIFF_CALLBACK_loadRawData || height < 22 || width < 22 ||
@@ -13542,11 +13243,11 @@ write_ppm_tiff() {
         for ( col = 0; col < width; col++, soff += cstep ) {
             if ( OPTIONS_values->outputBitsPerPixel == 8 ) {
                 for ( c = 0; c < IMAGE_colors; c++ ) {
-                    ppm[col * IMAGE_colors + c] = curve[image[soff][c]] >> 8;
+                    ppm[col * IMAGE_colors + c] = GAMMA_curveFunctionLookupTable[image[soff][c]] >> 8;
                 }
             } else {
                 for ( c = 0; c < IMAGE_colors; c++ ) {
-                    ppm2[col * IMAGE_colors + c] = curve[image[soff][c]];
+                    ppm2[col * IMAGE_colors + c] = GAMMA_curveFunctionLookupTable[image[soff][c]];
                 }
             }
         }
@@ -13835,7 +13536,7 @@ main(int argc, const char **argv) {
         for ( c = 0; c < 4; c++ ) {
             cblack[c] -= i;
         }
-        black += i;
+        ADOBE_black += i;
         i = cblack[6];
         for ( c = 0; c < cblack[4] * cblack[5]; c++ ) {
             if ( i > cblack[6 + c] ) {
@@ -13845,15 +13546,15 @@ main(int argc, const char **argv) {
         for ( c = 0; c < cblack[4] * cblack[5]; c++ ) {
             cblack[6 + c] -= i;
         }
-        black += i;
+        ADOBE_black += i;
         if ( OPTIONS_values->user_black >= 0 ) {
-            black = OPTIONS_values->user_black;
+            ADOBE_black = OPTIONS_values->user_black;
         }
         for ( c = 0; c < 4; c++ ) {
-            cblack[c] += black;
+            cblack[c] += ADOBE_black;
         }
         if ( OPTIONS_values->user_sat > 0 ) {
-            maximum = OPTIONS_values->user_sat;
+            ADOBE_maximum = OPTIONS_values->user_sat;
         }
 #ifdef COLORCHECK
         colorcheck();
