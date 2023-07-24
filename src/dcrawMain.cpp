@@ -156,7 +156,6 @@ unsigned zero_is_bad;
 unsigned zero_after_ff;
 unsigned is_raw;
 unsigned is_foveon;
-unsigned data_error;
 unsigned tile_width;
 unsigned tile_length;
 unsigned gpsdata[32];
@@ -348,116 +347,7 @@ my_strcasestr(char *haystack, const char *needle) {
 #define strcasestr my_strcasestr
 #endif
 
-void
-derror() {
-    if ( !data_error ) {
-        fprintf(stderr, "%s: ", CAMERA_IMAGE_information.inputFilename);
-        if ( feof(GLOBAL_IO_ifp) ) {
-            fprintf(stderr, _("Unexpected end of file\n"));
-        } else {
-            fprintf(stderr, _("Corrupt data near 0x%llx\n"), (INT64) ftello(GLOBAL_IO_ifp));
-        }
-    }
-    data_error++;
-}
-
-unsigned short
-sget2(unsigned char *s) {
-    if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER ) {
-        /* "II" means little-endian */
-        return s[0] | s[1] << 8;
-    } else {
-        /* "MM" means big-endian */
-        return s[0] << 8 | s[1];
-    }
-}
-
-unsigned short
-get2() {
-    unsigned char str[2] = {0xff, 0xff};
-    fread(str, 1, 2, GLOBAL_IO_ifp);
-    return sget2(str);
-}
-
-unsigned
-sget4(unsigned char *s) {
-    if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER ) {
-        return s[0] | s[1] << 8 | s[2] << 16 | s[3] << 24;
-    } else {
-        return s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3];
-    }
-}
-
-#define sget4(s) sget4((unsigned char *)s)
-
-unsigned
-get4() {
-    unsigned char str[4] = {0xff, 0xff, 0xff, 0xff};
-    fread(str, 1, 4, GLOBAL_IO_ifp);
-    return sget4(str);
-}
-
-unsigned
-getint(int type) {
-    return type == 3 ? get2() : get4();
-}
-
-float
-int_to_float(int i) {
-    union {
-        int i;
-        float f;
-    } u;
-    u.i = i;
-    return u.f;
-}
-
-double
-getreal(int type) {
-    union {
-        char c[8];
-        double d;
-    } u;
-    int i;
-    int rev;
-
-    switch ( type ) {
-        case 3:
-            return (unsigned short) get2();
-        case 4:
-            return (unsigned int) get4();
-        case 5:
-            u.d = (unsigned int) get4();
-            return u.d / (unsigned int) get4();
-        case 8:
-            return (signed short) get2();
-        case 9:
-            return (signed int) get4();
-        case 10:
-            u.d = (signed int) get4();
-            return u.d / (signed int) get4();
-        case 11:
-            return int_to_float(get4());
-        case 12:
-            rev = 7 * ((GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234));
-            for ( i = 0; i < 8; i++ ) {
-                u.c[i ^ rev] = fgetc(GLOBAL_IO_ifp);
-            }
-            return u.d;
-        default:
-            return fgetc(GLOBAL_IO_ifp);
-    }
-}
-
-void
-read_shorts(unsigned short *pixel, int count) {
-    if ( fread(pixel, 2, count, GLOBAL_IO_ifp) < count ) {
-        derror();
-    }
-    if ( (GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234) ) {
-        swab(pixel, pixel, count * 2);
-    }
-}
+#define unsignedShortEndianSwap(s) unsignedShortEndianSwap((unsigned char *)s)
 
 void
 cubic_spline(const int *x_, const int *y_, const int len) {
@@ -724,7 +614,7 @@ canon_600_load_raw() {
     int row;
 
     for ( irow = row = 0; irow < height; irow++ ) {
-        if ( fread(data, 1, 1120, GLOBAL_IO_ifp) < 1120 ) derror();
+        if ( fread(data, 1, 1120, GLOBAL_IO_ifp) < 1120 ) inputOutputError();
         pix = raw_image + row * raw_width;
         for ( dp = data; dp < data + 1120; dp += 10, pix += 8 ) {
             pix[0] = (dp[0] << 2) + (dp[1] >> 6);
@@ -810,7 +700,7 @@ getbithuff(int nbits, unsigned short *huff) {
         vbits -= nbits;
     }
     if ( vbits < 0 ) {
-        derror();
+        inputOutputError();
     }
     return c;
 }
@@ -1026,7 +916,7 @@ canon_load_raw() {
                     base[0] = base[1] = 512;
                 }
                 if ( (pixel[(block << 6) + i] = base[i & 1] += diffbuf[i]) >> 10 ) {
-                    derror();
+                    inputOutputError();
                 }
             }
         }
@@ -1245,7 +1135,7 @@ ljpeg_row(int jrow, struct jhead *jh) {
                         pred = 0;
                 }
             if ( (**row = pred + diff) >> jh->bits ) {
-                derror();
+                inputOutputError();
             }
             if ( c <= jh->sraw ) {
                 spred = **row;
@@ -1571,7 +1461,7 @@ packed_dng_load_raw() {
     memoryError(pixel, "packed_dng_load_raw()");
     for ( row = 0; row < raw_height; row++ ) {
         if ( tiff_bps == 16 ) {
-            read_shorts(pixel, raw_width * tiff_samples);
+            readShorts(pixel, raw_width * tiff_samples);
         } else {
             getbits(-1);
             for ( col = 0; col < raw_width * tiff_samples; col++ ) {
@@ -1626,7 +1516,7 @@ pentax_load_raw() {
             }
             RAW(row, col) = hpred[col & 1];
             if ( hpred[col & 1] >> tiff_bps ) {
-                derror();
+                inputOutputError();
             }
         }
     }
@@ -1677,7 +1567,7 @@ nikon_load_raw() {
     if ( tiff_bps == 14 ) {
         tree += 3;
     }
-    read_shorts(vpred[0], 4);
+    readShorts(vpred[0], 4);
     max = 1 << tiff_bps & 0x7fff;
     if ( (csize = get2()) > 1 ) {
         step = max / (csize - 1);
@@ -1694,7 +1584,7 @@ nikon_load_raw() {
         split = get2();
     } else {
         if ( ver0 != 0x46 && csize <= 0x4001 ) {
-            read_shorts(curve, max = csize);
+            readShorts(curve, max = csize);
         }
     }
     while ( curve[max - 2] == curve[max - 1] ) {
@@ -1723,7 +1613,7 @@ nikon_load_raw() {
                 hpred[col & 1] += diff;
             }
             if ( (unsigned short) (hpred[col & 1] + min) >= max ) {
-                derror();
+                inputOutputError();
             }
             RAW(row, col) = curve[LIM((short)hpred[col & 1], 0, 0x3fff)];
         }
@@ -1871,7 +1761,7 @@ ppm16_thumb() {
     thumb_length = thumb_width * thumb_height * 3;
     thumb = (char *) calloc(thumb_length, 2);
     memoryError(thumb, "ppm16_thumb()");
-    read_shorts((unsigned short *) thumb, thumb_length);
+    readShorts((unsigned short *) thumb, thumb_length);
     for ( i = 0; i < thumb_length; i++ ) {
         thumb[i] = ((unsigned short *) thumb)[i] >> 8;
     }
@@ -1911,7 +1801,7 @@ rollei_thumb() {
     thumb = (unsigned short *) calloc(thumb_length, 2);
     memoryError(thumb, "rollei_thumb()");
     fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
-    read_shorts(thumb, thumb_length);
+    readShorts(thumb, thumb_length);
     for ( i = 0; i < thumb_length; i++ ) {
         putc(thumb[i] << 3, ofp);
         putc(thumb[i] >> 5 << 2, ofp);
@@ -1968,7 +1858,7 @@ phase_one_flat_field(int is_float, int nc) {
     float num;
     float mult[4];
 
-    read_shorts(head, 8);
+    readShorts(head, 8);
     if ( head[2] * head[3] * head[4] * head[5] == 0 ) {
         return;
     }
@@ -1979,7 +1869,7 @@ phase_one_flat_field(int is_float, int nc) {
     for ( y = 0; y < high; y++ ) {
         for ( x = 0; x < wide; x++ ) {
             for ( c = 0; c < nc; c += 2 ) {
-                num = is_float ? getreal(11) : get2() / 32768.0;
+                num = is_float ? getReal(11) : get2() / 32768.0;
                 if ( y == 0 ) mrow[c * wide + x] = num;
                 else mrow[(c + 1) * wide + x] = (num - mrow[c * wide + x]) / head[5];
             }
@@ -2086,7 +1976,7 @@ phase_one_correct() {
         if ( tag == 0x419 ) {
             // Polynomial curve
             for ( get4(), i = 0; i < 8; i++ ) {
-                poly[i] = getreal(11);
+                poly[i] = getReal(11);
             }
             poly[3] += (ph1.tag_210 - poly[7]) * poly[6] + 1;
             for ( i = 0; i < 0x10000; i++ ) {
@@ -2098,7 +1988,7 @@ phase_one_correct() {
             if ( tag == 0x41a ) {
                 // Polynomial curve
                 for ( i = 0; i < 4; i++ ) {
-                    poly[i] = getreal(11);
+                    poly[i] = getReal(11);
                 }
                 for ( i = 0; i < 0x10000; i++ ) {
                     for ( num = 0, j = 4; j--; ) {
@@ -2223,21 +2113,21 @@ phase_one_correct() {
                                             get4();
                                             get4();
                                             get4();
-                                            qmult[0][0] = 1.0 + getreal(11);
+                                            qmult[0][0] = 1.0 + getReal(11);
                                             get4();
                                             get4();
                                             get4();
                                             get4();
                                             get4();
-                                            qmult[0][1] = 1.0 + getreal(11);
+                                            qmult[0][1] = 1.0 + getReal(11);
                                             get4();
                                             get4();
                                             get4();
-                                            qmult[1][0] = 1.0 + getreal(11);
+                                            qmult[1][0] = 1.0 + getReal(11);
                                             get4();
                                             get4();
                                             get4();
-                                            qmult[1][1] = 1.0 + getreal(11);
+                                            qmult[1][1] = 1.0 + getReal(11);
                                             for ( row = 0; row < raw_height; row++ ) {
                                                 for ( col = 0; col < raw_width; col++ ) {
                                                     i = qmult[row >= ph1.split_row][col >= ph1.split_col] *
@@ -2307,7 +2197,7 @@ phase_one_correct() {
         get2();
         for ( i = 0; i < 2; i++ ) {
             for ( j = 0; j < head[i + 1] * head[i + 3]; j++ ) {
-                yval[i][j] = getreal(11);
+                yval[i][j] = getReal(11);
             }
         }
         for ( i = 0; i < 2; i++ ) {
@@ -2350,7 +2240,7 @@ phase_one_load_raw() {
     bkey = get2();
     mask = ph1.format == 1 ? 0x5555 : 0x1354;
     fseek(GLOBAL_IO_ifp, data_offset, SEEK_SET);
-    read_shorts(raw_image, raw_width * raw_height);
+    readShorts(raw_image, raw_width * raw_height);
     if ( ph1.format ) {
         for ( i = 0; i < raw_width * raw_height; i += 2 ) {
             a = raw_image[i + 0] ^ akey;
@@ -2413,12 +2303,12 @@ phase_one_load_raw_c() {
     cblack = (short (*)[2]) (offset + raw_height);
     fseek(GLOBAL_IO_ifp, ph1.black_col, SEEK_SET);
     if ( ph1.black_col ) {
-        read_shorts((unsigned short *) cblack[0], raw_height * 2);
+        readShorts((unsigned short *) cblack[0], raw_height * 2);
     }
     rblack = cblack + raw_height;
     fseek(GLOBAL_IO_ifp, ph1.black_row, SEEK_SET);
     if ( ph1.black_row ) {
-        read_shorts((unsigned short *) rblack[0], raw_width * 2);
+        readShorts((unsigned short *) rblack[0], raw_width * 2);
     }
     for ( i = 0; i < 256; i++ ) {
         curve[i] = i * i / 3.969 + 0.5;
@@ -2446,7 +2336,7 @@ phase_one_load_raw_c() {
                 pixel[col] = pred[col & 1] += ph1_bits(i) + 1 - (1 << (i - 1));
             }
             if ( pred[col & 1] >> 16 ) {
-                derror();
+                inputOutputError();
             }
             if ( ph1.format == 5 && pixel[col] < 256 ) {
                 pixel[col] = curve[pixel[col]];
@@ -2573,7 +2463,7 @@ leaf_hdr_load_raw() {
             if ( filters ) {
                 pixel = raw_image + r * raw_width;
             }
-            read_shorts(pixel, raw_width);
+            readShorts(pixel, raw_width);
             if ( !filters && (row = r - top_margin) < height ) {
                 for ( col = 0; col < width; col++ ) {
                     image[row * width + col][c] = pixel[col + left_margin];
@@ -2595,13 +2485,13 @@ unpacked_load_raw() {
     int bits = 0;
 
     while ( 1 << ++bits < maximum );
-    read_shorts(raw_image, raw_width * raw_height);
+    readShorts(raw_image, raw_width * raw_height);
     for ( row = 0; row < raw_height; row++ ) {
         for ( col = 0; col < raw_width; col++ ) {
             if ((RAW(row, col) >>= GLOBAL_loadFlags) >> bits
                 && (unsigned) (row - top_margin) < height
                 && (unsigned) (col - left_margin) < width ) {
-                derror();
+                inputOutputError();
             }
         }
     }
@@ -2629,7 +2519,7 @@ sinar_4shot_load_raw() {
         fseek(GLOBAL_IO_ifp, data_offset + shot * 4, SEEK_SET);
         fseek(GLOBAL_IO_ifp, get4(), SEEK_SET);
         for ( row = 0; row < raw_height; row++ ) {
-            read_shorts(pixel, raw_width);
+            readShorts(pixel, raw_width);
             if ( (r = row - top_margin - (shot >> 1 & 1)) >= height ) {
                 continue;
             }
@@ -2655,7 +2545,7 @@ imacon_full_load_raw() {
     }
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
-            read_shorts(image[row * width + col], 3);
+            readShorts(image[row * width + col], 3);
         }
     }
 }
@@ -2705,7 +2595,7 @@ packed_load_raw() {
             RAW(row, col ^ (GLOBAL_loadFlags >> 6 & 3)) = val;
             if ( GLOBAL_loadFlags & 1 && (col % 10) == 9 && fgetc(GLOBAL_IO_ifp) &&
                  row < height + top_margin && col < width + left_margin ) {
-                derror();
+                inputOutputError();
             }
         }
         vbits -= rbits;
@@ -2728,7 +2618,7 @@ nokia_load_raw() {
     data = (unsigned char *) malloc(dwide * 2);
     memoryError(data, "nokia_load_raw()");
     for ( row = 0; row < raw_height; row++ ) {
-        if ( fread(data + dwide, 1, dwide, GLOBAL_IO_ifp) < dwide ) derror();
+        if ( fread(data + dwide, 1, dwide, GLOBAL_IO_ifp) < dwide ) inputOutputError();
         for ( c = 0; c < dwide; c++ ) {
             data[c] = data[dwide + (c ^ rev)];
         }
@@ -2829,7 +2719,7 @@ panasonic_load_raw() {
                 }
             }
             if ( (RAW(row, col) = pred[col & 1]) > 4098 && col < width ) {
-                derror();
+                inputOutputError();
             }
         }
     }
@@ -2903,7 +2793,7 @@ olympus_load_raw() {
                 }
             }
             if ( (RAW(row, col) = pred + ((diff << 2) | low)) >> 12 ) {
-                derror();
+                inputOutputError();
             }
         }
     }
@@ -2927,7 +2817,7 @@ minolta_rd175_load_raw() {
 
     for ( irow = 0; irow < 1481; irow++ ) {
         if ( fread(pixel, 1, 768, GLOBAL_IO_ifp) < 768 ) {
-            derror();
+            inputOutputError();
         }
         box = irow / 82;
         row = irow % 82 * 12 + ((box < 12) ? box | 1 : (box - 12) * 2);
@@ -3285,7 +3175,7 @@ lossy_dng_load_raw() {
                 break;
             }
             for ( i = 0; i <= deg && i < 9; i++ ) {
-                coeff[i] = getreal(12);
+                coeff[i] = getReal(12);
             }
             for ( i = 0; i < 256; i++ ) {
                 for ( tot = j = 0; j <= deg; j++ ) {
@@ -3344,7 +3234,7 @@ kodak_dc120_load_raw() {
     int col;
 
     for ( row = 0; row < height; row++ ) {
-        if ( fread(pixel, 1, 848, GLOBAL_IO_ifp) < 848 ) derror();
+        if ( fread(pixel, 1, 848, GLOBAL_IO_ifp) < 848 ) inputOutputError();
         shift = row * mul[row & 3] + add[row & 3];
         for ( col = 0; col < width; col++ ) {
             RAW(row, col) = (unsigned short) pixel[(col + shift) % 848];
@@ -3363,7 +3253,7 @@ eight_bit_load_raw() {
     memoryError(pixel, "eight_bit_load_raw()");
     for ( row = 0; row < raw_height; row++ ) {
         if ( fread(pixel, 1, raw_width, GLOBAL_IO_ifp) < raw_width ) {
-            derror();
+            inputOutputError();
         }
         for ( col = 0; col < raw_width; col++ ) {
             RAW(row, col) = curve[pixel[col]];
@@ -3388,7 +3278,7 @@ kodak_c330_load_raw() {
     memoryError(pixel, "kodak_c330_load_raw()");
     for ( row = 0; row < height; row++ ) {
         if ( fread(pixel, raw_width, 2, GLOBAL_IO_ifp) < 2 ) {
-            derror();
+            inputOutputError();
         }
         if ( GLOBAL_loadFlags && (row & 31) == 31 ) {
             fseek(GLOBAL_IO_ifp, raw_width * 32, SEEK_CUR);
@@ -3425,7 +3315,7 @@ kodak_c603_load_raw() {
     for ( row = 0; row < height; row++ ) {
         if ( ~row & 1 ) {
             if ( fread(pixel, raw_width, 3, GLOBAL_IO_ifp) < 3 ) {
-                derror();
+                inputOutputError();
             }
         }
         for ( col = 0; col < width; col++ ) {
@@ -3499,7 +3389,7 @@ kodak_262_load_raw() {
             pred = (pi1 < 0) ? 0 : (pixel[pi1] + pixel[pi2]) >> 1;
             pixel[pi] = val = pred + ljpeg_diff(huff[chess]);
             if ( val >> 8 ) {
-                derror();
+                inputOutputError();
             }
             val = curve[pixel[pi++]];
             RAW(row, col) = val;
@@ -3532,7 +3422,7 @@ kodak_65000_decode(short *out, int bsize) {
             (blen[i + 1] = c >> 4) > 12 ) {
             fseek(GLOBAL_IO_ifp, save, SEEK_SET);
             for ( i = 0; i < bsize; i += 8 ) {
-                read_shorts(raw, 6);
+                readShorts(raw, 6);
                 out[i] = raw[0] >> 12 << 8 | raw[2] >> 12 << 4 | raw[4] >> 12;
                 out[i + 1] = raw[1] >> 12 << 8 | raw[3] >> 12 << 4 | raw[5] >> 12;
                 for ( j = 0; j < 6; j++ ) {
@@ -3583,7 +3473,7 @@ kodak_65000_load_raw() {
             ret = kodak_65000_decode(buf, len);
             for ( i = 0; i < len; i++ ) {
                 if ( (RAW(row, col + i) = curve[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12 ) {
-                    derror();
+                    inputOutputError();
                 }
             }
         }
@@ -3623,7 +3513,7 @@ kodak_ycbcr_load_raw() {
                 rgb[0] = rgb[1] + cr;
                 for ( j = 0; j < 2; j++ )
                     for ( k = 0; k < 2; k++ ) {
-                        if ((y[j][k] = y[j][k ^ 1] + *bp++) >> 10 ) derror();
+                        if ((y[j][k] = y[j][k ^ 1] + *bp++) >> 10 ) inputOutputError();
                         ip = image[(row + j) * width + col + i + k];
                         for ( c = 0; c < 3; c++ ) {
                             ip[c] = curve[LIM(y[j][k] + rgb[c], 0, 0xfff)];
@@ -3653,7 +3543,7 @@ kodak_rgb_load_raw() {
             memset(rgb, 0, sizeof rgb);
             for ( bp = buf, i = 0; i < len; i++, ip += 4 ) {
                 for ( c = 0; c < 3; c++ ) {
-                    if ((ip[c] = rgb[c] += *bp++) >> 12 ) derror();
+                    if ((ip[c] = rgb[c] += *bp++) >> 12 ) inputOutputError();
                 }
             }
         }
@@ -3668,7 +3558,7 @@ kodak_thumb_load_raw() {
     colors = thumb_misc >> 5;
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
-            read_shorts(image[row * width + col], colors);
+            readShorts(image[row * width + col], colors);
         }
     }
     maximum = (1 << (thumb_misc & 31)) - 1;
@@ -3719,12 +3609,12 @@ sony_load_raw() {
     for ( row = 0; row < raw_height; row++ ) {
         pixel = raw_image + row * raw_width;
         if ( fread(pixel, 2, raw_width, GLOBAL_IO_ifp) < raw_width ) {
-            derror();
+            inputOutputError();
         }
         sony_decrypt((unsigned *)pixel, raw_width / 2, !row, key);
         for ( col = 0; col < raw_width; col++ ) {
             if ( (pixel[col] = ntohs(pixel[col])) >> 14 ) {
-                derror();
+                inputOutputError();
             }
         }
     }
@@ -3757,7 +3647,7 @@ sony_arw_load_raw() {
                 row = 1;
             }
             if ( (sum += ljpeg_diff(huff)) >> 12 ) {
-                derror();
+                inputOutputError();
             }
             if ( row < height ) {
                 RAW(row, col) = sum;
@@ -3787,7 +3677,7 @@ sony_arw2_load_raw() {
     for ( row = 0; row < height; row++ ) {
         fread(data, 1, raw_width, GLOBAL_IO_ifp);
         for ( dp = data, col = 0; col < raw_width - 30; dp += 16 ) {
-            max = 0x7ff & (val = sget4(dp));
+            max = 0x7ff & (val = unsignedShortEndianSwap(dp));
             min = 0x7ff & val >> 11;
             imax = 0x0f & val >> 22;
             imin = 0x0f & val >> 26;
@@ -3901,7 +3791,7 @@ samsung2_load_raw() {
             }
             RAW(row, col) = hpred[col & 1];
             if ( hpred[col & 1] >> tiff_bps ) {
-                derror();
+                inputOutputError();
             }
         }
     }
@@ -4330,7 +4220,7 @@ foveon_sd_load_raw() {
     int c;
     int i;
 
-    read_shorts((unsigned short *)diff, 1024);
+    readShorts((unsigned short *) diff, 1024);
     if ( !GLOBAL_loadFlags ) {
         foveon_decoder(1024, 0);
     }
@@ -4358,7 +4248,7 @@ foveon_sd_load_raw() {
                     }
                     pred[c] += diff[dindex->leaf];
                     if ( pred[c] >> 16 && ~pred[c] >> 16 ) {
-                        derror();
+                        inputOutputError();
                     }
                 }
             }
@@ -4482,7 +4372,7 @@ foveon_camf_param(const char *block, const char *param) {
     char *cp;
     char *dp;
 
-    for ( idx = 0; idx < meta_length; idx += sget4(pos + 8) ) {
+    for ( idx = 0; idx < meta_length; idx += unsignedShortEndianSwap(pos + 8) ) {
         pos = meta_data + idx;
         if ( strncmp(pos, "CMb", 3)) {
             break;
@@ -4490,16 +4380,16 @@ foveon_camf_param(const char *block, const char *param) {
         if ( pos[3] != 'P' ) {
             continue;
         }
-        if ( strcmp(block, pos + sget4(pos + 12)) ) {
+        if ( strcmp(block, pos + unsignedShortEndianSwap(pos + 12)) ) {
             continue;
         }
-        cp = pos + sget4(pos + 16);
-        num = sget4(cp);
-        dp = pos + sget4(cp + 4);
+        cp = pos + unsignedShortEndianSwap(pos + 16);
+        num = unsignedShortEndianSwap(cp);
+        dp = pos + unsignedShortEndianSwap(cp + 4);
         while ( num-- ) {
             cp += 8;
-            if ( !strcmp(param, dp + sget4(cp)) ) {
-                return dp + sget4(cp + 4);
+            if ( !strcmp(param, dp + unsignedShortEndianSwap(cp)) ) {
+                return dp + unsignedShortEndianSwap(cp + 4);
             }
         }
     }
@@ -4519,7 +4409,7 @@ foveon_camf_matrix(unsigned dim[3], const char *name) {
     char *dp;
     double dsize;
 
-    for ( idx = 0; idx < meta_length; idx += sget4(pos + 8) ) {
+    for ( idx = 0; idx < meta_length; idx += unsignedShortEndianSwap(pos + 8) ) {
         pos = meta_data + idx;
         if ( strncmp(pos, "CMb", 3)) {
             break;
@@ -4527,19 +4417,19 @@ foveon_camf_matrix(unsigned dim[3], const char *name) {
         if ( pos[3] != 'M' ) {
             continue;
         }
-        if ( strcmp(name, pos + sget4(pos + 12)) ) {
+        if ( strcmp(name, pos + unsignedShortEndianSwap(pos + 12)) ) {
             continue;
         }
         dim[0] = dim[1] = dim[2] = 1;
-        cp = pos + sget4(pos + 16);
-        type = sget4(cp);
-        if ( (ndim = sget4(cp + 4)) > 3 ) {
+        cp = pos + unsignedShortEndianSwap(pos + 16);
+        type = unsignedShortEndianSwap(cp);
+        if ( (ndim = unsignedShortEndianSwap(cp + 4)) > 3 ) {
             break;
         }
-        dp = pos + sget4(cp + 8);
+        dp = pos + unsignedShortEndianSwap(cp + 8);
         for ( i = ndim; i--; ) {
             cp += 12;
-            dim[i] = sget4(cp);
+            dim[i] = unsignedShortEndianSwap(cp);
         }
         if ( (dsize = (double) dim[0] * dim[1] * dim[2]) > meta_length / 4 ) {
             break;
@@ -4548,9 +4438,9 @@ foveon_camf_matrix(unsigned dim[3], const char *name) {
         memoryError(mat, "foveon_camf_matrix()");
         for ( i = 0; i < size; i++ ) {
             if ( type && type != 6 ) {
-                mat[i] = sget4(dp + i * 4);
+                mat[i] = unsignedShortEndianSwap(dp + i * 4);
             } else {
-                mat[i] = sget4(dp + i * 2) & 0xffff;
+                mat[i] = unsignedShortEndianSwap(dp + i * 2) & 0xffff;
             }
         }
         return mat;
@@ -7478,7 +7368,7 @@ parse_makernote(int base, int uptag) {
 
         if ( tag == 0xc && len == 4 ) {
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[(c << 1 | c >> 1) & 3] = getreal(type);
+                cam_mul[(c << 1 | c >> 1) & 3] = getReal(type);
             }
         }
 
@@ -7840,10 +7730,10 @@ parse_exif(int base) {
         switch ( tag ) {
             case 33434:
                 tiff_ifd[tiff_nifds - 1].shutter =
-                shutter = getreal(type);
+                shutter = getReal(type);
                 break;
             case 33437:
-                aperture = getreal(type);
+                aperture = getReal(type);
                 break;
             case 34855:
                 iso_speed = get2();
@@ -7853,16 +7743,16 @@ parse_exif(int base) {
                 get_timestamp(0);
                 break;
             case 37377:
-                if ( (expo = -getreal(type)) < 128 ) {
+                if ((expo = -getReal(type)) < 128 ) {
                     tiff_ifd[tiff_nifds - 1].shutter =
                     shutter = pow(2, expo);
                 }
                 break;
             case 37378:
-                aperture = pow(2, getreal(type) / 2);
+                aperture = pow(2, getReal(type) / 2);
                 break;
             case 37386:
-                focal_len = getreal(type);
+                focal_len = getReal(type);
                 break;
             case 37500:
                 parse_makernote(base, 0);
@@ -7998,7 +7888,7 @@ parse_mos(int offset) {
 
         if ( !strcmp(data, "icc_camera_to_tone_matrix") ) {
             for ( i = 0; i < 9; i++ ) {
-                ((float *) romm_cam)[i] = int_to_float(get4());
+                ((float *) romm_cam)[i] = intToFloat(get4());
             }
             romm_coeff(romm_cam);
         }
@@ -8059,7 +7949,7 @@ linear_table(unsigned len) {
     if ( len > 0x1000 ) {
         len = 0x1000;
     }
-    read_shorts(curve, len);
+    readShorts(curve, len);
     for ( i = len; i < 0x1000; i++ ) {
         curve[i] = curve[i - 1];
     }
@@ -8090,7 +7980,7 @@ parse_kodak_ifd(int base) {
         tiff_get(base, &tag, &type, &len, &save);
 
         if ( tag == 1020 ) {
-            wbi = getint(type);
+            wbi = getInt(type);
         }
 
         if ( tag == 1021 && len == 72 ) {
@@ -8103,25 +7993,25 @@ parse_kodak_ifd(int base) {
         }
 
         if ( tag == 2118 ) {
-            wbtemp = getint(type);
+            wbtemp = getInt(type);
         }
 
         if ( tag == 2120 + wbi && wbi >= 0 ) {
             for ( c = 0; c < 3; c++ ) {
-                cam_mul[c] = 2048.0 / getreal(type);
+                cam_mul[c] = 2048.0 / getReal(type);
             }
         }
 
         if ( tag == 2130 + wbi ) {
             for ( c = 0; c < 3; c++ ) {
-                mul[c] = getreal(type);
+                mul[c] = getReal(type);
             }
         }
 
         if ( tag == 2140 + wbi && wbi >= 0 ) {
             for ( c = 0; c < 3; c++ ) {
                 for ( num = i = 0; i < 4; i++ ) {
-                    num += getreal(type) * pow(wbtemp / 100.0, i);
+                    num += getReal(type) * pow(wbtemp / 100.0, i);
                 }
                 cam_mul[c] = 2048 / (num * mul[c]);
             }
@@ -8132,7 +8022,7 @@ parse_kodak_ifd(int base) {
         }
 
         if ( tag == 6020 ) {
-            iso_speed = getint(type);
+            iso_speed = getInt(type);
         }
 
         if ( tag == 64013 ) {
@@ -8146,11 +8036,11 @@ parse_kodak_ifd(int base) {
         }
 
         if ( tag == 64019 ) {
-            width = getint(type);
+            width = getInt(type);
         }
 
         if ( tag == 64020 ) {
-            height = (getint(type) + 1) & -2;
+            height = (getInt(type) + 1) & -2;
         }
 
         fseek(GLOBAL_IO_ifp, save, SEEK_SET);
@@ -8273,19 +8163,19 @@ int parse_tiff_ifd(int base) {
             case 256:
             case 61441:
                 // ImageWidth
-                tiff_ifd[ifd].width = getint(type);
+                tiff_ifd[ifd].width = getInt(type);
                 break;
             case 3:
             case 257:
             case 61442:
                 // ImageHeight
-                tiff_ifd[ifd].height = getint(type);
+                tiff_ifd[ifd].height = getInt(type);
                 break;
             case 258:
                 // BitsPerSample
             case 61443:
                 tiff_ifd[ifd].samples = len & 7;
-                if ( (tiff_ifd[ifd].bps = getint(type)) > 32 ) {
+                if ((tiff_ifd[ifd].bps = getInt(type)) > 32 ) {
                     tiff_ifd[ifd].bps = 8;
                 }
                 if ( tiff_bps < tiff_ifd[ifd].bps ) {
@@ -8298,7 +8188,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 259:
                 // Compression
-                tiff_ifd[ifd].comp = getint(type);
+                tiff_ifd[ifd].comp = getInt(type);
                 break;
             case 262:
                 // PhotometricInterpretation
@@ -8356,7 +8246,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 277:
                 // SamplesPerPixel
-                tiff_ifd[ifd].samples = getint(type) & 7;
+                tiff_ifd[ifd].samples = getInt(type) & 7;
                 break;
             case 279:
                 //StripByteCounts
@@ -8366,7 +8256,7 @@ int parse_tiff_ifd(int base) {
                 break;
             case 61454:
                 for ( c = 0; c < 3; c++ ) {
-                    cam_mul[(4 - c) % 3] = getint(type);
+                    cam_mul[(4 - c) % 3] = getInt(type);
                 }
                 break;
             case 305:
@@ -8391,11 +8281,11 @@ int parse_tiff_ifd(int base) {
                 break;
             case 322:
                 // TileWidth
-                tiff_ifd[ifd].tile_width = getint(type);
+                tiff_ifd[ifd].tile_width = getInt(type);
                 break;
             case 323:
                 // TileLength
-                tiff_ifd[ifd].tile_length = getint(type);
+                tiff_ifd[ifd].tile_length = getInt(type);
                 break;
             case 324:
                 // TileOffsets
@@ -8506,11 +8396,11 @@ int parse_tiff_ifd(int base) {
                 break;
             case 33434:
                 // ExposureTime
-                tiff_ifd[ifd].shutter = shutter = getreal(type);
+                tiff_ifd[ifd].shutter = shutter = getReal(type);
                 break;
             case 33437:
                 // FNumber
-                aperture = getreal(type);
+                aperture = getReal(type);
                 break;
             case 34306:
                 // Leaf white balance
@@ -8568,18 +8458,18 @@ int parse_tiff_ifd(int base) {
                 break;
             case 37386:
                 // FocalLength
-                focal_len = getreal(type);
+                focal_len = getReal(type);
                 break;
             case 37393:
                 // ImageNumber
-                shot_order = getint(type);
+                shot_order = getInt(type);
                 break;
             case 37400:
                 // Old Kodak KDC tag
                 for ( GLOBAL_colorTransformForRaw = i = 0; i < 3; i++ ) {
-                    getreal(type);
+                    getReal(type);
                     for ( c = 0; c < 3; c++ ) {
-                        rgb_cam[i][c] = getreal(type);
+                        rgb_cam[i][c] = getReal(type);
                     };
                 }
                 break;
@@ -8623,7 +8513,7 @@ int parse_tiff_ifd(int base) {
                 }
                 fseek(GLOBAL_IO_ifp, 52, SEEK_CUR);
                 for ( c = 0; c < 3; c++ ) {
-                    cam_mul[c] = getreal(11);
+                    cam_mul[c] = getReal(11);
                 }
                 fseek(GLOBAL_IO_ifp, 114, SEEK_CUR);
                 GLOBAL_flipsMask = (get2() >> 7) * 90;
@@ -8743,7 +8633,7 @@ int parse_tiff_ifd(int base) {
                     cblack[4] = cblack[5] = 1;
                 }
                 for ( c = 0; c < cblack[4] * cblack[5]; c++ ) {
-                    cblack[6 + c] = getreal(type);
+                    cblack[6 + c] = getReal(type);
                 }
                 black = 0;
                 break;
@@ -8752,18 +8642,18 @@ int parse_tiff_ifd(int base) {
             case 50716:
                 // BlackLevelDeltaV
                 for ( num = i = 0; i < (len & 0xffff); i++ ) {
-                    num += getreal(type);
+                    num += getReal(type);
                 }
                 black += num / len + 0.5;
                 break;
             case 50717:
                 // WhiteLevel
-                maximum = getint(type);
+                maximum = getInt(type);
                 break;
             case 50718:
                 // DefaultScale
-                pixel_aspect = getreal(type);
-                pixel_aspect /= getreal(type);
+                pixel_aspect = getReal(type);
+                pixel_aspect /= getReal(type);
                 break;
             case 50721:
                 // ColorMatrix1
@@ -8771,7 +8661,7 @@ int parse_tiff_ifd(int base) {
                 // ColorMatrix2
                 for ( c = 0; c < colors; c++ ) {
                     for ( j = 0; j < 3; j++ ) {
-                        cm[c][j] = getreal(type);
+                        cm[c][j] = getReal(type);
                     }
                 }
                 use_cm = 1;
@@ -8782,26 +8672,26 @@ int parse_tiff_ifd(int base) {
                 // CameraCalibration2
                 for ( i = 0; i < colors; i++ ) {
                     for ( c = 0; c < colors; c++ ) {
-                        cc[i][c] = getreal(type);
+                        cc[i][c] = getReal(type);
                     }
                 }
                 break;
             case 50727:
                 // AnalogBalance
                 for ( c = 0; c < colors; c++ ) {
-                    ab[c] = getreal(type);
+                    ab[c] = getReal(type);
                 }
                 break;
             case 50728:
                 // AsShotNeutral
                 for ( c = 0; c < colors; c++ ) {
-                    asn[c] = getreal(type);
+                    asn[c] = getReal(type);
                 }
                 break;
             case 50729:
                 // AsShotWhiteXY
-                xyz[0] = getreal(type);
-                xyz[1] = getreal(type);
+                xyz[0] = getReal(type);
+                xyz[1] = getReal(type);
                 xyz[2] = 1 - xyz[0] - xyz[1];
                 for ( c = 0; c < 3; c++ ) {
                     xyz[c] /= d65_white[c];
@@ -8817,19 +8707,19 @@ int parse_tiff_ifd(int base) {
                 parse_tiff_ifd(base);
                 break;
             case 50752:
-                read_shorts(cr2_slice, 3);
+                readShorts(cr2_slice, 3);
                 break;
             case 50829:
                 // ActiveArea
-                top_margin = getint(type);
-                left_margin = getint(type);
-                height = getint(type) - top_margin;
-                width = getint(type) - left_margin;
+                top_margin = getInt(type);
+                left_margin = getInt(type);
+                height = getInt(type) - top_margin;
+                width = getInt(type) - left_margin;
                 break;
             case 50830:
                 // MaskedAreas
                 for ( i = 0; i < len && i < 32; i++ ) {
-                    ((int *) mask)[i] = getint(type);
+                    ((int *) mask)[i] = getInt(type);
                 }
                 black = 0;
                 break;
@@ -9344,7 +9234,7 @@ parse_ciff(int offset, int length, int depth) {
         if ( type == 0x1810 ) {
             width = get4();
             height = get4();
-            pixel_aspect = int_to_float(get4());
+            pixel_aspect = intToFloat(get4());
             GLOBAL_flipsMask = get4();
         }
 
@@ -9359,8 +9249,8 @@ parse_ciff(int offset, int length, int depth) {
         }
 
         if ( type == 0x1818 ) {
-            shutter = pow(2, -int_to_float((get4(), get4())));
-            aperture = pow(2, int_to_float(get4()) / 2);
+            shutter = pow(2, -intToFloat((get4(), get4())));
+            aperture = pow(2, intToFloat(get4()) / 2);
         }
 
         if ( type == 0x102a ) {
@@ -9454,11 +9344,11 @@ parse_ciff(int offset, int length, int depth) {
         }
 
         if ( type == 0x5813 ) {
-            flash_used = int_to_float(len);
+            flash_used = intToFloat(len);
         }
 
         if ( type == 0x5814 ) {
-            canon_ev = int_to_float(len);
+            canon_ev = intToFloat(len);
         }
 
         if ( type == 0x5817 ) {
@@ -9619,13 +9509,13 @@ parse_phase_one(int base) {
                 break;
             case 0x106:
                 for ( i = 0; i < 9; i++ ) {
-                    ((float *) romm_cam)[i] = getreal(11);
+                    ((float *) romm_cam)[i] = getReal(11);
                 }
                 romm_coeff(romm_cam);
                 break;
             case 0x107:
                 for ( c = 0; c < 3; c++ ) {
-                    cam_mul[c] = getreal(11);
+                    cam_mul[c] = getReal(11);
                 }
                 break;
             case 0x108:
@@ -9660,7 +9550,7 @@ parse_phase_one(int base) {
                 ph1.key_off = save - 4;
                 break;
             case 0x210:
-                ph1.tag_210 = int_to_float(data);
+                ph1.tag_210 = intToFloat(data);
                 break;
             case 0x21a:
                 ph1.tag_21a = data;
@@ -10079,8 +9969,8 @@ parse_cine() {
         case 0:
             GLOBAL_flipsMask = 2;
     }
-    cam_mul[0] = getreal(11);
-    cam_mul[2] = getreal(11);
+    cam_mul[0] = getReal(11);
+    cam_mul[2] = getReal(11);
     maximum = ~(-1 << get4());
     fseek(GLOBAL_IO_ifp, 668, SEEK_CUR);
     shutter = get4() / 1000000000.0;
@@ -11883,7 +11773,7 @@ tiffIdentify() {
     data_offset = meta_offset = meta_length = tiff_bps = tiff_compress = 0;
     kodak_cbpp = zero_after_ff = GLOBAL_dngVersion = GLOBAL_loadFlags = 0;
     timestamp = shot_order = tiff_samples = black = is_foveon = 0;
-    mix_green = profile_length = data_error = zero_is_bad = 0;
+    mix_green = profile_length = GLOBAL_IO_dataError = zero_is_bad = 0;
     pixel_aspect = is_raw = GLOBAL_colorTransformForRaw = 1;
     tile_width = tile_length = 0;
 
@@ -12581,7 +12471,7 @@ tiffIdentify() {
         }
     } else if ( !strcmp(model, "*ist D") ) {
         TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
-        data_error = -1;
+                                                                                                                                                                        GLOBAL_IO_dataError = -1;
     } else if ( !strcmp(model, "*ist DS") ) {
         height -= 2;
     } else if ( !strcmp(make, "Samsung") && raw_width == 4704 ) {
@@ -12889,7 +12779,7 @@ tiffIdentify() {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         if ( filters && data_offset ) {
             fseek(GLOBAL_IO_ifp, data_offset < 4096 ? 168 : 5252, SEEK_SET);
-            read_shorts(curve, 256);
+            readShorts(curve, 256);
         } else {
             gamma_curve(0, 3.875, 1, 255);
         }

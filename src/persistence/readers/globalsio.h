@@ -12,5 +12,16 @@
 #include <cstdio>
 
 extern FILE *GLOBAL_IO_ifp;
+extern unsigned GLOBAL_IO_dataError;
+
+extern void inputOutputError();
+extern unsigned short sget2(const unsigned char *s);
+extern unsigned unsignedShortEndianSwap(unsigned char *s);
+extern unsigned short get2();
+extern unsigned get4();
+extern unsigned getInt(int type);
+extern double getReal(int type);
+extern void readShorts(unsigned short *pixel, int count);
+extern float intToFloat(int i);
 
 #endif
