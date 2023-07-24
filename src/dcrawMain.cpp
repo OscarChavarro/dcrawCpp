@@ -120,43 +120,82 @@ typedef unsigned long long UINT64;
 #define ushort unsigned short
 #endif
 
-/*
-   All global variables are defined here, and all functions that
-   access them are prefixed with "CLASS".  For thread-safety, all
-   non-const static local variables except cbrt[] must be declared
-   "thread_local".
- */
 FILE *ifp, *ofp;
 
 const char *ifname;
-char *meta_data, xtrans[6][6], xtrans_abs[6][6];
-char desc[512], make[64], model[64], model2[64], artist[64];
-float flash_used, canon_ev, iso_speed, shutter, aperture, focal_len;
+char *meta_data;
+char xtrans[6][6];
+char xtrans_abs[6][6];
+char desc[512];
+char make[64];
+char model[64];
+char model2[64];
+char artist[64];
+float flash_used;
+float canon_ev;
+float iso_speed;
+float shutter;
+float aperture;
+float focal_len;
 time_t timestamp;
-off_t strip_offset, data_offset;
-off_t thumb_offset, meta_offset, profile_offset;
-unsigned shot_order, kodak_cbpp, exif_cfa, unique_id;
-unsigned thumb_length, meta_length, profile_length;
+off_t strip_offset;
+off_t data_offset;
+off_t thumb_offset;
+off_t meta_offset;
+off_t profile_offset;
+unsigned shot_order;
+unsigned kodak_cbpp;
+unsigned exif_cfa;
+unsigned unique_id;
+unsigned thumb_length;
+unsigned meta_length;
+unsigned profile_length;
 unsigned thumb_misc;
 unsigned fuji_layout;
-unsigned tiff_nifds, tiff_samples, tiff_bps, tiff_compress;
-unsigned black, maximum, mix_green;
+unsigned tiff_nifds;
+unsigned tiff_samples;
+unsigned tiff_bps;
+unsigned tiff_compress;
+unsigned black;
+unsigned maximum;
+unsigned mix_green;
 unsigned zero_is_bad;
-unsigned zero_after_ff, is_raw;
-unsigned is_foveon, data_error;
-unsigned tile_width, tile_length, gpsdata[32];
-unsigned cameraFlip, filters, colors;
-ushort raw_height, raw_width, height, width, top_margin, left_margin;
-ushort shrink, iheight, iwidth, fuji_width, thumb_width, thumb_height;
-ushort *raw_image, (*image)[4], cblack[4102];
-ushort white[8][8], curve[0x10000], cr2_slice[3], sraw_mul[4];
+unsigned zero_after_ff;
+unsigned is_raw;
+unsigned is_foveon;
+unsigned data_error;
+unsigned tile_width;
+unsigned tile_length;
+unsigned gpsdata[32];
+unsigned cameraFlip;
+unsigned filters;
+unsigned colors;
+ushort raw_height;
+ushort raw_width;
+ushort height;
+ushort width;
+ushort top_margin;
+ushort left_margin;
+ushort shrink;
+ushort iheight;
+ushort iwidth;
+ushort fuji_width;
+ushort thumb_width;
+ushort thumb_height;
+ushort *raw_image;
+ushort (*image)[4];
+ushort cblack[4102];
+ushort white[8][8];
+ushort curve[0x10000];
+ushort cr2_slice[3];
+ushort sraw_mul[4];
 double pixel_aspect;
 int mask[8][4];
 float cam_mul[4];
 float pre_mul[4];
 float cmatrix[3][4];
 float rgb_cam[3][4];
-const double xyz_rgb[3][3] = {            /* XYZ from RGB */
+const double xyz_rgb[3][3] = { // XYZ from RGB
         {0.412453, 0.357580, 0.180423},
         {0.212671, 0.715160, 0.072169},
         {0.019334, 0.119193, 0.950227}
@@ -173,60 +212,78 @@ jmp_buf failure;
 struct decode {
     struct decode *branch[2];
     int leaf;
-} first_decode[2048], *second_decode, *free_decode;
+};
+struct decode first_decode[2048];
+struct decode *second_decode;
+struct decode *free_decode;
 
 struct tiff_ifd {
-    int width, height, bps, comp, phint, offset, flip, samples, bytes;
-    int tile_width, tile_length;
+    int width;
+    int height;
+    int bps;
+    int comp;
+    int phint;
+    int offset;
+    int flip;
+    int samples;
+    int bytes;
+    int tile_width;
+    int tile_length;
     float shutter;
-} tiff_ifd[10];
+};
+struct tiff_ifd tiff_ifd[10];
 
 struct ph1 {
-    int format, key_off, tag_21a;
-    int black, split_col, black_col, split_row, black_row;
+    int format;
+    int key_off;
+    int tag_21a;
+    int black;
+    int split_col;
+    int black_col;
+    int split_row;
+    int black_row;
     float tag_210;
-} ph1;
-
-#define CLASS
+};
+struct ph1 ph1;
 
 /*
-   In order to inline this calculation, I make the risky
-   assumption that all filter patterns can be described
-   by a repeating pattern of eight rows and two columns
+In order to inline this calculation, I make the risky
+assumption that all filter patterns can be described
+by a repeating pattern of eight rows and two columns
 
-   Do not use the FC or BAYER macros with the Leaf CatchLight,
-   because its pattern is 16x16, not 2x8.
+Do not use the FC or BAYER macros with the Leaf CatchLight,
+because its pattern is 16x16, not 2x8.
 
-   Return values are either 0/1/2/3 = G/M/C/Y or 0/1/2/3 = R/G1/B/G2
+Return values are either 0/1/2/3 = G/M/C/Y or 0/1/2/3 = R/G1/B/G2
 
-	PowerShot 600	PowerShot A50	PowerShot Pro70	Pro90 & G1
-	0xe1e4e1e4:	0x1b4e4b1e:	0x1e4b4e1b:	0xb4b4b4b4:
+PowerShot 600	PowerShot A50	PowerShot Pro70	Pro90 & G1
+0xe1e4e1e4:	0x1b4e4b1e:	0x1e4b4e1b:	0xb4b4b4b4:
 
-	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5
-	0 G M G M G M	0 C Y C Y C Y	0 Y C Y C Y C	0 G M G M G M
-	1 C Y C Y C Y	1 M G M G M G	1 M G M G M G	1 Y C Y C Y C
-	2 M G M G M G	2 Y C Y C Y C	2 C Y C Y C Y
-	3 C Y C Y C Y	3 G M G M G M	3 G M G M G M
-			4 C Y C Y C Y	4 Y C Y C Y C
-	PowerShot A5	5 G M G M G M	5 G M G M G M
-	0x1e4e1e4e:	6 Y C Y C Y C	6 C Y C Y C Y
-			7 M G M G M G	7 M G M G M G
-	  0 1 2 3 4 5
-	0 C Y C Y C Y
-	1 G M G M G M
-	2 C Y C Y C Y
-	3 M G M G M G
+  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5
+0 G M G M G M	0 C Y C Y C Y	0 Y C Y C Y C	0 G M G M G M
+1 C Y C Y C Y	1 M G M G M G	1 M G M G M G	1 Y C Y C Y C
+2 M G M G M G	2 Y C Y C Y C	2 C Y C Y C Y
+3 C Y C Y C Y	3 G M G M G M	3 G M G M G M
+        4 C Y C Y C Y	4 Y C Y C Y C
+PowerShot A5	5 G M G M G M	5 G M G M G M
+0x1e4e1e4e:	6 Y C Y C Y C	6 C Y C Y C Y
+        7 M G M G M G	7 M G M G M G
+  0 1 2 3 4 5
+0 C Y C Y C Y
+1 G M G M G M
+2 C Y C Y C Y
+3 M G M G M G
 
-   All RGB cameras use one of these Bayer grids:
+All RGB cameras use one of these Bayer grids:
 
-	0x16161616:	0x61616161:	0x49494949:	0x94949494:
+0x16161616:	0x61616161:	0x49494949:	0x94949494:
 
-	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5
-	0 B G B G B G	0 G R G R G R	0 G B G B G B	0 R G R G R G
-	1 G R G R G R	1 B G B G B G	1 R G R G R G	1 G B G B G B
-	2 B G B G B G	2 G R G R G R	2 G B G B G B	2 R G R G R G
-	3 G R G R G R	3 B G B G B G	3 R G R G R G	3 G B G B G B
- */
+  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5	  0 1 2 3 4 5
+0 B G B G B G	0 G R G R G R	0 G B G B G B	0 R G R G R G
+1 G R G R G R	1 B G B G B G	1 R G R G R G	1 G B G B G B
+2 B G B G B G	2 G R G R G R	2 G B G B G B	2 R G R G R G
+3 G R G R G R	3 B G B G B G	3 R G R G R G	3 G B G B G B
+*/
 
 #define RAW(row, col) \
     raw_image[(row)*raw_width+(col)]
@@ -260,8 +317,12 @@ fcol(int row, int col) {
              {2, 1, 3, 2, 3, 1, 2, 1, 0, 3, 0, 2, 0, 2, 0, 2},
              {0, 3, 1, 0, 0, 2, 0, 3, 2, 1, 3, 1, 1, 3, 1, 3}};
 
-    if ( filters == 1 ) return filter[(row + top_margin) & 15][(col + left_margin) & 15];
-    if ( filters == 9 ) return xtrans[(row + 6) % 6][(col + 6) % 6];
+    if ( filters == 1 ) {
+        return filter[(row + top_margin) & 15][(col + left_margin) & 15];
+    }
+    if ( filters == 9 ) {
+        return xtrans[(row + 6) % 6][(col + 6) % 6];
+    }
     return FC(row, col);
 }
 
@@ -374,7 +435,8 @@ getreal(int type) {
         char c[8];
         double d;
     } u;
-    int i, rev;
+    int i;
+    int rev;
 
     switch ( type ) {
         case 3:
@@ -416,8 +478,14 @@ read_shorts(ushort *pixel, int count) {
 
 void
 cubic_spline(const int *x_, const int *y_, const int len) {
-    float **A, *b, *c, *d, *x, *y;
-    int i, j;
+    float **A;
+    float *b;
+    float *c;
+    float *d;
+    float *x;
+    float *y;
+    int i;
+    int j;
 
     A = (float **)calloc(((2 * len + 4) * sizeof **A + sizeof *A), 2 * len);
     if ( !A ) {
@@ -480,7 +548,9 @@ canon_600_fixed_wb(int temp) {
             {731,  390, 367, 499, 517},
             {1119, 396, 348, 448, 537},
             {1399, 485, 431, 508, 688}};
-    int lo, hi, i;
+    int lo;
+    int hi;
+    int i;
     float frac = 0;
 
     for ( lo = 4; --lo; ) {
@@ -506,7 +576,9 @@ Return values:  0 = white  1 = near white  2 = not white
 */
 int
 canon_600_color(int ratio[2], int mar) {
-    int clipped = 0, target, miss;
+    int clipped = 0;
+    int target;
+    int miss;
 
     if ( flash_used ) {
         if ( ratio[1] < -104 ) {
@@ -553,8 +625,17 @@ canon_600_color(int ratio[2], int mar) {
 
 void
 canon_600_auto_wb() {
-    int mar, row, col, i, j, st, count[] = {0, 0};
-    int test[8], total[2][8], ratio[2][2], stat[2];
+    int mar;
+    int row;
+    int col;
+    int i;
+    int j;
+    int st;
+    int count[] = {0, 0};
+    int test[8];
+    int total[2][8];
+    int ratio[2][2];
+    int stat[2];
 
     memset(&total, 0, sizeof total);
     i = canon_ev + 0.5;
@@ -626,8 +707,11 @@ canon_600_coeff() {
             {-190,  702,  -1886, 2398, 2153, -1641, 763, -251, -452,  964,  3040, -2528},
             {-190,  702,  -1878, 2390, 1861, -1349, 905, -393, -432,  944,  2617, -2105},
             {-807,  1319, -1785, 2297, 1388, -876,  769, -257, -230,  742,  2067, -1555}};
-    int t = 0, i, c;
-    float mc, yc;
+    int t = 0;
+    int i;
+    int c;
+    float mc;
+    float yc;
 
     mc = pre_mul[1] / pre_mul[2];
     yc = pre_mul[3] / pre_mul[2];
@@ -653,7 +737,8 @@ void
 canon_600_load_raw() {
     uchar data[1120], *dp;
     ushort *pix;
-    int irow, row;
+    int irow;
+    int row;
 
     for ( irow = row = 0; irow < height; irow++ ) {
         if ( fread(data, 1, 1120, ifp) < 1120 ) derror();
@@ -676,7 +761,9 @@ canon_600_load_raw() {
 
 void
 canon_600_correct() {
-    int row, col, val;
+    int row;
+    int col;
+    int val;
     static const short mul[4][2] =
             {{1141, 1145},
              {1128, 1109},
@@ -714,7 +801,8 @@ canon_s2is() {
 unsigned
 getbithuff(int nbits, ushort *huff) {
     static unsigned bitbuf = 0;
-    static int vbits = 0, reset = 0;
+    static int vbits = 0;
+    static int reset = 0;
     unsigned c;
 
     if ( nbits > 25 ) {
@@ -775,7 +863,11 @@ then the code is
  */
 ushort *
 make_decoder_ref(const uchar **source) {
-    int max, len, h, i, j;
+    int max;
+    int len;
+    int h;
+    int i;
+    int j;
     const uchar *count;
     ushort *huff;
 
@@ -874,7 +966,8 @@ In Canon compressed data, 0xff is always followed by 0x00.
 int
 canon_has_lowbits() {
     uchar test[0x4000];
-    int ret = 1, i;
+    int ret = 1;
+    int i;
 
     fseek(ifp, 0, SEEK_SET);
     fread(test, 1, sizeof test, ifp);
@@ -891,9 +984,25 @@ canon_has_lowbits() {
 
 void
 canon_load_raw() {
-    ushort *pixel, *prow, *huff[2];
-    int nblocks, lowbits, i, c, row, r, save, val;
-    int block, diffbuf[64], leaf, len, diff, carry = 0, pnum = 0, base[2];
+    ushort *pixel;
+    ushort *prow;
+    ushort *huff[2];
+    int nblocks;
+    int lowbits;
+    int i;
+    int c;
+    int row;
+    int r;
+    int save;
+    int val;
+    int block;
+    int diffbuf[64];
+    int leaf;
+    int len;
+    int diff;
+    int carry = 0;
+    int pnum = 0;
+    int base[2];
 
     crw_init_tables(tiff_compress, huff);
     lowbits = canon_has_lowbits();
@@ -960,13 +1069,27 @@ canon_load_raw() {
 }
 
 struct jhead {
-    int algo, bits, high, wide, clrs, sraw, psv, restart, vpred[6];
-    ushort quant[64], idct[64], *huff[20], *free[20], *row;
+    int algo;
+    int bits;
+    int high;
+    int wide;
+    int clrs;
+    int sraw;
+    int psv;
+    int restart;
+    int vpred[6];
+    ushort quant[64];
+    ushort idct[64];
+    ushort *huff[20];
+    ushort *free[20];
+    ushort *row;
 };
 
 int
 ljpeg_start(struct jhead *jh, int info_only) {
-    ushort c, tag, len;
+    ushort c;
+    ushort tag;
+    ushort len;
     uchar data[0x10000];
     const uchar *dp;
 
@@ -1052,6 +1175,7 @@ ljpeg_start(struct jhead *jh, int info_only) {
 void
 ljpeg_end(struct jhead *jh) {
     int c;
+
     for ( c = 0; c < 4; c++ ) {
         if ( jh->free[c] ) {
             free(jh->free[c]);
@@ -1062,7 +1186,8 @@ ljpeg_end(struct jhead *jh) {
 
 int
 ljpeg_diff(ushort *huff) {
-    int len, diff;
+    int len;
+    int diff;
 
     len = gethuff(huff);
     if ( len == 16 && (!GLOBAL_dngVersion || GLOBAL_dngVersion >= 0x1010000) ) {
@@ -1077,8 +1202,13 @@ ljpeg_diff(ushort *huff) {
 
 ushort *
 ljpeg_row(int jrow, struct jhead *jh) {
-    int col, c, diff, pred, spred = 0;
-    ushort mark = 0, *row[3];
+    int col;
+    int c;
+    int diff;
+    int pred;
+    int spred = 0;
+    ushort mark = 0;
+    ushort *row[3];
 
     if ( jrow * jh->wide % jh->restart == 0 ) {
         for ( c = 0; c < 6; c++ ) {
@@ -1146,7 +1276,15 @@ ljpeg_row(int jrow, struct jhead *jh) {
 
 void
 lossless_jpeg_load_raw() {
-    int jwide, jrow, jcol, val, jidx, i, j, row = 0, col = 0;
+    int jwide;
+    int jrow;
+    int jcol;
+    int val;
+    int jidx;
+    int i;
+    int j;
+    int row = 0;
+    int col = 0;
     struct jhead jh;
     ushort *rp;
 
@@ -1189,9 +1327,21 @@ lossless_jpeg_load_raw() {
 void
 canon_sraw_load_raw() {
     struct jhead jh;
-    short *rp = 0, (*ip)[4];
-    int jwide, slice, scol, ecol, row, col, jrow = 0, jcol = 0, pix[3], c;
-    int v[3] = {0, 0, 0}, ver, hue;
+    short *rp = 0;
+    short (*ip)[4];
+    int jwide;
+    int slice;
+    int scol;
+    int ecol;
+    int row;
+    int col;
+    int jrow = 0;
+    int jcol = 0;
+    int pix[3];
+    int c;
+    int v[3] = {0, 0, 0};
+    int ver;
+    int hue;
     char *cp;
 
     if ( !ljpeg_start(&jh, 0) || jh.clrs < 4 ) {
@@ -1303,7 +1453,12 @@ adobe_copy_pixel(unsigned row, unsigned col, ushort **rp) {
 
 void
 ljpeg_idct(struct jhead *jh) {
-    int c, i, j, len, skip, coef;
+    int c;
+    int i;
+    int j;
+    int len;
+    int skip;
+    int coef;
     float work[3][8][8];
     static float cs[106] = {0};
     static const uchar zigzag[80] =
@@ -1359,7 +1514,16 @@ ljpeg_idct(struct jhead *jh) {
 
 void
 lossless_dng_load_raw() {
-    unsigned save, trow = 0, tcol = 0, jwide, jrow, jcol, row, col, i, j;
+    unsigned save;
+    unsigned trow = 0;
+    unsigned tcol = 0;
+    unsigned jwide;
+    unsigned jrow;
+    unsigned jcol;
+    unsigned row;
+    unsigned col;
+    unsigned i;
+    unsigned j;
     struct jhead jh;
     ushort *rp;
 
@@ -1415,8 +1579,10 @@ lossless_dng_load_raw() {
 
 void
 packed_dng_load_raw() {
-    ushort *pixel, *rp;
-    int row, col;
+    ushort *pixel;
+    ushort *rp;
+    int row;
+    int col;
 
     pixel = (ushort *) calloc(raw_width, tiff_samples * sizeof *pixel);
     merror(pixel, "packed_dng_load_raw()");
@@ -1438,10 +1604,17 @@ packed_dng_load_raw() {
 
 void
 pentax_load_raw() {
-    ushort bit[2][15], huff[4097];
-    int dep, row, col, diff, c, i;
+    ushort bit[2][15];
+    ushort huff[4097];
+    int dep;
+    int row;
+    int col;
+    int diff;
+    int c;
+    int i;
     ushort vpred[2][2] = {{0, 0},
-                          {0, 0}}, hpred[2];
+                          {0, 0}};
+    ushort hpred[2];
 
     fseek(ifp, meta_offset, SEEK_SET);
     dep = (get2() + 12) & 15;
@@ -1491,8 +1664,23 @@ nikon_load_raw() {
                     8,    0x5c, 0x4b, 0x3a, 0x29, 7, 6,  5, 4,  3,  2,  1,  0,  13, 14},
             {0, 1, 4, 2, 2, 3, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,    /* 14-bit lossless */
                     7,    6,    8,    5,    9,    4, 10, 3, 11, 12, 2,  0,  1,  13, 14}};
-    ushort *huff, ver0, ver1, vpred[2][2], hpred[2], csize;
-    int i, min, max, step = 0, tree = 0, split = 0, row, col, len, shl, diff;
+    ushort *huff;
+    ushort ver0;
+    ushort ver1;
+    ushort vpred[2][2];
+    ushort hpred[2];
+    ushort csize;
+    int i;
+    int min;
+    int max;
+    int step = 0;
+    int tree = 0;
+    int split = 0;
+    int row;
+    int col;
+    int len;
+    int shl;
+    int diff;
 
     fseek(ifp, meta_offset, SEEK_SET);
     ver0 = fgetc(ifp);
@@ -1562,7 +1750,12 @@ nikon_load_raw() {
 
 void
 nikon_yuv_load_raw() {
-    int row, col, yuv[4], rgb[3], b, c;
+    int row;
+    int col;
+    int yuv[4];
+    int rgb[3];
+    int b;
+    int c;
     UINT64 bitbuf = 0;
 
     for ( row = 0; row < raw_height; row++ ) {
@@ -1591,7 +1784,8 @@ Returns 1 for a Coolpix 995, 0 for anything else.
 */
 int
 nikon_e995() {
-    int i, histo[256];
+    int i;
+    int histo[256];
     const uchar often[] = {0x00, 0x55, 0xaa, 0xff};
 
     memset(histo, 0, sizeof histo);
@@ -1628,11 +1822,13 @@ nikon_e2100() {
 
 void
 nikon_3700() {
-    int bits, i;
+    int bits;
+    int i;
     uchar dp[24];
     static const struct {
         int bits;
-        char make[12], model[15];
+        char make[12];
+        char model[15];
     } table[] = {
             {0x00, "Pentax",  "Optio 33WR"},
             {0x03, "Nikon",   "E3200"},
@@ -1654,7 +1850,8 @@ Separates a Minolta DiMAGE Z2 from a Nikon E4300.
 */
 int
 minolta_z2() {
-    int i, nz;
+    int i;
+    int nz;
     char tail[424];
 
     fseek(ifp, -sizeof tail, SEEK_END);
@@ -1673,6 +1870,7 @@ jpeg_thumb();
 void
 ppm_thumb() {
     char *thumb;
+
     thumb_length = thumb_width * thumb_height * 3;
     thumb = (char *) malloc(thumb_length);
     merror(thumb, "ppm_thumb()");
@@ -1686,6 +1884,7 @@ void
 ppm16_thumb() {
     int i;
     char *thumb;
+
     thumb_length = thumb_width * thumb_height * 3;
     thumb = (char *) calloc(thumb_length, 2);
     merror(thumb, "ppm16_thumb()");
@@ -1700,8 +1899,10 @@ ppm16_thumb() {
 
 void
 layer_thumb() {
-    int i, c;
-    char *thumb, map[][4] = {"012", "102"};
+    int i;
+    int c;
+    char *thumb;
+    char map[][4] = {"012", "102"};
 
     colors = thumb_misc >> 5 & 7;
     thumb_length = thumb_width * thumb_height;
@@ -1739,7 +1940,11 @@ rollei_thumb() {
 void
 rollei_load_raw() {
     uchar pixel[10];
-    unsigned iten = 0, isix, i, buffer = 0, todo[16];
+    unsigned iten = 0;
+    unsigned isix;
+    unsigned i;
+    unsigned buffer = 0;
+    unsigned todo[16];
 
     isix = raw_width * raw_height * 5 / 8;
     while ( fread(pixel, 1, 10, ifp) == 10 ) {
@@ -1767,8 +1972,18 @@ raw(unsigned row, unsigned col) {
 void
 phase_one_flat_field(int is_float, int nc) {
     ushort head[8];
-    unsigned wide, high, y, x, c, rend, cend, row, col;
-    float *mrow, num, mult[4];
+    unsigned wide;
+    unsigned high;
+    unsigned y;
+    unsigned x;
+    unsigned c;
+    unsigned rend;
+    unsigned cend;
+    unsigned row;
+    unsigned col;
+    float *mrow;
+    float num;
+    float mult[4];
 
     read_shorts(head, 8);
     if ( head[2] * head[3] * head[4] * head[5] == 0 ) {
@@ -1824,9 +2039,26 @@ phase_one_flat_field(int is_float, int nc) {
 
 void
 phase_one_correct() {
-    unsigned entries, tag, data, save, col, row, type;
-    int len, i, j, k, cip, val[4], dev[4], sum, max;
-    int head[9], diff, mindiff = INT_MAX, off_412 = 0;
+    unsigned entries;
+    unsigned tag;
+    unsigned data;
+    unsigned save;
+    unsigned col;
+    unsigned row;
+    unsigned type;
+    int len;
+    int i;
+    int j;
+    int k;
+    int cip;
+    int val[4];
+    int dev[4];
+    int sum;
+    int max;
+    int head[9];
+    int diff;
+    int mindiff = INT_MAX;
+    int off_412 = 0;
     static const signed char dir[12][2] =
             {{-1, -1},
              {-1, 1},
@@ -1840,9 +2072,15 @@ phase_one_correct() {
              {-2, 2},
              {2,  -2},
              {2,  2}};
-    float poly[8], num, cfrac, frac, mult[2], *yval[2];
+    float poly[8];
+    float num;
+    float cfrac;
+    float frac;
+    float mult[2];
+    float *yval[2];
     ushort *xval[2];
-    int qmult_applied = 0, qlin_applied = 0;
+    int qmult_applied = 0;
+    int qlin_applied = 0;
 
     if ( OPTIONS_values->halfSizePreInterpolation || !meta_length ) {
         return;
@@ -2119,7 +2357,9 @@ phase_one_correct() {
 
 void
 phase_one_load_raw() {
-    int a, b, i;
+    int a;
+    int b;
+    int i;
     ushort akey, bkey, mask;
 
     fseek(ifp, ph1.key_off, SEEK_SET);
@@ -2169,9 +2409,16 @@ ph1_bithuff(int nbits, ushort *huff) {
 void
 phase_one_load_raw_c() {
     static const int length[] = {8, 7, 6, 9, 11, 10, 5, 12, 14, 13};
-    int *offset, len[2], pred[2], row, col, i, j;
+    int *offset;
+    int len[2];
+    int pred[2];
+    int row;
+    int col;
+    int i;
+    int j;
     ushort *pixel;
-    short (*cblack)[2], (*rblack)[2];
+    short (*cblack)[2];
+    short (*rblack)[2];
 
     pixel = (ushort *) calloc(raw_width * 3 + raw_height * 4, 2);
     merror(pixel, "phase_one_load_raw_c()");
@@ -2238,11 +2485,23 @@ phase_one_load_raw_c() {
 void
 hasselblad_load_raw() {
     struct jhead jh;
-    int shot, row, col, *back[5], len[2], diff[12], pred, sh, f, s, c;
-    unsigned upix, urow, ucol;
+    int shot;
+    int row;
+    int col;
+    int *back[5];
+    int len[2];
+    int diff[12];
+    int pred;
+    int sh;
+    int f;
+    int s;
+    int c;
+    unsigned upix;
+    unsigned urow;
+    unsigned ucol;
     ushort *ip;
 
-    if ( !ljpeg_start(&jh, 0)) {
+    if ( !ljpeg_start(&jh, 0) ) {
         return;
     }
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
@@ -2309,7 +2568,11 @@ hasselblad_load_raw() {
 void
 leaf_hdr_load_raw() {
     ushort *pixel = 0;
-    unsigned tile = 0, r, c, row, col;
+    unsigned tile = 0;
+    unsigned r;
+    unsigned c;
+    unsigned row;
+    unsigned col;
 
     if ( !filters ) {
         pixel = (ushort *) calloc(raw_width, sizeof *pixel);
@@ -2344,7 +2607,9 @@ leaf_hdr_load_raw() {
 
 void
 unpacked_load_raw() {
-    int row, col, bits = 0;
+    int row;
+    int col;
+    int bits = 0;
 
     while ( 1 << ++bits < maximum );
     read_shorts(raw_image, raw_width * raw_height);
@@ -2362,7 +2627,11 @@ unpacked_load_raw() {
 void
 sinar_4shot_load_raw() {
     ushort *pixel;
-    unsigned shot, row, col, r, c;
+    unsigned shot;
+    unsigned row;
+    unsigned col;
+    unsigned r;
+    unsigned c;
 
     if ( raw_image ) {
         shot = LIM (OPTIONS_values->shotSelect, 1, 4) - 1;
@@ -2395,7 +2664,8 @@ sinar_4shot_load_raw() {
 
 void
 imacon_full_load_raw() {
-    int row, col;
+    int row;
+    int col;
 
     if ( !image ) {
         return;
@@ -2409,7 +2679,16 @@ imacon_full_load_raw() {
 
 void
 packed_load_raw() {
-    int vbits = 0, bwide, rbits, bite, half, irow, row, col, val, i;
+    int vbits = 0;
+    int bwide;
+    int rbits;
+    int bite;
+    int half;
+    int irow;
+    int row;
+    int col;
+    int val;
+    int i;
     UINT64 bitbuf = 0;
 
     bwide = raw_width * tiff_bps / 8;
@@ -2452,8 +2731,13 @@ packed_load_raw() {
 
 void
 nokia_load_raw() {
-    uchar *data, *dp;
-    int rev, dwide, row, col, c;
+    uchar *data;
+    uchar *dp;
+    int rev;
+    int dwide;
+    int row;
+    int col;
+    int c;
     double sum[] = {0, 0};
 
     rev = 3 * (GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER);
@@ -2488,7 +2772,12 @@ nokia_load_raw() {
 
 void
 canon_rmf_load_raw() {
-    int row, col, bits, orow, ocol, c;
+    int row;
+    int col;
+    int bits;
+    int orow;
+    int ocol;
+    int c;
 
     for ( row = 0; row < raw_height; row++ ) {
         for ( col = 0; col < raw_width - 2; col += 3 ) {
@@ -2528,7 +2817,13 @@ pana_bits(int nbits) {
 
 void
 panasonic_load_raw() {
-    int row, col, i, j, sh = 0, pred[2], nonz[2];
+    int row;
+    int col;
+    int i;
+    int j;
+    int sh = 0;
+    int pred[2];
+    int nonz[2];
 
     pana_bits(0);
     for ( row = 0; row < height; row++ ) {
@@ -2560,8 +2855,21 @@ panasonic_load_raw() {
 void
 olympus_load_raw() {
     ushort huff[4096];
-    int row, col, nbits, sign, low, high, i, c, w, n, nw;
-    int acarry[2][3], *carry, pred, diff;
+    int row;
+    int col;
+    int nbits;
+    int sign;
+    int low;
+    int high;
+    int i;
+    int c;
+    int w;
+    int n;
+    int nw;
+    int acarry[2][3];
+    int *carry;
+    int pred;
+    int diff;
 
     huff[n = 0] = 0xc0c;
     for ( i = 12; i--; ) {
@@ -2629,7 +2937,10 @@ fuji_xtrans_load_raw() {
 void
 minolta_rd175_load_raw() {
     uchar pixel[768];
-    unsigned irow, box, row, col;
+    unsigned irow;
+    unsigned box;
+    unsigned row;
+    unsigned col;
 
     for ( irow = 0; irow < 1481; irow++ ) {
         if ( fread(pixel, 1, 768, ifp) < 768 ) {
@@ -2695,7 +3006,11 @@ quicktake_100_load_raw() {
              483, 487, 492, 496, 500, 508, 519, 531, 542, 553, 564, 575, 587, 598, 609, 620, 631, 643,
              654, 665, 676, 687, 698, 710, 721, 732, 743, 754, 766, 777, 788, 799, 810, 822, 833, 844,
              855, 866, 878, 889, 900, 911, 922, 933, 945, 956, 967, 978, 989, 1001, 1012, 1023};
-    int rb, row, col, sharp, val = 0;
+    int rb;
+    int row;
+    int col;
+    int sharp;
+    int val = 0;
 
     getbits(-1);
     memset(pixel, 0x80, sizeof pixel);
@@ -2782,8 +3097,21 @@ kodak_radc_load_raw() {
             2, -26, 2, -13, 2, 1, 3, -39, 4, 16, 5, -55, 6, -76, 6, 37
     };
     ushort huff[19][256];
-    int row, col, tree, nreps, rep, step, i, c, s, r, x, y, val;
-    short last[3] = {16, 16, 16}, mul[3], buf[3][3][386];
+    int row;
+    int col;
+    int tree;
+    int nreps;
+    int rep;
+    int step;
+    int i;
+    int c;
+    int s;
+    int r;
+    int x;
+    int y;
+    int val;
+    short last[3] = {16, 16, 16}, mul[3];
+    short buf[3][3][386];
     static const ushort pt[] =
             {0, 0, 1280, 1344, 2320, 3616, 3328, 8000, 4095, 16383, 65535, 16383};
 
@@ -2882,8 +3210,8 @@ kodak_radc_load_raw() {
 #undef PREDICTOR
 
 #ifdef NO_JPEG
-                                                                                                                        void CLASS kodak_jpeg_load_raw() {}
-void CLASS lossy_dng_load_raw() {}
+void kodak_jpeg_load_raw() {}
+void lossy_dng_load_raw() {}
 #else
 
 METHODDEF(boolean)
@@ -2904,7 +3232,8 @@ kodak_jpeg_load_raw() {
     struct jpeg_error_mgr jerr;
     JSAMPARRAY buf;
     JSAMPLE (*pixel)[3];
-    int row, col;
+    int row;
+    int col;
 
     cinfo.err = jpeg_std_error(&jerr);
     jpeg_create_decompress (&cinfo);
@@ -3027,7 +3356,9 @@ kodak_dc120_load_raw() {
     static const int mul[4] = {162, 192, 187, 92};
     static const int add[4] = {0, 636, 424, 212};
     uchar pixel[848];
-    int row, shift, col;
+    int row;
+    int shift;
+    int col;
 
     for ( row = 0; row < height; row++ ) {
         if ( fread(pixel, 1, 848, ifp) < 848 ) derror();
@@ -3042,7 +3373,8 @@ kodak_dc120_load_raw() {
 void
 eight_bit_load_raw() {
     uchar *pixel;
-    unsigned row, col;
+    unsigned row;
+    unsigned col;
 
     pixel = (uchar *) calloc(raw_width, sizeof *pixel);
     merror(pixel, "eight_bit_load_raw()");
@@ -3061,7 +3393,13 @@ eight_bit_load_raw() {
 void
 kodak_c330_load_raw() {
     uchar *pixel;
-    int row, col, y, cb, cr, rgb[3], c;
+    int row;
+    int col;
+    int y;
+    int cb;
+    int cr;
+    int rgb[3];
+    int c;
 
     pixel = (uchar *)calloc(raw_width, 2 * sizeof *pixel);
     merror(pixel, "kodak_c330_load_raw()");
@@ -3091,7 +3429,13 @@ kodak_c330_load_raw() {
 void
 kodak_c603_load_raw() {
     uchar *pixel;
-    int row, col, y, cb, cr, rgb[3], c;
+    int row;
+    int col;
+    int y;
+    int cb;
+    int cr;
+    int rgb[3];
+    int c;
 
     pixel = (uchar *)calloc(raw_width, 3 * sizeof *pixel);
     merror(pixel, "kodak_c603_load_raw()");
@@ -3124,7 +3468,17 @@ kodak_262_load_raw() {
              {0, 3, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
     ushort *huff[2];
     uchar *pixel;
-    int *strip, ns, c, row, col, chess, pi = 0, pi1, pi2, pred, val;
+    int *strip;
+    int ns;
+    int c;
+    int row;
+    int col;
+    int chess;
+    int pi = 0;
+    int pi1;
+    int pi2;
+    int pred;
+    int val;
 
     for ( c = 0; c < 2; c++ ) {
         huff[c] = make_decoder(kodak_tree[c]);
@@ -3176,10 +3530,16 @@ kodak_262_load_raw() {
 
 int
 kodak_65000_decode(short *out, int bsize) {
-    uchar c, blen[768];
+    uchar c;
+    uchar blen[768];
     ushort raw[6];
     INT64 bitbuf = 0;
-    int save, bits = 0, i, j, len, diff;
+    int save;
+    int bits = 0;
+    int i;
+    int j;
+    int len;
+    int diff;
 
     save = ftell(ifp);
     bsize = (bsize + 3) & -4;
@@ -3226,7 +3586,12 @@ kodak_65000_decode(short *out, int bsize) {
 void
 kodak_65000_load_raw() {
     short buf[256];
-    int row, col, len, pred[2], ret, i;
+    int row;
+    int col;
+    int len;
+    int pred[2];
+    int ret;
+    int i;
 
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col += 256 ) {
@@ -3244,8 +3609,19 @@ kodak_65000_load_raw() {
 
 void
 kodak_ycbcr_load_raw() {
-    short buf[384], *bp;
-    int row, col, len, c, i, j, k, y[2][2], cb, cr, rgb[3];
+    short buf[384];
+    short *bp;
+    int row;
+    int col;
+    int len;
+    int c;
+    int i;
+    int j;
+    int k;
+    int y[2][2];
+    int cb;
+    int cr;
+    int rgb[3];
     ushort *ip;
 
     if ( !image ) {
@@ -3277,8 +3653,14 @@ kodak_ycbcr_load_raw() {
 
 void
 kodak_rgb_load_raw() {
-    short buf[768], *bp;
-    int row, col, len, c, i, rgb[3];
+    short buf[768];
+    short *bp;
+    int row;
+    int col;
+    int len;
+    int c;
+    int i;
+    int rgb[3];
     ushort *ip = image[0];
 
     for ( row = 0; row < height; row++ ) {
@@ -3297,9 +3679,10 @@ kodak_rgb_load_raw() {
 
 void
 kodak_thumb_load_raw() {
-    int row, col;
-    colors = thumb_misc >> 5;
+    int row;
+    int col;
 
+    colors = thumb_misc >> 5;
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
             read_shorts(image[row * width + col], colors);
@@ -3310,7 +3693,8 @@ kodak_thumb_load_raw() {
 
 void
 sony_decrypt(unsigned *data, int len, int start, int key) {
-    static unsigned pad[128], p;
+    static unsigned pad[128];
+    static unsigned p;
 
     if ( start ) {
         for ( p = 0; p < 4; p++ ) {
@@ -3333,7 +3717,10 @@ void
 sony_load_raw() {
     uchar head[40];
     ushort *pixel;
-    unsigned i, key, row, col;
+    unsigned i;
+    unsigned key;
+    unsigned row;
+    unsigned col;
 
     fseek(ifp, 200896, SEEK_SET);
     fseek(ifp, (unsigned) fgetc(ifp) * 4 - 1, SEEK_CUR);
@@ -3367,7 +3754,12 @@ sony_arw_load_raw() {
     static const ushort tab[18] =
             {0xf11, 0xf10, 0xe0f, 0xd0e, 0xc0d, 0xb0c, 0xa0b, 0x90a, 0x809,
              0x708, 0x607, 0x506, 0x405, 0x304, 0x303, 0x300, 0x202, 0x201};
-    int i, c, n, col, row, sum = 0;
+    int i;
+    int c;
+    int n;
+    int col;
+    int row;
+    int sum = 0;
 
     huff[0] = 15;
     for ( n = i = 0; i < 18; i++ ) {
@@ -3393,9 +3785,19 @@ sony_arw_load_raw() {
 
 void
 sony_arw2_load_raw() {
-    uchar *data, *dp;
+    uchar *data;
+    uchar *dp;
     ushort pix[16];
-    int row, col, val, max, min, imax, imin, sh, bit, i;
+    int row;
+    int col;
+    int val;
+    int max;
+    int min;
+    int imax;
+    int imin;
+    int sh;
+    int bit;
+    int i;
 
     data = (uchar *)malloc(raw_width + 1);
     merror(data, "sony_arw2_load_raw()");
@@ -3433,7 +3835,13 @@ sony_arw2_load_raw() {
 
 void
 samsung_load_raw() {
-    int row, col, c, i, dir, op[4], len[4];
+    int row;
+    int col;
+    int c;
+    int i;
+    int dir;
+    int op[4];
+    int len[4];
 
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
     for ( row = 0; row < raw_height; row++ ) {
@@ -3482,9 +3890,16 @@ samsung2_load_raw() {
     static const ushort tab[14] =
             {0x304, 0x307, 0x206, 0x205, 0x403, 0x600, 0x709,
              0x80a, 0x90b, 0xa0c, 0xa0d, 0x501, 0x408, 0x402};
-    ushort huff[1026], vpred[2][2] = {{0, 0},
-                                      {0, 0}}, hpred[2];
-    int i, c, n, row, col, diff;
+    ushort huff[1026];
+    ushort vpred[2][2] = {{0, 0},
+                      {0, 0}};
+    ushort hpred[2];
+    int i;
+    int c;
+    int n;
+    int row;
+    int col;
+    int diff;
 
     huff[0] = 10;
     for ( n = i = 0; i < 14; i++ ) {
@@ -3511,8 +3926,20 @@ samsung2_load_raw() {
 
 void
 samsung3_load_raw() {
-    int opt, init, mag, pmode, row, tab, col, pred, diff, i, c;
-    ushort lent[3][2], len[4], *prow[2];
+    int opt;
+    int init;
+    int mag;
+    int pmode;
+    int row;
+    int tab;
+    int col;
+    int pred;
+    int diff;
+    int i;
+    int c;
+    ushort lent[3][2];
+    ushort len[4];
+    ushort *prow[2];
 
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
     fseek(ifp, 9, SEEK_CUR);
@@ -3577,10 +4004,21 @@ smal_decode_segment(unsigned seg[2][2], int holes) {
             {7, 7, 0, 0, 63, 55, 47, 39, 31, 23, 15, 7, 0},
             {7, 7, 0, 0, 63, 55, 47, 39, 31, 23, 15, 7, 0},
             {3, 3, 0, 0, 63, 47, 31, 15, 0}};
-    int low, high = 0xff, carry = 0, nbits = 8;
-    int pix, s, count, bin, next, i, sym[3];
-    uchar diff, pred[] = {0, 0};
-    ushort data = 0, range = 0;
+    int low;
+    int high = 0xff;
+    int carry = 0;
+    int nbits = 8;
+    int pix;
+    int s;
+    int count;
+    int bin;
+    int next;
+    int i;
+    int sym[3];
+    uchar diff;
+    uchar pred[] = {0, 0};
+    ushort data = 0;
+    ushort range = 0;
 
     fseek(ifp, seg[0][1] + 1, SEEK_SET);
     getbits(-1);
@@ -3667,7 +4105,10 @@ smal_v6_load_raw() {
 
 int
 median4(int *p) {
-    int min, max, sum, i;
+    int min;
+    int max;
+    int sum;
+    int i;
 
     min = max = sum = p[0];
     for ( i = 1; i < 4; i++ ) {
@@ -3684,7 +4125,9 @@ median4(int *p) {
 
 void
 fill_holes(int holes) {
-    int row, col, val[4];
+    int row;
+    int col;
+    int val[4];
 
     for ( row = 2; row < height - 2; row++ ) {
         if ( !HOLE(row) ) {
@@ -3713,7 +4156,11 @@ fill_holes(int holes) {
 
 void
 smal_v9_load_raw() {
-    unsigned seg[256][2], offset, nseg, holes, i;
+    unsigned seg[256][2];
+    unsigned offset;
+    unsigned nseg;
+    unsigned holes;
+    unsigned i;
 
     fseek(ifp, 67, SEEK_SET);
     offset = get4();
@@ -3738,12 +4185,15 @@ smal_v9_load_raw() {
 void
 redcine_load_raw() {
 #ifndef NO_JASPER
-  int c, row, col;
+  int c;
+  int row;
+  int col;
   jas_stream_t *in;
   jas_image_t *jimg;
   jas_matrix_t *jmat;
   jas_seqent_t *data;
-  ushort *img, *pix;
+  ushort *img;
+  ushort *pix;
 
   jas_init();
   in = jas_stream_fopen (ifname, "rb");
@@ -3799,7 +4249,8 @@ void
 foveon_decoder(unsigned size, unsigned code) {
     static unsigned huff[1024];
     struct decode *cur;
-    int i, len;
+    int i;
+    int len;
 
     if ( !code ) {
         for ( i = 0; i < size; i++ ) {
@@ -3834,7 +4285,13 @@ foveon_decoder(unsigned size, unsigned code) {
 
 void
 foveon_thumb() {
-    unsigned bwide, row, col, bitbuf = 0, bit = 1, c, i;
+    unsigned bwide;
+    unsigned row;
+    unsigned col;
+    unsigned bitbuf = 0;
+    unsigned bit = 1;
+    unsigned c;
+    unsigned i;
     char *buf;
     struct decode *dindex;
     short pred[3];
@@ -3883,7 +4340,12 @@ foveon_sd_load_raw() {
     struct decode *dindex;
     short diff[1024];
     unsigned bitbuf = 0;
-    int pred[3], row, col, bit = -1, c, i;
+    int pred[3];
+    int row;
+    int col;
+    int bit = -1;
+    int c;
+    int i;
 
     read_shorts((ushort *)diff, 1024);
     if ( !GLOBAL_loadFlags ) {
@@ -3926,7 +4388,10 @@ foveon_sd_load_raw() {
 
 void
 foveon_huff(ushort *huff) {
-    int i, j, clen, code;
+    int i;
+    int j;
+    int clen;
+    int code;
 
     huff[0] = 8;
     for ( i = 0; i < 13; i++ ) {
@@ -3941,7 +4406,11 @@ foveon_huff(ushort *huff) {
 
 void
 foveon_dp_load_raw() {
-    unsigned c, roff[4], row, col, diff;
+    unsigned c;
+    unsigned roff[4];
+    unsigned row;
+    unsigned col;
+    unsigned diff;
     ushort huff[512], vpred[2][2], hpred[2];
 
     fseek(ifp, 8, SEEK_CUR);
@@ -3970,9 +4439,18 @@ foveon_dp_load_raw() {
 
 void
 foveon_load_camf() {
-    unsigned type, wide, high, i, j, row, col, diff;
-    ushort huff[258], vpred[2][2] = {{512, 512},
-                                     {512, 512}}, hpred[2];
+    unsigned type;
+    unsigned wide;
+    unsigned high;
+    unsigned i;
+    unsigned j;
+    unsigned row;
+    unsigned col;
+    unsigned diff;
+    ushort huff[258];
+    ushort vpred[2][2] = {{512, 512},
+                     {512, 512}};
+    ushort hpred[2];
 
     fseek(ifp, meta_offset, SEEK_SET);
     type = get4();
@@ -4015,10 +4493,13 @@ foveon_load_camf() {
 
 const char *
 foveon_camf_param(const char *block, const char *param) {
-    unsigned idx, num;
-    char *pos, *cp, *dp;
+    unsigned idx;
+    unsigned num;
+    char *pos;
+    char *cp;
+    char *dp;
 
-    for ( idx = 0; idx < meta_length; idx += sget4(pos + 8)) {
+    for ( idx = 0; idx < meta_length; idx += sget4(pos + 8) ) {
         pos = meta_data + idx;
         if ( strncmp(pos, "CMb", 3)) {
             break;
@@ -4044,8 +4525,15 @@ foveon_camf_param(const char *block, const char *param) {
 
 void *
 foveon_camf_matrix(unsigned dim[3], const char *name) {
-    unsigned i, idx, type, ndim, size, *mat;
-    char *pos, *cp, *dp;
+    unsigned i;
+    unsigned idx;
+    unsigned type;
+    unsigned ndim;
+    unsigned size;
+    unsigned *mat;
+    char *pos;
+    char *cp;
+    char *dp;
     double dsize;
 
     for ( idx = 0; idx < meta_length; idx += sget4(pos + 8) ) {
@@ -4108,7 +4596,10 @@ foveon_fixed(void *ptr, int size, const char *name) {
 float
 foveon_avg(short *pix, int range[2], float cfilt) {
     int i;
-    float val, min = FLT_MAX, max = -FLT_MAX, sum = 0;
+    float val;
+    float min = FLT_MAX;
+    float max = -FLT_MAX;
+    float sum = 0;
 
     for ( i = range[0]; i <= range[1]; i++ ) {
         sum += val = pix[i * 4] + (pix[i * 4] - pix[(i - 1) * 4]) * cfilt;
@@ -4128,7 +4619,8 @@ foveon_avg(short *pix, int range[2], float cfilt) {
 short *
 foveon_make_curve(double max, double mul, double filt) {
     short *curve;
-    unsigned i, size;
+    unsigned i;
+    unsigned size;
     double x;
 
     if ( !filt ) {
@@ -4150,7 +4642,8 @@ foveon_make_curve(double max, double mul, double filt) {
 
 void
 foveon_make_curves(short **curvep, float dq[3], float div[3], float filt) {
-    double mul[3], max = 0;
+    double mul[3];
+    double max = 0;
     int c;
 
     for ( c = 0; c < 3; c++ ) {
@@ -4177,18 +4670,57 @@ foveon_apply_curve(short *curve, int i) {
 void
 foveon_interpolate() {
     static const short hood[] = {-1, -1, -1, 0, -1, 1, 0, -1, 0, 1, 1, -1, 1, 0, 1, 1};
-    short *pix, prev[3], *curve[8], (*shrink)[3];
-    float cfilt = 0, ddft[3][3][2], ppm[3][3][3];
-    float cam_xyz[3][3], correct[3][3], last[3][3], trans[3][3];
-    float chroma_dq[3], color_dq[3], diag[3][3], div[3];
-    float (*black)[3], (*sgain)[3], (*sgrow)[3];
-    float fsum[3], val, frow, num;
-    int row, col, c, i, j, diff, sgx, irow, sum, min, max, limit;
-    int dscr[2][2], dstb[4], (*smrow[7])[3], total[4], ipix[3];
-    int work[3][3], smlast, smred, smred_p = 0, dev[3];
-    int satlev[3], keep[4], active[4];
-    unsigned dim[3], *badpix;
-    double dsum = 0, trsum[3];
+    short *pix;
+    short prev[3];
+    short *curve[8];
+    short (*shrink)[3];
+    float cfilt = 0;
+    float ddft[3][3][2];
+    float ppm[3][3][3];
+    float cam_xyz[3][3];
+    float correct[3][3];
+    float last[3][3];
+    float trans[3][3];
+    float chroma_dq[3];
+    float color_dq[3];
+    float diag[3][3];
+    float div[3];
+    float (*black)[3];
+    float (*sgain)[3];
+    float (*sgrow)[3];
+    float fsum[3];
+    float val;
+    float frow;
+    float num;
+    int row;
+    int col;
+    int c;
+    int i;
+    int j;
+    int diff;
+    int sgx;
+    int irow;
+    int sum;
+    int min;
+    int max;
+    int limit;
+    int dscr[2][2];
+    int dstb[4];
+    int (*smrow[7])[3];
+    int total[4];
+    int ipix[3];
+    int work[3][3];
+    int smlast;
+    int smred;
+    int smred_p = 0;
+    int dev[3];
+    int satlev[3];
+    int keep[4];
+    int active[4];
+    unsigned dim[3];
+    unsigned *badpix;
+    double dsum = 0;
+    double trsum[3];
     char str[128];
     const char *cp;
 
@@ -4728,8 +5260,14 @@ foveon_interpolate() {
 
 void
 crop_masked_pixels() {
-    int row, col;
-    unsigned r, c, m, mblack[8], zero, val;
+    int row;
+    int col;
+    unsigned r;
+    unsigned c;
+    unsigned m;
+    unsigned mblack[8];
+    unsigned zero;
+    unsigned val;
 
     if ( TIFF_CALLBACK_loadRawData == & phase_one_load_raw ||
          TIFF_CALLBACK_loadRawData == & phase_one_load_raw_c ) {
@@ -4794,7 +5332,7 @@ crop_masked_pixels() {
             }
         }
     }
-    if ( TIFF_CALLBACK_loadRawData == &CLASS canon_600_load_raw && width < raw_width ) {
+    if ( TIFF_CALLBACK_loadRawData == &canon_600_load_raw && width < raw_width ) {
         black = (mblack[0] + mblack[1] + mblack[2] + mblack[3]) /
                 (mblack[4] + mblack[5] + mblack[6] + mblack[7]) - 4;
         canon_600_correct();
@@ -4810,7 +5348,12 @@ crop_masked_pixels() {
 
 void
 remove_zeroes() {
-    unsigned row, col, tot, n, r, c;
+    unsigned row;
+    unsigned col;
+    unsigned tot;
+    unsigned n;
+    unsigned r;
+    unsigned c;
 
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
@@ -4839,8 +5382,19 @@ a ".badpixels" file, and fix those pixels now.
 void
 bad_pixels(const char *cfname) {
     FILE *fp = 0;
-    char *fname, *cp, line[128];
-    int len, time, row, col, r, c, rad, tot, n, fixed = 0;
+    char *fname;
+    char *cp;
+    char line[128];
+    int len;
+    int time;
+    int row;
+    int col;
+    int r;
+    int c;
+    int rad;
+    int tot;
+    int n;
+    int fixed = 0;
 
     if ( !filters ) {
         return;
@@ -4930,7 +5484,14 @@ bad_pixels(const char *cfname) {
 void
 subtract(const char *fname) {
     FILE *fp;
-    int dim[3] = {0, 0, 0}, comment = 0, number = 0, error = 0, nd = 0, c, row, col;
+    int dim[3] = {0, 0, 0};
+    int comment = 0;
+    int number = 0;
+    int error = 0;
+    int nd = 0;
+    int c;
+    int row;
+    int col;
     ushort *pixel;
 
     if ( !(fp = fopen(fname, "rb")) ) {
@@ -4994,7 +5555,9 @@ subtract(const char *fname) {
 void
 gamma_curve(double pwr, double ts, int mode, int imax) {
     int i;
-    double g[6], bnd[2] = {0, 0}, r;
+    double g[6];
+    double bnd[2] = {0, 0};
+    double r;
 
     g[0] = pwr;
     g[1] = ts;
@@ -5039,8 +5602,11 @@ gamma_curve(double pwr, double ts, int mode, int imax) {
 
 void
 pseudoinverse(double (*in)[3], double (*out)[3], int size) {
-    double work[3][6], num;
-    int i, j, k;
+    double work[3][6];
+    double num;
+    int i;
+    int j;
+    int k;
 
     for ( i = 0; i < 3; i++ ) {
         for ( j = 0; j < 6; j++ ) {
@@ -5078,8 +5644,12 @@ pseudoinverse(double (*in)[3], double (*out)[3], int size) {
 
 void
 cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3]) {
-    double cam_rgb[4][3], inverse[4][3], num;
-    int i, j, k;
+    double cam_rgb[4][3];
+    double inverse[4][3];
+    double num;
+    int i;
+    int j;
+    int k;
 
     for ( i = 0; i < colors; i++ ) {
         // Multiply out XYZ colorspace
@@ -5144,9 +5714,21 @@ colorcheck()
         { 0.310, 0.316, 9.0  },		// Neutral 3.5
         { 0.310, 0.316, 3.1  }      // Black
     };
-    double gmb_cam[NSQ][4], gmb_xyz[NSQ][3];
-    double inverse[NSQ][3], cam_xyz[4][3], balance[4], num;
-    int c, i, j, k, sq, row, col, pass, count[4];
+    double gmb_cam[NSQ][4];
+    double gmb_xyz[NSQ][3];
+    double inverse[NSQ][3];
+    double cam_xyz[4][3];
+    double balance[4];
+    double num;
+    int c;
+    int i;
+    int j;
+    int k;
+    int sq;
+    int row;
+    int col;
+    int pass;
+    int count[4];
 
     memset (gmb_cam, 0, sizeof gmb_cam);
     for ( sq = 0; sq < NSQ; sq++ ) {
@@ -5169,7 +5751,7 @@ colorcheck()
         gmb_xyz[sq][1] = gmb_xyY[sq][2];
         gmb_xyz[sq][2] = gmb_xyY[sq][2] * (1 - gmb_xyY[sq][0] - gmb_xyY[sq][1]) / gmb_xyY[sq][1];
     }
-    pseudoinverse (gmb_xyz, inverse, NSQ);
+    pseudoinverse(gmb_xyz, inverse, NSQ);
     for ( pass = 0; pass < 2; pass++ ) {
         for ( GLOBAL_colorTransformForRaw = i=0; i < colors; i++ ) {
             for ( j = 0; j < 3; j++ ) {
@@ -5177,7 +5759,7 @@ colorcheck()
                     cam_xyz[i][j] += gmb_cam[k][i] * inverse[k][j];
                 }
             }
-            cam_xyz_coeff (rgb_cam, cam_xyz);
+            cam_xyz_coeff(rgb_cam, cam_xyz);
             for ( c = 0; c < colors; c++ ) {
                 balance[c] = pre_mul[c] * gmb_cam[20][c];
             }
@@ -5192,10 +5774,10 @@ colorcheck()
             num = 10000 / (cam_xyz[1][0] + cam_xyz[1][1] + cam_xyz[1][2]);
             for ( c = 0; c < colors; c++ ) {
                 for ( j = 0; j < 3; j++ ) {
-                    printf ("%c%d", (c | j) ? ',':' ', (int) (cam_xyz[c][j] * num + 0.5));
+                    printf("%c%d", (c | j) ? ',':' ', (int) (cam_xyz[c][j] * num + 0.5));
                 }
             }
-            puts (" } },");
+            puts(" } },");
         }
 #undef NSQ
 }
@@ -5218,8 +5800,24 @@ hat_transform(float *temp, float *base, int st, int size, int sc) {
 
 void
 wavelet_denoise() {
-    float *fimg = 0, *temp, thold, mul[2], avg, diff;
-    int scale = 1, size, lev, hpass, lpass, row, col, nc, c, i, wlast, blk[2];
+    float *fimg = 0;
+    float *temp;
+    float thold;
+    float mul[2];
+    float avg;
+    float diff;
+    int scale = 1;
+    int size;
+    int lev;
+    int hpass;
+    int lpass;
+    int row;
+    int col;
+    int nc;
+    int c;
+    int i;
+    int wlast;
+    int blk[2];
     ushort *window[4];
     static const float noise[] =
             {0.8002, 0.2735, 0.1202, 0.0585, 0.0291, 0.0152, 0.0080, 0.0044};
@@ -5328,11 +5926,29 @@ wavelet_denoise() {
 
 void
 scale_colors() {
-    unsigned bottom, right, size, row, col, ur, uc, i, x, y, c, sum[8];
-    int val, dark, sat;
-    double dsum[8], dmin, dmax;
-    float scale_mul[4], fr, fc;
-    ushort *img = 0, *pix;
+    unsigned bottom;
+    unsigned right;
+    unsigned size;
+    unsigned row;
+    unsigned col;
+    unsigned ur;
+    unsigned uc;
+    unsigned i;
+    unsigned x;
+    unsigned y;
+    unsigned c;
+    unsigned sum[8];
+    int val;
+    int dark;
+    int sat;
+    double dsum[8];
+    double dmin;
+    double dmax;
+    float scale_mul[4];
+    float fr;
+    float fc;
+    ushort *img = 0;
+    ushort *pix;
 
     if ( OPTIONS_values->userMul[0] ) {
         memcpy(pre_mul, OPTIONS_values->userMul, sizeof pre_mul);
@@ -5496,7 +6112,9 @@ scale_colors() {
 void
 pre_interpolate() {
     ushort (*img)[4];
-    int row, col, c;
+    int row;
+    int col;
+    int c;
 
     if ( shrink ) {
         if ( OPTIONS_values->halfSizePreInterpolation ) {
@@ -5554,7 +6172,13 @@ pre_interpolate() {
 
 void
 border_interpolate(int border) {
-    unsigned row, col, y, x, f, c, sum[8];
+    unsigned row;
+    unsigned col;
+    unsigned y;
+    unsigned x;
+    unsigned f;
+    unsigned c;
+    unsigned sum[8];
 
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
@@ -5583,8 +6207,19 @@ border_interpolate(int border) {
 
 void
 lin_interpolate() {
-    int code[16][16][32], size = 16, *ip, sum[4];
-    int f, c, i, x, y, row, col, shift, color;
+    int code[16][16][32];
+    int size = 16;
+    int *ip;
+    int sum[4];
+    int f;
+    int c;
+    int i;
+    int x;
+    int y;
+    int row;
+    int col;
+    int shift;
+    int color;
     ushort *pix;
 
     if ( OPTIONS_values->verbose ) {
@@ -5646,7 +6281,8 @@ Gradients are numbered clockwise from NW=0 to W=7.
 */
 void
 vng_interpolate() {
-    static const signed char *cp, terms[] = {
+    static const signed char *cp;
+    static const signed char terms[] = {
             -2, -2, +0, -1, 0, 0x01, -2, -2, +0, +0, 1, 0x01, -2, -1, -1, +0, 0, 0x01,
             -2, -1, +0, -1, 0, 0x02, -2, -1, +0, +0, 0, 0x03, -2, -1, +0, +1, 1, 0x01,
             -2, +0, +0, -1, 0, 0x06, -2, +0, +0, +0, 1, 0x02, -2, +0, +0, +1, 0, 0x03,
@@ -5669,11 +6305,36 @@ vng_interpolate() {
             +0, +1, +2, +1, 0, 0x20, +0, +1, +2, +2, 0, 0x10, +1, -2, +1, +0, 0, 0x80,
             +1, -1, +1, +1, 0, 0x88, +1, +0, +1, +2, 0, 0x08, +1, +0, +2, -1, 0, 0x40,
             +1, +0, +2, +1, 0, 0x10
-    }, chood[] = {-1, -1, -1, 0, -1, +1, 0, +1, +1, +1, +1, 0, +1, -1, 0, -1};
-    ushort (*brow[5])[4], *pix;
-    int prow = 8, pcol = 2, *ip, *code[16][16], gval[8], gmin, gmax, sum[4];
-    int row, col, x, y, x1, x2, y1, y2, t, weight, grads, color, diag;
-    int g, diff, thold, num, c;
+    };
+    static const signed char chood[] = {-1, -1, -1, 0, -1, +1, 0, +1, +1, +1, +1, 0, +1, -1, 0, -1};
+    ushort (*brow[5])[4];
+    ushort *pix;
+    int prow = 8;
+    int pcol = 2;
+    int *ip;
+    int *code[16][16];
+    int gval[8];
+    int gmin;
+    int gmax;
+    int sum[4];
+    int row;
+    int col;
+    int x;
+    int y;
+    int x1;
+    int x2;
+    int y1;
+    int y2;
+    int t;
+    int weight;
+    int grads;
+    int color;
+    int diag;
+    int g;
+    int diff;
+    int thold;
+    int num;
+    int c;
 
     lin_interpolate();
     if ( OPTIONS_values->verbose ) {
@@ -5814,7 +6475,13 @@ Patterned Pixel Grouping Interpolation by Alain Desbiolles
 void
 ppg_interpolate() {
     int dir[5] = {1, width, -1, -width, 1};
-    int row, col, diff[2], guess[2], c, d, i;
+    int row;
+    int col;
+    int diff[2];
+    int guess[2];
+    int c;
+    int d;
+    int i;
     ushort (*pix)[4];
 
     border_interpolate(3);
@@ -5873,9 +6540,14 @@ ppg_interpolate() {
 
 void
 cielab(ushort rgb[3], short lab[3]) {
-    int c, i, j, k;
-    float r, xyz[3];
-    static float cbrt[0x10000], xyz_cam[3][4];
+    int c;
+    int i;
+    int j;
+    int k;
+    float r;
+    float xyz[3];
+    static float cbrt[0x10000];
+    static float xyz_cam[3][4];
 
     if ( !rgb ) {
         for ( i = 0; i < 0x10000; i++ ) {
@@ -5913,18 +6585,46 @@ Frank Markesteijn's algorithm for Fuji X-Trans sensors
 */
 void
 xtrans_interpolate(int passes) {
-    int c, d, f, g, h, i, v, ng, row, col, top, left, mrow, mcol;
-    int val, ndir, pass, hm[8], avg[4], color[3][8];
-    static const short orth[12] = {1, 0, 0, 1, -1, 0, 0, -1, 1, 0, 0, 1},
-            patt[2][16] = {{0, 1, 0, -1, 2, 0, -1, 0, 1, 1, 1,  -1, 0, 0,  0,  0},
-                           {0, 1, 0, -2, 1, 0, -2, 0, 1, 1, -2, -2, 1, -1, -1, 1}},
-            dir[4] = {1, TS, TS + 1, TS - 1};
-    short allhex[3][3][2][8], *hex;
-    ushort min, max, sgrow, sgcol;
-    ushort (*rgb)[TS][TS][3], (*rix)[3], (*pix)[4];
-    short (*lab)[TS][3], (*lix)[3];
-    float (*drv)[TS][TS], diff[6], tr;
-    char (*homo)[TS][TS], *buffer;
+    int c;
+    int d;
+    int f;
+    int g;
+    int h;
+    int i;
+    int v;
+    int ng;
+    int row;
+    int col;
+    int top;
+    int left;
+    int mrow;
+    int mcol;
+    int val;
+    int ndir;
+    int pass;
+    int hm[8];
+    int avg[4];
+    int color[3][8];
+    static const short orth[12] = {1, 0, 0, 1, -1, 0, 0, -1, 1, 0, 0, 1};
+    static const short patt[2][16] = {{0, 1, 0, -1, 2, 0, -1, 0, 1, 1, 1,  -1, 0, 0,  0,  0},
+                           {0, 1, 0, -2, 1, 0, -2, 0, 1, 1, -2, -2, 1, -1, -1, 1}};
+    static const short dir[4] = {1, TS, TS + 1, TS - 1};
+    short allhex[3][3][2][8];
+    short *hex;
+    ushort min;
+    ushort max;
+    ushort sgrow;
+    ushort sgcol;
+    ushort (*rgb)[TS][TS][3];
+    ushort (*rix)[3];
+    ushort (*pix)[4];
+    short (*lab)[TS][3];
+    short (*lix)[3];
+    float (*drv)[TS][TS];
+    float diff[6];
+    float tr;
+    char (*homo)[TS][TS];
+    char *buffer;
 
     if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("%d-pass X-Trans interpolation...\n"), passes);
@@ -6237,12 +6937,30 @@ the work of Keigo Hirakawa, Thomas Parks, and Paul Lee.
 */
 void
 ahd_interpolate() {
-    int i, j, top, left, row, col, tr, tc, c, d, val, hm[2];
+    int i;
+    int j;
+    int top;
+    int left;
+    int row;
+    int col;
+    int tr;
+    int tc;
+    int c;
+    int d;
+    int val;
+    int hm[2];
     static const int dir[4] = {-1, 1, -TS, TS};
-    unsigned ldiff[2][4], abdiff[2][4], leps, abeps;
-    ushort (*rgb)[TS][TS][3], (*rix)[3], (*pix)[4];
-    short (*lab)[TS][TS][3], (*lix)[3];
-    char (*homo)[TS][TS], *buffer;
+    unsigned ldiff[2][4];
+    unsigned abdiff[2][4];
+    unsigned leps;
+    unsigned abeps;
+    ushort (*rgb)[TS][TS][3];
+    ushort (*rix)[3];
+    ushort (*pix)[4];
+    short (*lab)[TS][TS][3];
+    short (*lix)[3];
+    char (*homo)[TS][TS];
+    char *buffer;
 
     if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("AHD interpolation...\n"));
@@ -6360,7 +7078,12 @@ ahd_interpolate() {
 void
 median_filter() {
     ushort (*pix)[4];
-    int pass, c, i, j, k, med[9];
+    int pass;
+    int c;
+    int i;
+    int j;
+    int k;
+    int med[9];
     static const uchar opt[] =    /* Optimal 9-element median search */
             {1, 2, 4, 5, 7, 8, 0, 1, 3, 4, 6, 7, 1, 2, 4, 5, 7, 8,
              0, 3, 5, 8, 4, 7, 3, 6, 1, 4, 2, 5, 4, 7, 4, 2, 6, 4, 4, 2};
@@ -6395,14 +7118,22 @@ median_filter() {
 
 void
 blend_highlights() {
-    int clip = INT_MAX, row, col, c, i, j;
+    int clip = INT_MAX;
+    int row;
+    int col;
+    int c;
+    int i;
+    int j;
     static const float trans[2][4][4] =
             {{{1, 1, 1},    {1.7320508, -1.7320508, 0},     {-1, -1, 2}},
              {{1, 1, 1, 1}, {1,         -1,         1, -1}, {1,  1,  -1, -1}, {1, -1, -1, 1}}};
     static const float itrans[2][4][4] =
             {{{1, 0.8660254, -0.5}, {1, -0.8660254, -0.5},  {1, 0, 1}},
              {{1, 1,         1, 1}, {1, -1,         1, -1}, {1, 1, -1, -1}, {1, -1, -1, 1}}};
-    float cam[2][4], lab[2][4], sum[2], chratio;
+    float cam[2][4];
+    float lab[2][4];
+    float sum[2];
+    float chratio;
 
     if ( (unsigned) (colors - 3) > 1 ) {
         return;
@@ -6458,9 +7189,27 @@ blend_highlights() {
 
 void
 recover_highlights() {
-    float *map, sum, wgt, grow;
-    int hsat[4], count, spread, change, val, i;
-    unsigned high, wide, mrow, mcol, row, col, kc, c, d, y, x;
+    float *map;
+    float sum;
+    float wgt;
+    float grow;
+    int hsat[4];
+    int count;
+    int spread;
+    int change;
+    int val;
+    int i;
+    unsigned high;
+    unsigned wide;
+    unsigned mrow;
+    unsigned mcol;
+    unsigned row;
+    unsigned col;
+    unsigned kc;
+    unsigned c;
+    unsigned d;
+    unsigned y;
+    unsigned x;
     ushort *pixel;
     static const signed char dir[8][2] =
             {{-1, -1},
@@ -6579,7 +7328,11 @@ tiff_get(unsigned base, unsigned *tag, unsigned *type, unsigned *len, unsigned *
 
 void
 parse_thumb_note(int base, unsigned toff, unsigned tlen) {
-    unsigned entries, tag, type, len, save;
+    unsigned entries;
+    unsigned tag;
+    unsigned type;
+    unsigned len;
+    unsigned save;
 
     entries = get2();
     while ( entries-- ) {
@@ -6594,9 +7347,9 @@ parse_thumb_note(int base, unsigned toff, unsigned tlen) {
     }
 }
 
-int CLASS parse_tiff_ifd(int base);
+int parse_tiff_ifd(int base);
 
-void CLASS parse_makernote(int base, int uptag) {
+void parse_makernote(int base, int uptag) {
     static const uchar xlat[2][256] = {
             {0xc1, 0xbf, 0x6d, 0x0d, 0x59, 0xc5, 0x13, 0x9d, 0x83, 0x61, 0x6b, 0x4f, 0xc7, 0x7f, 0x3d, 0x3d,
                     0x53, 0x59, 0xe3, 0xc7, 0xe9, 0x2f, 0x95, 0xa7, 0x95, 0x1f, 0xdf, 0x7f, 0x2b, 0x29, 0xc7, 0x0d,
@@ -6630,11 +7383,26 @@ void CLASS parse_makernote(int base, int uptag) {
                     0xbe, 0x57, 0x19, 0x32, 0x7e, 0x2a, 0xd0, 0xb8, 0xba, 0x29, 0x00, 0x3c, 0x52, 0x7d, 0xa8, 0x49,
                     0x3b, 0x2d, 0xeb, 0x25, 0x49, 0xfa, 0xa3, 0xaa, 0x39, 0xa7, 0xc5, 0xa7, 0x50, 0x11, 0x36, 0xfb,
                     0xc6, 0x67, 0x4a, 0xf5, 0xa5, 0x12, 0x65, 0x7e, 0xb0, 0xdf, 0xaf, 0x4e, 0xb3, 0x61, 0x7f, 0x2f}};
-    unsigned offset = 0, entries, tag, type, len, save, c;
-    unsigned ver97 = 0, serial = 0, i, wbi = 0, wb[4] = {0, 0, 0, 0};
-    uchar buf97[324], ci, cj, ck;
-    short morder, sorder = GLOBAL_endianOrder;
+    unsigned offset = 0;
+    unsigned entries;
+    unsigned tag;
+    unsigned type;
+    unsigned len;
+    unsigned save;
+    unsigned c;
+    unsigned ver97 = 0;
+    unsigned serial = 0;
+    unsigned i;
+    unsigned wbi = 0;
+    unsigned wb[4] = {0, 0, 0, 0};
+    uchar buf97[324];
+    uchar ci;
+    uchar cj;
+    uchar ck;
+    short morder;
+    short sorder = GLOBAL_endianOrder;
     char buf[10];
+
     // The MakerNote might have its own TIFF header (possibly with its own byte-order!), or it might just be a table.
     if ( !strcmp(make, "Nokia") ) {
         return;
@@ -6665,7 +7433,7 @@ void CLASS parse_makernote(int base, int uptag) {
         goto quit;
     }
 
-    if ( !strcmp(buf, "Nikon")) {
+    if ( !strcmp(buf, "Nikon") ) {
         base = ftell(ifp);
         GLOBAL_endianOrder = get2();
         if ( get2() != 42 ) {
@@ -6674,18 +7442,16 @@ void CLASS parse_makernote(int base, int uptag) {
         offset = get4();
         fseek(ifp, offset - 8, SEEK_CUR);
     } else {
-        if ( !strcmp(buf, "OLYMPUS") ||
-             !strcmp(buf, "PENTAX ")) {
+        if ( !strcmp(buf, "OLYMPUS") || !strcmp(buf, "PENTAX ") ) {
             base = ftell(ifp) - 10;
             fseek(ifp, -2, SEEK_CUR);
             GLOBAL_endianOrder = get2();
             if ( buf[0] == 'O' ) get2();
         } else {
-            if ( !strncmp(buf, "SONY", 4) ||
-                 !strcmp(buf, "Panasonic")) {
+            if ( !strncmp(buf, "SONY", 4) || !strcmp(buf, "Panasonic") ) {
                 goto nf;
             } else {
-                if ( !strncmp(buf, "FUJIFILM", 8)) {
+                if ( !strncmp(buf, "FUJIFILM", 8) ) {
                     base = ftell(ifp) - 10;
                     nf:
                     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
@@ -6694,15 +7460,15 @@ void CLASS parse_makernote(int base, int uptag) {
                     if ( !strcmp(buf, "OLYMP") ||
                          !strcmp(buf, "LEICA") ||
                          !strcmp(buf, "Ricoh") ||
-                         !strcmp(buf, "EPSON")) {
+                         !strcmp(buf, "EPSON") ) {
                         fseek(ifp, -2, SEEK_CUR);
                     } else {
                         if ( !strcmp(buf, "AOC") ||
-                             !strcmp(buf, "QVC")) {
+                             !strcmp(buf, "QVC") ) {
                             fseek(ifp, -4, SEEK_CUR);
                         } else {
                             fseek(ifp, -10, SEEK_CUR);
-                            if ( !strncmp(make, "SAMSUNG", 7)) {
+                            if ( !strncmp(make, "SAMSUNG", 7) ) {
                                 base = ftell(ifp);
                             }
                         }
@@ -7050,7 +7816,7 @@ void CLASS parse_makernote(int base, int uptag) {
             }
         }
 
-        if ( tag == 0x4021 && get4() && get4()) {
+        if ( tag == 0x4021 && get4() && get4() ) {
             for ( c = 0; c < 4; c++ ) {
                 cam_mul[c] = 1024;
             }
@@ -7112,7 +7878,13 @@ get_timestamp(int reversed) {
 
 void
 parse_exif(int base) {
-    unsigned kodak, entries, tag, type, len, save, c;
+    unsigned kodak;
+    unsigned entries;
+    unsigned tag;
+    unsigned type;
+    unsigned len;
+    unsigned save;
+    unsigned c;
     double expo;
 
     kodak = !strncmp(make, "EASTMAN", 7) && tiff_nifds < 3;
@@ -7172,7 +7944,12 @@ parse_exif(int base) {
 
 void
 parse_gps(int base) {
-    unsigned entries, tag, type, len, save, c;
+    unsigned entries;
+    unsigned tag;
+    unsigned type;
+    unsigned len;
+    unsigned save;
+    unsigned c;
 
     entries = get2();
     while ( entries-- ) {
@@ -7205,11 +7982,13 @@ parse_gps(int base) {
 
 void
 romm_coeff(float romm_cam[3][3]) {
-    static const float rgb_romm[3][3] =    /* ROMM == Kodak ProPhoto */
+    static const float rgb_romm[3][3] = // ROMM == Kodak ProPhoto
             {{2.034193,  -0.727420, -0.306766},
              {-0.228811, 1.231729,  -0.002922},
              {-0.008565, -0.153273, 1.161839}};
-    int i, j, k;
+    int i;
+    int j;
+    int k;
 
     for ( i = 0; i < 3; i++ ) {
         for ( j = 0; j < 3; j++ ) {
@@ -7223,7 +8002,13 @@ romm_coeff(float romm_cam[3][3]) {
 void
 parse_mos(int offset) {
     char data[40];
-    int skip, from, i, c, neut[4], planes = 0, frot = 0;
+    int skip;
+    int from;
+    int i;
+    int c;
+    int neut[4];
+    int planes = 0;
+    int frot = 0;
     static const char *mod[] =
             {"", "DCB2", "Volare", "Cantare", "CMost", "Valeo 6", "Valeo 11", "Valeo 22",
              "Valeo 11p", "Valeo 17", "", "Aptus 17", "Aptus 22", "Aptus 75", "Aptus 65",
@@ -7331,9 +8116,17 @@ linear_table(unsigned len) {
 
 void
 parse_kodak_ifd(int base) {
-    unsigned entries, tag, type, len, save;
-    int i, c, wbi = -2, wbtemp = 6500;
-    float mul[3] = {1, 1, 1}, num;
+    unsigned entries;
+    unsigned tag;
+    unsigned type;
+    unsigned len;
+    unsigned save;
+    int i;
+    int c;
+    int wbi = -2;
+    int wbtemp = 6500;
+    float mul[3] = {1, 1, 1};
+    float num;
     static const int wbtag[] = {64037, 64040, 64039, 64041, -1, -1, 64042};
 
     entries = get2();
@@ -7412,19 +8205,42 @@ parse_kodak_ifd(int base) {
     }
 }
 
-void CLASS parse_minolta(int base);
+void parse_minolta(int base);
 
-int CLASS parse_tiff(int base);
+int parse_tiff(int base);
 
-int CLASS parse_tiff_ifd(int base) {
-    unsigned entries, tag, type, len, plen = 16, save;
-    int ifd, use_cm = 0, cfa, i, j, c, ima_len = 0;
-    char software[64], *cbuf, *cp;
-    uchar cfa_pat[16], cfa_pc[] = {0, 1, 2, 3}, tab[256];
-    double cc[4][4], cm[4][3], cam_xyz[4][3], num;
-    double ab[] = {1, 1, 1, 1}, asn[] = {0, 0, 0, 0}, xyz[] = {1, 1, 1};
+int parse_tiff_ifd(int base) {
+    unsigned entries;
+    unsigned tag;
+    unsigned type;
+    unsigned len;
+    unsigned plen = 16;
+    unsigned save;
+    int ifd;
+    int use_cm = 0;
+    int cfa;
+    int i;
+    int j;
+    int c;
+    int ima_len = 0;
+    char software[64];
+    char *cbuf;
+    char *cp;
+    uchar cfa_pat[16];
+    uchar cfa_pc[] = {0, 1, 2, 3};
+    uchar tab[256];
+    double cc[4][4];
+    double cm[4][3];
+    double cam_xyz[4][3];
+    double num;
+    double ab[] = {1, 1, 1, 1};
+    double asn[] = {0, 0, 0, 0};
+    double xyz[] = {1, 1, 1};
     unsigned sony_curve[] = {0, 0, 0, 0, 0, 4095};
-    unsigned *buf, sony_offset = 0, sony_length = 0, sony_key = 0;
+    unsigned *buf;
+    unsigned sony_offset = 0;
+    unsigned sony_length = 0;
+    unsigned sony_key = 0;
     struct jhead jh;
     FILE *sfp;
 
@@ -7636,14 +8452,14 @@ int CLASS parse_tiff_ifd(int base) {
                     tiff_ifd[ifd].tile_width = tiff_ifd[ifd].tile_length = 0;
                 }
                 if ( len == 4 ) {
-                    TIFF_CALLBACK_loadRawData = &CLASS sinar_4shot_load_raw;
+                    TIFF_CALLBACK_loadRawData = &sinar_4shot_load_raw;
                     is_raw = 5;
                 }
                 break;
             case 330:
                 // SubIFDs
                 if ( !strcmp(model, "DSLR-A100") && tiff_ifd[ifd].width == 3872 ) {
-                    TIFF_CALLBACK_loadRawData = &CLASS sony_arw_load_raw;
+                    TIFF_CALLBACK_loadRawData = &sony_arw_load_raw;
                     data_offset = get4() + base;
                     ifd++;
                     break;
@@ -7819,13 +8635,13 @@ int CLASS parse_tiff_ifd(int base) {
                 strip_offset = get4();
                 switch ( tiff_ifd[ifd].comp ) {
                     case 32770:
-                        TIFF_CALLBACK_loadRawData = &CLASS samsung_load_raw;
+                        TIFF_CALLBACK_loadRawData = &samsung_load_raw;
                         break;
                     case 32772:
-                        TIFF_CALLBACK_loadRawData = &CLASS samsung2_load_raw;
+                        TIFF_CALLBACK_loadRawData = &samsung2_load_raw;
                         break;
                     case 32773:
-                        TIFF_CALLBACK_loadRawData = &CLASS samsung3_load_raw;
+                        TIFF_CALLBACK_loadRawData = &samsung3_load_raw;
                         break;
                 }
                 break;
@@ -7868,12 +8684,12 @@ int CLASS parse_tiff_ifd(int base) {
                     left_margin = top_margin = filters = GLOBAL_flipsMask = 0;
                 }
                 snprintf(model, 64, "Ixpress %d-Mp", height * width / 1000000);
-                TIFF_CALLBACK_loadRawData = &CLASS imacon_full_load_raw;
+                TIFF_CALLBACK_loadRawData = &imacon_full_load_raw;
                 if ( filters ) {
                     if ( left_margin & 1 ) {
                         filters = 0x61616161;
                     }
-                    TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
+                    TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
                 }
                 maximum = 0xffff;
                 break;
@@ -8078,7 +8894,7 @@ int CLASS parse_tiff_ifd(int base) {
                 data_offset = get4();
                 fseek(ifp, 28, SEEK_CUR);
                 data_offset += get4();
-                TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+                TIFF_CALLBACK_loadRawData = &packed_load_raw;
                 break;
             case 65026:
                 if ( type == 2 ) {
@@ -8152,7 +8968,13 @@ parse_tiff(int base) {
 
 void
 apply_tiff() {
-    int max_samp = 0, ties = 0, os, ns, raw = -1, thm = -1, i;
+    int max_samp = 0;
+    int ties = 0;
+    int os;
+    int ns;
+    int raw = -1;
+    int thm = -1;
+    int i;
     struct jhead jh;
 
     thumb_misc = 16;
@@ -8220,12 +9042,12 @@ apply_tiff() {
                 if ( tiff_ifd[raw].bytes == raw_width * raw_height ) {
                     tiff_bps = 12;
                     maximum = 4095;
-                    TIFF_CALLBACK_loadRawData = &CLASS sony_arw2_load_raw;
+                    TIFF_CALLBACK_loadRawData = &sony_arw2_load_raw;
                     break;
                 }
                 if ( tiff_ifd[raw].bytes * 8 != raw_width * raw_height * tiff_bps ) {
                     raw_height += 8;
-                    TIFF_CALLBACK_loadRawData = &CLASS sony_arw_load_raw;
+                    TIFF_CALLBACK_loadRawData = &sony_arw_load_raw;
                     break;
                 }
                 GLOBAL_loadFlags = 79;
@@ -8298,31 +9120,31 @@ apply_tiff() {
                             filters = 0;
                         } else {
                             if ( raw_width * raw_height * 2 == tiff_ifd[raw].bytes ) {
-                                TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
+                                TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
                                 GLOBAL_loadFlags = 4;
                                 GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
                             } else {
-                                TIFF_CALLBACK_loadRawData = &CLASS nikon_load_raw;
+                                TIFF_CALLBACK_loadRawData = &nikon_load_raw;
                             }
                         }
                     }
                 }
                 break;
             case 65535:
-                TIFF_CALLBACK_loadRawData = &CLASS pentax_load_raw;
+                TIFF_CALLBACK_loadRawData = &pentax_load_raw;
                 break;
             case 65000:
                 switch ( tiff_ifd[raw].phint ) {
                     case 2:
-                        TIFF_CALLBACK_loadRawData = &CLASS kodak_rgb_load_raw;
+                        TIFF_CALLBACK_loadRawData = &kodak_rgb_load_raw;
                         filters = 0;
                         break;
                     case 6:
-                        TIFF_CALLBACK_loadRawData = &CLASS kodak_ycbcr_load_raw;
+                        TIFF_CALLBACK_loadRawData = &kodak_ycbcr_load_raw;
                         filters = 0;
                         break;
                     case 32803:
-                        TIFF_CALLBACK_loadRawData = &CLASS kodak_65000_load_raw;
+                        TIFF_CALLBACK_loadRawData = &kodak_65000_load_raw;
                 }
             case 32867:
             case 34892:
@@ -8358,29 +9180,36 @@ apply_tiff() {
         thumb_misc |= tiff_ifd[thm].samples << 5;
         switch ( tiff_ifd[thm].comp ) {
             case 0:
-                write_thumb = &CLASS layer_thumb;
+                write_thumb = &layer_thumb;
                 break;
             case 1:
                 if ( tiff_ifd[thm].bps <= 8 ) {
-                    write_thumb = &CLASS ppm_thumb;
+                    write_thumb = &ppm_thumb;
                 } else {
                     if ( !strcmp(make, "Imacon") ) {
-                        write_thumb = &CLASS ppm16_thumb;
+                        write_thumb = &ppm16_thumb;
                     } else {
-                        CALLBACK_loadThumbnailRawData = &CLASS kodak_thumb_load_raw;
+                        CALLBACK_loadThumbnailRawData = &kodak_thumb_load_raw;
                     }
                 }
                 break;
             case 65000:
                 CALLBACK_loadThumbnailRawData = tiff_ifd[thm].phint == 6 ?
-                                                &CLASS kodak_ycbcr_load_raw : &CLASS kodak_rgb_load_raw;
+                                                &kodak_ycbcr_load_raw : &kodak_rgb_load_raw;
         }
     }
 }
 
 void
 parse_minolta(int base) {
-    int save, tag, len, offset, high = 0, wide = 0, i, c;
+    int save;
+    int tag;
+    int len;
+    int offset;
+    int high = 0;
+    int wide = 0;
+    int i;
+    int c;
     short sorder = GLOBAL_endianOrder;
 
     fseek(ifp, base, SEEK_SET);
@@ -8428,8 +9257,11 @@ to open the matching JPEG file and read its metadata.
 */
 void
 parse_external_jpeg() {
-    const char *file, *ext;
-    char *jname, *jfile, *jext;
+    const char *file;
+    const char *ext;
+    char *jname;
+    char *jfile;
+    char *jext;
     FILE *save = ifp;
 
     ext = strrchr(ifname, '.');
@@ -8489,7 +9321,11 @@ Load this into white[][] for use in scale_colors().
 void
 ciff_block_1030() {
     static const ushort key[] = {0x410, 0x45f3};
-    int i, bpp, row, col, vbits = 0;
+    int i;
+    int bpp;
+    int row;
+    int col;
+    int vbits = 0;
     unsigned long bitbuf = 0;
 
     if ( (get2(), get4()) != 0x80008 || !get4() ) {
@@ -8515,7 +9351,13 @@ Parse a CIFF file, better known as Canon CRW format.
 */
 void
 parse_ciff(int offset, int length, int depth) {
-    int tboff, nrecs, c, type, len, save, wbi = -1;
+    int tboff;
+    int nrecs;
+    int c;
+    int type;
+    int len;
+    int save;
+    int wbi = -1;
     ushort key[] = {0x410, 0x45f3};
 
     fseek(ifp, offset + length - 4, SEEK_SET);
@@ -8694,7 +9536,8 @@ parse_ciff(int offset, int length, int depth) {
 
 void
 parse_rollei() {
-    char line[128], *val;
+    char line[128];
+    char *val;
     struct tm t;
 
     fseek(ifp, 0, SEEK_SET);
@@ -8749,8 +9592,10 @@ parse_rollei() {
 
 void
 parse_sinar_ia() {
-    int entries, off;
-    char str[8], *cp;
+    int entries;
+    int off;
+    char str[8];
+    char *cp;
 
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
     fseek(ifp, 4, SEEK_SET);
@@ -8788,7 +9633,14 @@ parse_sinar_ia() {
 
 void
 parse_phase_one(int base) {
-    unsigned entries, tag, type, len, data, save, i, c;
+    unsigned entries;
+    unsigned tag;
+    unsigned type;
+    unsigned len;
+    unsigned data;
+    unsigned save;
+    unsigned i;
+    unsigned c;
     float romm_cam[3][3];
     char *cp;
 
@@ -8913,7 +9765,11 @@ parse_phase_one(int base) {
 
 void
 parse_fuji(int offset) {
-    unsigned entries, tag, len, save, c;
+    unsigned entries;
+    unsigned tag;
+    unsigned len;
+    unsigned save;
+    unsigned c;
 
     fseek(ifp, offset, SEEK_SET);
     entries = get4();
@@ -8968,8 +9824,12 @@ parse_fuji(int offset) {
     width >>= fuji_layout;
 }
 
-int CLASS parse_jpeg(int offset) {
-    int len, save, hlen, mark;
+int
+parse_jpeg(int offset) {
+    int len;
+    int save;
+    int hlen;
+    int mark;
 
     fseek(ifp, offset, SEEK_SET);
     if ( fgetc(ifp) != 0xff || fgetc(ifp) != 0xd8 ) {
@@ -9001,8 +9861,12 @@ int CLASS parse_jpeg(int offset) {
 
 void
 parse_riff() {
-    unsigned i, size, end;
-    char tag[4], date[64], month[64];
+    unsigned i;
+    unsigned size;
+    unsigned end;
+    char tag[4];
+    char date[64];
+    char month[64];
     static const char mon[12][4] =
             {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
     struct tm t;
@@ -9048,8 +9912,16 @@ parse_riff() {
 
 void
 parse_crx(int end) {
-    unsigned i, save, size, tag, base;
-    static int index = 0, wide, high, off, len;
+    unsigned i;
+    unsigned save;
+    unsigned size;
+    unsigned tag;
+    unsigned base;
+    static int index = 0;
+    static int wide;
+    static int high;
+    static int off;
+    static int len;
 
     GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
     while ( ftell(ifp) + 7 < end ) {
@@ -9135,7 +10007,8 @@ parse_crx(int end) {
 
 void
 parse_qt(int end) {
-    unsigned save, size;
+    unsigned save;
+    unsigned size;
     char tag[4];
 
     GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
@@ -9178,16 +10051,19 @@ parse_smal(int offset, int fsize) {
     strcpy(make, "SMaL");
     snprintf(model, 64, "v%d %dx%d", ver, width, height);
     if ( ver == 6 ) {
-        TIFF_CALLBACK_loadRawData = &CLASS smal_v6_load_raw;
+        TIFF_CALLBACK_loadRawData = &smal_v6_load_raw;
     }
     if ( ver == 9 ) {
-        TIFF_CALLBACK_loadRawData = &CLASS smal_v9_load_raw;
+        TIFF_CALLBACK_loadRawData = &smal_v9_load_raw;
     }
 }
 
 void
 parse_cine() {
-    unsigned off_head, off_setup, off_image, i;
+    unsigned off_head;
+    unsigned off_setup;
+    unsigned off_image;
+    unsigned i;
 
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
     fseek(ifp, 4, SEEK_SET);
@@ -9254,7 +10130,9 @@ parse_cine() {
 
 void
 parse_redcine() {
-    unsigned i, len, rdvo;
+    unsigned i;
+    unsigned len;
+    unsigned rdvo;
 
     GLOBAL_endianOrder = BIG_ENDIAN_ORDER;
     is_raw = 0;
@@ -9286,6 +10164,7 @@ parse_redcine() {
 char *
 foveon_gets(int offset, char *str, int len) {
     int i;
+
     fseek(ifp, offset, SEEK_SET);
     for ( i = 0; i < len - 1; i++ ) {
         if ( (str[i] = get2()) == 0 ) {
@@ -9298,8 +10177,19 @@ foveon_gets(int offset, char *str, int len) {
 
 void
 parse_foveon() {
-    int entries, img = 0, off, len, tag, save, i, wide, high, pent, poff[256][2];
-    char name[64], value[64];
+    int entries;
+    int img = 0;
+    int off;
+    int len;
+    int tag;
+    int save;
+    int i;
+    int wide;
+    int high;
+    int pent;
+    int poff[256][2];
+    char name[64];
+    char value[64];
 
     GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
     fseek(ifp, 36, SEEK_SET);
@@ -9334,10 +10224,10 @@ parse_foveon() {
                         case 5:
                             GLOBAL_loadFlags = 1;
                         case 6:
-                            TIFF_CALLBACK_loadRawData = &CLASS foveon_sd_load_raw;
+                            TIFF_CALLBACK_loadRawData = &foveon_sd_load_raw;
                             break;
                         case 30:
-                            TIFF_CALLBACK_loadRawData = &CLASS foveon_dp_load_raw;
+                            TIFF_CALLBACK_loadRawData = &foveon_dp_load_raw;
                             break;
                         default:
                             TIFF_CALLBACK_loadRawData = 0;
@@ -9352,13 +10242,13 @@ parse_foveon() {
                      && thumb_length < len - 28 ) {
                     thumb_offset = off + 28;
                     thumb_length = len - 28;
-                    write_thumb = &CLASS jpeg_thumb;
+                    write_thumb = &jpeg_thumb;
                 }
                 if ( ++img == 2 && !thumb_length ) {
                     thumb_offset = off + 24;
                     thumb_width = wide;
                     thumb_height = high;
-                    write_thumb = &CLASS foveon_thumb;
+                    write_thumb = &foveon_thumb;
                 }
                 break;
             case 0x464d4143:
@@ -9420,7 +10310,9 @@ void
 adobe_coeff(const char *make, const char *model) {
     static const struct {
         const char *prefix;
-        short black, maximum, trans[12];
+        short black;
+        short maximum;
+        short trans[12];
     } table[] = {
             {"AgfaPhoto DC-833m",             0,   0,    /* DJC */
                     {11438, -3762,  -1115, -2409, 9914,  2497,  -1227, 2295,  5300}},
@@ -10567,7 +11459,8 @@ adobe_coeff(const char *make, const char *model) {
     };
     double cam_xyz[4][3];
     char name[130];
-    int i, j;
+    int i;
+    int j;
 
     snprintf(name, 130, "%s %s", make, model);
     for ( i = 0; i < sizeof table / sizeof *table; i++ ) {
@@ -10600,7 +11493,8 @@ simple_coeff(int index) {
         // index 3 -- Nikon E880, E900, and E990
         {-1.936280, 1.800443, -1.448486, 2.584324,1.405365, -0.524955, -0.289090, 0.408680, -1.204965, 1.082304, 2.941367, -1.818705}
     };
-    int i, c;
+    int i;
+    int c;
 
     for ( GLOBAL_colorTransformForRaw = i = 0; i < 3; i++ ) {
         for ( c = 0; c < colors; c++ ) {
@@ -10613,7 +11507,8 @@ short
 guess_byte_order(int words) {
     uchar test[4][2];
     int t = 2, msb;
-    double diff, sum[2] = {0, 0};
+    double diff;
+    double sum[2] = {0, 0};
 
     fread(test[0], 2, 2, ifp);
     for ( words -= 2; words--; ) {
@@ -10631,7 +11526,10 @@ guess_byte_order(int words) {
 float
 find_green(int bps, int bite, int off0, int off1) {
     UINT64 bitbuf = 0;
-    int vbits, col, i, c;
+    int vbits;
+    int col;
+    int i;
+    int c;
     ushort img[2][2064];
     double sum[] = {0, 0};
 
@@ -10857,7 +11755,8 @@ tiffIdentify() {
             {0x16c, "DSC-RX0"},
             {0x16d, "DSC-RX10M4"},
     };
-    static const char *orig, panalias[][12] = {
+    static const char *orig;
+    static const char panalias[][12] = {
             "@DC-FZ80", "DC-FZ82", "DC-FZ85",
             "@DC-FZ81", "DC-FZ83",
             "@DC-GF9", "DC-GX800", "DC-GX850",
@@ -10990,11 +11889,17 @@ tiffIdentify() {
              "Mamiya", "Minolta", "Motorola", "Kodak", "Konica", "Leica",
              "Nikon", "Nokia", "Olympus", "Ricoh", "Pentax", "Phase One",
              "Samsung", "Sigma", "Sinar", "Sony", "YI"};
-    char head[32], *cp;
-    int hlen, flen, fsize, zero_fsize = 1, i, c;
+    char head[32];
+    char *cp;
+    int hlen;
+    int flen;
+    int fsize;
+    int zero_fsize = 1;
+    int i;
+    int c;
     struct jhead jh;
 
-    cameraFlip = GLOBAL_flipsMask = filters = UINT_MAX;    /* unknown */
+    cameraFlip = GLOBAL_flipsMask = filters = UINT_MAX; // unknown
     raw_height = raw_width = fuji_width = fuji_layout = cr2_slice[0] = 0;
     maximum = height = width = top_margin = left_margin = 0;
     GLOBAL_bayerPatternLabels[0] = desc[0] = artist[0] = make[0] = model[0] = model2[0] = 0;
@@ -11007,7 +11912,7 @@ tiffIdentify() {
     memset(mask, 0, sizeof mask);
     thumb_offset = thumb_length = thumb_width = thumb_height = 0;
     TIFF_CALLBACK_loadRawData = CALLBACK_loadThumbnailRawData = 0;
-    write_thumb = &CLASS jpeg_thumb;
+    write_thumb = &jpeg_thumb;
     data_offset = meta_offset = meta_length = tiff_bps = tiff_compress = 0;
     kodak_cbpp = zero_after_ff = GLOBAL_dngVersion = GLOBAL_loadFlags = 0;
     timestamp = shot_order = tiff_samples = black = is_foveon = 0;
@@ -11048,7 +11953,7 @@ tiffIdentify() {
         if ( !memcmp(head + 6, "HEAPCCDR", 8) ) {
             data_offset = hlen;
             parse_ciff(hlen, flen - hlen, 0);
-            TIFF_CALLBACK_loadRawData = &CLASS canon_load_raw;
+            TIFF_CALLBACK_loadRawData = &canon_load_raw;
         } else if ( parse_tiff(0) ) {
             apply_tiff();
         }
@@ -11075,11 +11980,11 @@ tiffIdentify() {
     } else if ( !strcmp(head, "qktk") ) {
         strcpy(make, "Apple");
         strcpy(model, "QuickTake 100");
-        TIFF_CALLBACK_loadRawData = &CLASS quicktake_100_load_raw;
+        TIFF_CALLBACK_loadRawData = &quicktake_100_load_raw;
     } else if ( !strcmp(head, "qktn") ) {
         strcpy(make, "Apple");
         strcpy(model, "QuickTake 150");
-        TIFF_CALLBACK_loadRawData = &CLASS kodak_radc_load_raw;
+        TIFF_CALLBACK_loadRawData = &kodak_radc_load_raw;
     } else if ( !memcmp(head, "FUJIFILM", 8) ) {
         fseek(ifp, 84, SEEK_SET);
         thumb_offset = get4();
@@ -11101,7 +12006,7 @@ tiffIdentify() {
         parse_tiff(thumb_offset + 12);
         apply_tiff();
         if ( !TIFF_CALLBACK_loadRawData ) {
-            TIFF_CALLBACK_loadRawData = &CLASS unpacked_load_raw;
+            TIFF_CALLBACK_loadRawData = &unpacked_load_raw;
             tiff_bps = 14;
         }
     } else if ( !memcmp(head, "RIFF", 4) ) {
@@ -11123,7 +12028,7 @@ tiffIdentify() {
         get2();
         raw_width = get2();
         raw_height = get2();
-        TIFF_CALLBACK_loadRawData = &CLASS nokia_load_raw;
+        TIFF_CALLBACK_loadRawData = &nokia_load_raw;
         filters = 0x61616161;
     } else if ( !memcmp(head, "NOKIARAW", 8) ) {
         strcpy(make, "NOKIA");
@@ -11135,10 +12040,10 @@ tiffIdentify() {
         height = get2();
         switch ( tiff_bps = i * 8 / (width * height) ) {
             case 8:
-                TIFF_CALLBACK_loadRawData = &CLASS eight_bit_load_raw;
+                TIFF_CALLBACK_loadRawData = &eight_bit_load_raw;
                 break;
             case 10:
-                TIFF_CALLBACK_loadRawData = &CLASS nokia_load_raw;
+                TIFF_CALLBACK_loadRawData = &nokia_load_raw;
         }
         raw_height = height + (top_margin = i / (width * tiff_bps / 8) - height);
         mask[0][3] = 1;
@@ -11152,7 +12057,7 @@ tiffIdentify() {
         fseek(ifp, 668, SEEK_SET);
         fread(model, 1, 64, ifp);
         data_offset = 4096;
-        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+        TIFF_CALLBACK_loadRawData = &packed_load_raw;
         GLOBAL_loadFlags = 88;
         filters = 0x61616161;
     } else if ( !memcmp(head, "XPDS", 4) ) {
@@ -11164,13 +12069,13 @@ tiffIdentify() {
         fseek(ifp, 56, SEEK_CUR);
         fread(model, 1, 30, ifp);
         data_offset = 0x10000;
-        TIFF_CALLBACK_loadRawData = &CLASS canon_rmf_load_raw;
+        TIFF_CALLBACK_loadRawData = &canon_rmf_load_raw;
         gamma_curve(0, 12.25, 1, 1023);
     } else if ( !memcmp(head + 4, "RED1", 4) ) {
         strcpy(make, "Red");
         strcpy(model, "One");
         parse_redcine();
-        TIFF_CALLBACK_loadRawData = &CLASS redcine_load_raw;
+        TIFF_CALLBACK_loadRawData = &redcine_load_raw;
         gamma_curve(1 / 2.4, 12.92, 1, 4095);
         filters = 0x49494949;
     } else if ( !memcmp(head, "DSC-Image", 9) ) {
@@ -11371,13 +12276,13 @@ tiffIdentify() {
         switch ( tiff_compress ) {
             case 0:
             case 1:
-                TIFF_CALLBACK_loadRawData = &CLASS   packed_dng_load_raw;
+                TIFF_CALLBACK_loadRawData = &packed_dng_load_raw;
                 break;
             case 7:
-                TIFF_CALLBACK_loadRawData = &CLASS lossless_dng_load_raw;
+                TIFF_CALLBACK_loadRawData = &lossless_dng_load_raw;
                 break;
             case 34892:
-                TIFF_CALLBACK_loadRawData = &CLASS    lossy_dng_load_raw;
+                TIFF_CALLBACK_loadRawData = &lossy_dng_load_raw;
                 break;
             default:
                 TIFF_CALLBACK_loadRawData = 0;
@@ -11387,7 +12292,7 @@ tiffIdentify() {
 
     if ( !strcmp(make, "Canon") && !fsize && tiff_bps != 15 ) {
         if ( !TIFF_CALLBACK_loadRawData )
-            TIFF_CALLBACK_loadRawData = &CLASS lossless_jpeg_load_raw;
+            TIFF_CALLBACK_loadRawData = &lossless_jpeg_load_raw;
         for ( i = 0; i < sizeof canon / sizeof *canon; i++ )
             if ( raw_width == canon[i][0] && raw_height == canon[i][1] ) {
                 width = raw_width - (left_margin = canon[i][2]);
@@ -11425,12 +12330,12 @@ tiffIdentify() {
 
     if ( !strcmp(make, "Nikon")) {
         if ( !TIFF_CALLBACK_loadRawData )
-            TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+            TIFF_CALLBACK_loadRawData = &packed_load_raw;
         if ( model[0] == 'E' )
             GLOBAL_loadFlags |= !data_offset << 2 | 2;
     }
 
-    /* Set parameters based on camera name (for non-DNG files). */
+    // Set parameters based on camera name (for non-DNG files)
 
     if ( !strcmp(model, "KAI-0340")
          && find_green(16, 16, 3840, 5120) < 25 ) {
@@ -11465,14 +12370,14 @@ tiffIdentify() {
         }
         filters = 0;
         tiff_samples = colors = 3;
-        TIFF_CALLBACK_loadRawData = &CLASS canon_sraw_load_raw;
+        TIFF_CALLBACK_loadRawData = &canon_sraw_load_raw;
     } else if ( !strcmp(model, "PowerShot 600") ) {
         height = 613;
         width = 854;
         raw_width = 896;
         colors = 4;
         filters = 0xe1e4e1e4;
-        TIFF_CALLBACK_loadRawData = &CLASS canon_600_load_raw;
+        TIFF_CALLBACK_loadRawData = &canon_600_load_raw;
     } else if ( !strcmp(model, "PowerShot A5") ||
         !strcmp(model, "PowerShot A5 Zoom") ) {
         height = 773;
@@ -11494,7 +12399,7 @@ tiffIdentify() {
         canon_a5:
         colors = 4;
         tiff_bps = 10;
-        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+        TIFF_CALLBACK_loadRawData = &packed_load_raw;
         GLOBAL_loadFlags = 264;
     } else if ( !strcmp(model, "PowerShot Pro90 IS") ||
         !strcmp(model, "PowerShot G1")) {
@@ -12027,7 +12932,7 @@ tiffIdentify() {
         tiff_bps = 8;
     } else if ( !strncasecmp(model, "EasyShare", 9) ) {
         data_offset = data_offset < 0x15000 ? 0x15000 : 0x17000;
-        TIFF_CALLBACK_loadRawData = &CLASS packed_load_raw;
+        TIFF_CALLBACK_loadRawData = &packed_load_raw;
     } else if ( !strcasecmp(make, "Kodak") ) {
         if ( filters == UINT_MAX ) {
             filters = 0x61616161;
@@ -12205,7 +13110,7 @@ tiffIdentify() {
     }
 
 #ifdef NO_JASPER
-    if ( TIFF_CALLBACK_loadRawData == &CLASS redcine_load_raw ) {
+    if ( TIFF_CALLBACK_loadRawData == &redcine_load_raw ) {
         fprintf(stderr, _("%s: You must link dcraw with %s!!\n"),
                 ifname, "libjasper");
         is_raw = 0;
@@ -12213,7 +13118,7 @@ tiffIdentify() {
 #endif
 
 #ifdef NO_JPEG
-    if (TIFF_CALLBACK_loadRawData == &CLASS kodak_jpeg_load_raw || TIFF_CALLBACK_loadRawData == &CLASS lossy_dng_load_raw) {
+    if (TIFF_CALLBACK_loadRawData == &kodak_jpeg_load_raw || TIFF_CALLBACK_loadRawData == &lossy_dng_load_raw) {
         fprintf (stderr,_("%s: You must link dcraw with %s!!\n"),
         ifname, "libjpeg");
         is_raw = 0;
@@ -12252,7 +13157,8 @@ tiffIdentify() {
 void
 apply_profile(const char *input, const char *output) {
     char *prof;
-    cmsHPROFILE hInProfile = 0, hOutProfile = 0;
+    cmsHPROFILE hInProfile = 0;
+    cmsHPROFILE hOutProfile = 0;
     cmsHTRANSFORM hTransform;
     FILE *fp;
     unsigned size;
@@ -12315,10 +13221,17 @@ apply_profile(const char *input, const char *output) {
 
 void
 convert_to_rgb() {
-    int row, col, c, i, j, k;
+    int row;
+    int col;
+    int c;
+    int i;
+    int j;
+    int k;
     ushort *img;
-    float out[3], out_cam[3][4];
-    double num, inverse[3][3];
+    float out[3];
+    float out_cam[3][4];
+    double num;
+    double inverse[3][3];
     static const double xyzd50_srgb[3][3] =
             {{0.436083, 0.385083, 0.143055},
              {0.222507, 0.716888, 0.060608},
@@ -12351,16 +13264,16 @@ convert_to_rgb() {
             {1024, 0, 0x2100000, 0x6d6e7472, 0x52474220, 0x58595a20, 0, 0, 0,
              0x61637370, 0, 0, 0x6e6f6e65, 0, 0, 0, 0, 0xf6d6, 0x10000, 0xd32d};
     unsigned pbody[] =
-            {10, 0x63707274, 0, 36,    /* cprt */
-             0x64657363, 0, 40,    /* desc */
-             0x77747074, 0, 20,    /* wtpt */
-             0x626b7074, 0, 20,    /* bkpt */
-             0x72545243, 0, 14,    /* rTRC */
-             0x67545243, 0, 14,    /* gTRC */
-             0x62545243, 0, 14,    /* bTRC */
-             0x7258595a, 0, 20,    /* rXYZ */
-             0x6758595a, 0, 20,    /* gXYZ */
-             0x6258595a, 0, 20};    /* bXYZ */
+            {10, 0x63707274, 0, 36,    // cprt
+             0x64657363, 0, 40,    // desc
+             0x77747074, 0, 20,    // wtpt
+             0x626b7074, 0, 20,    // bkpt
+             0x72545243, 0, 14,    // rTRC
+             0x67545243, 0, 14,    // gTRC
+             0x62545243, 0, 14,    // bTRC
+             0x7258595a, 0, 20,    // rXYZ
+             0x6758595a, 0, 20,    // gXYZ
+             0x6258595a, 0, 20};    // bXYZ
     static const unsigned pwhite[] = {0xf351, 0x10000, 0x116cc};
     unsigned pcurve[] = {0x63757276, 0, 1, 0x1000000};
 
@@ -12449,11 +13362,20 @@ convert_to_rgb() {
 
 void
 fuji_rotate() {
-    int i, row, col;
+    int i;
+    int row;
+    int col;
     double step;
-    float r, c, fr, fc;
-    unsigned ur, uc;
-    ushort wide, high, (*img)[4], (*pix)[4];
+    float r;
+    float c;
+    float fr;
+    float fc;
+    unsigned ur;
+    unsigned uc;
+    ushort wide;
+    ushort high;
+    ushort (*img)[4];
+    ushort (*pix)[4];
 
     if ( !fuji_width ) {
         return;
@@ -12494,9 +13416,15 @@ fuji_rotate() {
 
 void
 stretch() {
-    ushort newdim, (*img)[4], *pix0, *pix1;
-    int row, col, c;
-    double rc, frac;
+    ushort newdim;
+    ushort (*img)[4];
+    ushort *pix0;
+    ushort *pix1;
+    int row;
+    int col;
+    int c;
+    double rc;
+    double frac;
 
     if ( pixel_aspect == 1 ) {
         return;
@@ -12558,7 +13486,8 @@ flip_index(int row, int col) {
 }
 
 struct tiff_tag {
-    ushort tag, type;
+    ushort tag;
+    ushort type;
     int count;
     union {
         char c[4];
@@ -12568,19 +13497,28 @@ struct tiff_tag {
 };
 
 struct tiff_hdr {
-    ushort order, magic;
+    ushort order;
+    ushort magic;
     int ifd;
-    ushort pad, ntag;
+    ushort pad;
+    ushort ntag;
     struct tiff_tag tag[23];
     int nextifd;
-    ushort pad2, nexif;
+    ushort pad2;
+    ushort nexif;
     struct tiff_tag exif[4];
-    ushort pad3, ngps;
+    ushort pad3;
+    ushort ngps;
     struct tiff_tag gpst[10];
     short bps[4];
     int rat[10];
     unsigned gps[26];
-    char desc[512], make[64], model[64], soft[32], date[20], artist[64];
+    char desc[512];
+    char make[64];
+    char model[64];
+    char soft[32];
+    char date[20];
+    char artist[64];
 };
 
 void
@@ -12619,7 +13557,8 @@ tiff_set(struct tiff_hdr *th, ushort *ntag, ushort tag, ushort type, int count, 
 
 void
 tiff_head(struct tiff_hdr *th, int full) {
-    int c, psize = 0;
+    int c;
+    int psize = 0;
     struct tm *t;
 
     memset(th, 0, sizeof *th);
@@ -12728,8 +13667,16 @@ write_ppm_tiff() {
     struct tiff_hdr th;
     uchar *ppm;
     ushort *ppm2;
-    int c, row, col, soff, rstep, cstep;
-    int perc, val, total, white = 0x2000;
+    int c;
+    int row;
+    int col;
+    int soff;
+    int rstep;
+    int cstep;
+    int perc;
+    int val;
+    int total;
+    int white = 0x2000;
 
     perc = width * height * 0.01; // 99th percentile white level
     if ( fuji_width ) {
@@ -12799,7 +13746,6 @@ write_ppm_tiff() {
 int
 main(int argc, const char **argv) {
     OPTIONS_values = new Options();
-
     int status = 0;
     int quality;
     int i;
@@ -12887,7 +13833,7 @@ main(int argc, const char **argv) {
             }
             goto next;
         }
-        write_fun = &CLASS write_ppm_tiff;
+        write_fun = &write_ppm_tiff;
         if ( OPTIONS_values->thumbnail_only ) {
             if ( (status = !thumb_offset) ) {
                 fprintf(stderr, _("%s has no thumbnail.\n"), ifname);
@@ -12908,7 +13854,7 @@ main(int argc, const char **argv) {
                 }
             }
         }
-        if ( TIFF_CALLBACK_loadRawData == &CLASS kodak_ycbcr_load_raw ) {
+        if ( TIFF_CALLBACK_loadRawData == &kodak_ycbcr_load_raw ) {
             height += height & 1;
             width += width & 1;
         }
@@ -13092,7 +14038,7 @@ main(int argc, const char **argv) {
         colorcheck();
 #endif
         if ( is_foveon ) {
-            if ( OPTIONS_values->documentMode || TIFF_CALLBACK_loadRawData == &CLASS foveon_dp_load_raw ) {
+            if ( OPTIONS_values->documentMode || TIFF_CALLBACK_loadRawData == &foveon_dp_load_raw ) {
                 for ( i = 0; i < height * width * 4; i++ ) {
                     if ((short) image[0][i] < 0 ) {
                         image[0][i] = 0;
@@ -13147,10 +14093,10 @@ main(int argc, const char **argv) {
             stretch();
         }
         thumbnail:
-        if ( write_fun == &CLASS jpeg_thumb ) {
+        if ( write_fun == &jpeg_thumb ) {
             write_ext = ".jpg";
         } else {
-            if ( OPTIONS_values->outputTiff && write_fun == &CLASS write_ppm_tiff ) {
+            if ( OPTIONS_values->outputTiff && write_fun == &write_ppm_tiff ) {
                 write_ext = ".tiff";
             } else {
                 char extensions[4][5] = {".pgm", ".ppm", ".ppm", ".pam"};
