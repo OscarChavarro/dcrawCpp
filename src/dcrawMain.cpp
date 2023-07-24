@@ -13618,7 +13618,7 @@ main(int argc, const char **argv) {
     putenv((char *) "TZ=UTC");
 #endif
 #ifdef LOCALEDIR
-                                                                                                                            setlocale (LC_CTYPE, "");
+  setlocale (LC_CTYPE, "");
   setlocale (LC_MESSAGES, "");
   bindtextdomain ("dcraw", LOCALEDIR);
   textdomain ("dcraw");
@@ -13786,9 +13786,9 @@ main(int argc, const char **argv) {
                 if ( GLOBAL_flipsMask & 4 ) {
                     SWAP(iheight, iwidth);
                 }
-                printf("Image size:  %4d x %d\n", width, height);
-                printf("Output size: %4d x %d\n", iwidth, iheight);
-                printf("Raw colors: %d", IMAGE_colors);
+                printf(_("Image size:  %4d x %d\n"), width, height);
+                printf(_("Output size: %4d x %d\n"), iwidth, iheight);
+                printf(_("Raw colors: %d"), IMAGE_colors);
                 if ( filters ) {
                     int fhigh = 2, fwide = 2;
                     if ((filters ^ (filters >> 8)) & 0xff ) fhigh = 4;
