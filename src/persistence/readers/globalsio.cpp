@@ -4,3 +4,4 @@
 #include "../../common/globals.h"
 #include "globalsio.h"
 
+FILE *GLOBAL_IO_ifp;

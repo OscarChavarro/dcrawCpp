@@ -2,7 +2,7 @@
 #define __GLOBALSIO__
 
 #ifdef LINUX_PLATFORM
-#include <arpa/inet.h>
+    #include <arpa/inet.h>
     #ifndef _GNU_SOURCE
         // swab function
         #define _GNU_SOURCE
@@ -10,5 +10,7 @@
 #endif
 
 #include <cstdio>
+
+extern FILE *GLOBAL_IO_ifp;
 
 #endif
