@@ -49,8 +49,8 @@ add_executable(dcraw
         src/interpolation/VgnInterpolator.h
         src/persistence/readers/globalsio.cpp
         src/persistence/readers/globalsio.h
-        src/persistence/readers/sonyRawLoaders.cpp
-        src/persistence/readers/sonyRawLoaders.h
+        src/persistence/readers/rawloaders/sonyRawLoaders.cpp
+        src/persistence/readers/rawloaders/sonyRawLoaders.h
         src/persistence/readers/tiffinternal.cpp
         src/persistence/readers/tiffinternal.h
         src/persistence/readers/tiffjpeg.cpp

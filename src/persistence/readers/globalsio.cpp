@@ -7,6 +7,8 @@
 
 FILE *GLOBAL_IO_ifp;
 unsigned GLOBAL_IO_dataError;
+unsigned GLOBAL_IO_zeroAfterFf;
+off_t GLOBAL_IO_profileOffset;
 
 void
 inputOutputError() {
@@ -117,3 +119,36 @@ readShorts(unsigned short *pixel, int count) {
     }
 }
 
+unsigned
+getbithuff(int nbits, unsigned short *huff) {
+    static unsigned bitbuf = 0;
+    static int vbits = 0;
+    static int reset = 0;
+    unsigned c;
+
+    if ( nbits > 25 ) {
+        return 0;
+    }
+    if ( nbits < 0 ) {
+        return bitbuf = vbits = reset = 0;
+    }
+    if ( nbits == 0 || vbits < 0 ) {
+        return 0;
+    }
+    while ( !reset && vbits < nbits && (c = fgetc(GLOBAL_IO_ifp)) != EOF &&
+            !(reset = GLOBAL_IO_zeroAfterFf && c == 0xff && fgetc(GLOBAL_IO_ifp)) ) {
+        bitbuf = (bitbuf << 8) + (unsigned char) c;
+        vbits += 8;
+    }
+    c = bitbuf << (32 - vbits) >> (32 - nbits);
+    if ( huff ) {
+        vbits -= huff[c] >> 8;
+        c = (unsigned char) huff[c];
+    } else {
+        vbits -= nbits;
+    }
+    if ( vbits < 0 ) {
+        inputOutputError();
+    }
+    return c;
+}

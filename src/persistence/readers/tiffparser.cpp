@@ -27,7 +27,7 @@
 
 #include "globalsio.h"
 #include "../../colorRepresentation/colorFilters.h"
-#include "sonyRawLoaders.h"
+#include "rawloaders/sonyRawLoaders.h"
 #include "timestamp.h"
 #include "tiffinternal.h"
 #include "tiffparser.h"

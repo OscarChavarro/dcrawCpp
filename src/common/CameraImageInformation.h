@@ -3,6 +3,8 @@
 
 class CameraImageInformation {
   public:
+    // Camera
+    float shutterSpeed;
 
     // Image
     char *inputFilename;
