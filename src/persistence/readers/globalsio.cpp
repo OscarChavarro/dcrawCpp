@@ -32,7 +32,7 @@ intToFloat(int i) {
 }
 
 unsigned short
-sget2(const unsigned char *s) {
+unsignedShortEndianSwap(const unsigned char *s) {
     if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER ) {
         /* "II" means little-endian */
         return s[0] | s[1] << 8;
@@ -43,7 +43,7 @@ sget2(const unsigned char *s) {
 }
 
 unsigned
-unsignedShortEndianSwap(unsigned char *s) {
+unsignedEndianSwap(const unsigned char *s) {
     if ( GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER ) {
         return s[0] | s[1] << 8 | s[2] << 16 | s[3] << 24;
     } else {
@@ -52,50 +52,50 @@ unsignedShortEndianSwap(unsigned char *s) {
 }
 
 unsigned short
-get2() {
+read2bytes() {
     unsigned char str[2] = {0xff, 0xff};
     fread(str, 1, 2, GLOBAL_IO_ifp);
-    return sget2(str);
-}
-
-unsigned
-get4() {
-    unsigned char str[4] = {0xff, 0xff, 0xff, 0xff};
-    fread(str, 1, 4, GLOBAL_IO_ifp);
     return unsignedShortEndianSwap(str);
 }
 
 unsigned
-getInt(int type) {
-    return type == 3 ? get2() : get4();
+read4bytes() {
+    unsigned char str[4] = {0xff, 0xff, 0xff, 0xff};
+    fread(str, 1, 4, GLOBAL_IO_ifp);
+    return unsignedEndianSwap(str);
+}
+
+unsigned
+readInt(int type) {
+    return type == 3 ? read2bytes() : read4bytes();
 }
 
 double
-getReal(int type) {
+readDouble(int type) {
     union {
         char c[8];
         double d;
-    } u;
+    } u = {'\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0'};
     int i;
     int rev;
 
     switch ( type ) {
         case 3:
-            return (unsigned short) get2();
+            return (unsigned short) read2bytes();
         case 4:
-            return (unsigned int) get4();
+            return (unsigned int) read4bytes();
         case 5:
-            u.d = (unsigned int) get4();
-            return u.d / (unsigned int) get4();
+            u.d = (unsigned int) read4bytes();
+            return u.d / (unsigned int) read4bytes();
         case 8:
-            return (signed short) get2();
+            return (signed short) read2bytes();
         case 9:
-            return (signed int) get4();
+            return (signed int) read4bytes();
         case 10:
-            u.d = (signed int) get4();
-            return u.d / (signed int) get4();
+            u.d = (signed int) read4bytes();
+            return u.d / (signed int) read4bytes();
         case 11:
-            return intToFloat(get4());
+            return intToFloat(read4bytes());
         case 12:
             rev = 7 * ((GLOBAL_endianOrder == LITTLE_ENDIAN_ORDER) == (ntohs(0x1234) == 0x1234));
             for ( i = 0; i < 8; i++ ) {
