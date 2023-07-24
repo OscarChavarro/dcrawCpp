@@ -161,7 +161,7 @@ unsigned tile_length;
 unsigned gpsdata[32];
 unsigned cameraFlip;
 unsigned filters;
-unsigned colors;
+unsigned IMAGE_colors;
 unsigned short raw_height;
 unsigned short raw_width;
 unsigned short height;
@@ -600,7 +600,7 @@ canon_600_coeff() {
         t = 5;
     }
     for ( GLOBAL_colorTransformForRaw = i = 0; i < 3; i++ ) {
-        for ( c = 0; c < colors; c++ ) {
+        for ( c = 0; c < IMAGE_colors; c++ ) {
             rgb_cam[i][c] = table[t][i * 4 + c] / 1024.0;
         }
     }
@@ -1777,15 +1777,15 @@ layer_thumb() {
     char *thumb;
     char map[][4] = {"012", "102"};
 
-    colors = thumb_misc >> 5 & 7;
+    IMAGE_colors = thumb_misc >> 5 & 7;
     thumb_length = thumb_width * thumb_height;
-    thumb = (char *) calloc(colors, thumb_length);
+    thumb = (char *) calloc(IMAGE_colors, thumb_length);
     memoryError(thumb, "layer_thumb()");
     fprintf(ofp, "P%d\n%d %d\n255\n",
-            5 + (colors >> 1), thumb_width, thumb_height);
-    fread(thumb, thumb_length, colors, GLOBAL_IO_ifp);
+            5 + (IMAGE_colors >> 1), thumb_width, thumb_height);
+    fread(thumb, thumb_length, IMAGE_colors, GLOBAL_IO_ifp);
     for ( i = 0; i < thumb_length; i++ ) {
-        for ( c = 0; c < colors; c++ ) {
+        for ( c = 0; c < IMAGE_colors; c++ ) {
             putc(thumb[i + thumb_length * (map[thumb_misc >> 8][c] - '0')], ofp);
         }
     }
@@ -3555,10 +3555,10 @@ kodak_thumb_load_raw() {
     int row;
     int col;
 
-    colors = thumb_misc >> 5;
+    IMAGE_colors = thumb_misc >> 5;
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
-            readShorts(image[row * width + col], colors);
+            readShorts(image[row * width + col], IMAGE_colors);
         }
     }
     maximum = (1 << (thumb_misc & 31)) - 1;
@@ -5482,7 +5482,7 @@ cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3]) {
     int j;
     int k;
 
-    for ( i = 0; i < colors; i++ ) {
+    for ( i = 0; i < IMAGE_colors; i++ ) {
         // Multiply out XYZ colorspace
         for ( j = 0; j < 3; j++ ) {
             for ( cam_rgb[i][j] = k = 0; k < 3; k++ ) {
@@ -5491,7 +5491,7 @@ cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3]) {
         }
     }
 
-    for ( i = 0; i < colors; i++ ) {
+    for ( i = 0; i < IMAGE_colors; i++ ) {
         // Normalize cam_rgb so that
         for ( num = j = 0; j < 3; j++ ) {
             // cam_rgb * (1,1,1) is (1,1,1,1)
@@ -5502,9 +5502,9 @@ cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3]) {
         }
         pre_mul[i] = 1 / num;
     }
-    pseudoinverse(cam_rgb, inverse, colors);
+    pseudoinverse(cam_rgb, inverse, IMAGE_colors);
     for ( i = 0; i < 3; i++ ) {
-        for ( j = 0; j < colors; j++ ) {
+        for ( j = 0; j < IMAGE_colors; j++ ) {
             rgb_cam[i][j] = inverse[j][i];
         }
     }
@@ -5563,19 +5563,19 @@ colorcheck()
 
     memset (gmb_cam, 0, sizeof gmb_cam);
     for ( sq = 0; sq < NSQ; sq++ ) {
-        for ( c = 0; colors < 3; c++ ) {
+        for ( c = 0; IMAGE_colors < 3; c++ ) {
             count[c] = 0;
         }
         for ( row = cut[sq][3]; row < cut[sq][3]+cut[sq][1]; row++ ) {
             for ( col = cut[sq][2]; col < cut[sq][2] + cut[sq][0]; col++ ) {
                 c = FC(row, col);
-                if ( c >= colors ) c -= 2;
+                if ( c >= IMAGE_colors ) c -= 2;
                 gmb_cam[sq][c] += BAYER2(row, col);
                 BAYER2(row, col) = black + (BAYER2(row, col) - black) / 2;
                 count[c]++;
             }
         }
-        for ( c = 0; c < colors; c++ ) {
+        for ( c = 0; c < IMAGE_colors; c++ ) {
             gmb_cam[sq][c] = gmb_cam[sq][c]/count[c] - black;
         }
         gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
@@ -5584,18 +5584,18 @@ colorcheck()
     }
     pseudoinverse(gmb_xyz, inverse, NSQ);
     for ( pass = 0; pass < 2; pass++ ) {
-        for ( GLOBAL_colorTransformForRaw = i=0; i < colors; i++ ) {
+        for ( GLOBAL_colorTransformForRaw = i=0; i < IMAGE_colors; i++ ) {
             for ( j = 0; j < 3; j++ ) {
                 for ( cam_xyz[i][j] = k = 0; k < NSQ; k++ ) {
                     cam_xyz[i][j] += gmb_cam[k][i] * inverse[k][j];
                 }
             }
             cam_xyz_coeff(rgb_cam, cam_xyz);
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 balance[c] = pre_mul[c] * gmb_cam[20][c];
             }
             for ( sq = 0; sq < NSQ; sq++ ) {
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     gmb_cam[sq][c] *= balance[c];
                 }
             }
@@ -5603,7 +5603,7 @@ colorcheck()
         if ( OPTIONS_values->verbose ) {
             printf ("    { \"%s %s\", %d,\n\t{", make, model, black);
             num = 10000 / (cam_xyz[1][0] + cam_xyz[1][1] + cam_xyz[1][2]);
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 for ( j = 0; j < 3; j++ ) {
                     printf("%c%d", (c | j) ? ',':' ', (int) (cam_xyz[c][j] * num + 0.5));
                 }
@@ -5670,7 +5670,7 @@ wavelet_denoise() {
     }
     memoryError(fimg, "wavelet_denoise()");
     temp = fimg + size * 3;
-    if ( (nc = colors) == 3 && filters ) {
+    if ((nc = IMAGE_colors) == 3 && filters ) {
         nc++;
     }
     for ( c = 0; c < nc; c++ ) {
@@ -5714,7 +5714,7 @@ wavelet_denoise() {
             image[i][c] = CLIP(SQR(fimg[i] + fimg[lpass + i]) / 0x10000);
         }
     }
-    if ( filters && colors == 3 ) {
+    if ( filters && IMAGE_colors == 3 ) {
         // Pull G1 and G3 closer together
         for ( row = 0; row < 2; row++ ) {
             mul[row] = 0.125 * pre_mul[FC(row + 1, 0) | 1] / pre_mul[FC(row, 0) | 1];
@@ -5853,7 +5853,7 @@ scale_colors() {
         pre_mul[1] = 1;
     }
     if ( pre_mul[3] == 0 ) {
-        pre_mul[3] = colors < 4 ? pre_mul[1] : 1;
+        pre_mul[3] = IMAGE_colors < 4 ? pre_mul[1] : 1;
     }
     dark = black;
     sat = maximum;
@@ -5903,8 +5903,8 @@ scale_colors() {
         val *= scale_mul[i & 3];
         ((unsigned short *)image)[i] = CLIP(val);
     }
-    if ( (OPTIONS_values->chromaticAberrationCorrection[0] != 1 ||
-         OPTIONS_values->chromaticAberrationCorrection[2] != 1) && colors == 3 ) {
+    if ((OPTIONS_values->chromaticAberrationCorrection[0] != 1 ||
+         OPTIONS_values->chromaticAberrationCorrection[2] != 1) && IMAGE_colors == 3 ) {
         if ( OPTIONS_values->verbose ) {
             fprintf(stderr, _("Correcting chromatic aberration...\n"));
         }
@@ -5983,10 +5983,10 @@ pre_interpolate() {
             shrink = 0;
         }
     }
-    if ( filters > 1000 && colors == 3 ) {
+    if ( filters > 1000 && IMAGE_colors == 3 ) {
         mix_green = OPTIONS_values->fourColorRgb ^ OPTIONS_values->halfSizePreInterpolation;
         if ( OPTIONS_values->fourColorRgb | OPTIONS_values->halfSizePreInterpolation ) {
-            colors++;
+            IMAGE_colors++;
         } else {
             for ( row = FC(1, 0) >> 1; row < height; row += 2 ) {
                 for ( col = FC(row, 1) & 1; col < width; col += 2 ) {
@@ -6027,7 +6027,7 @@ border_interpolate(int border) {
                 }
             }
             f = fcol(row, col);
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 if ( c != f && sum[c + 4] ) {
                     image[row * width + col][c] = sum[c] / sum[c + 4];
                 }
@@ -6077,7 +6077,7 @@ lin_interpolate() {
                 }
             }
             code[row][col][0] = (ip - code[row][col]) / 3;
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 if ( c != f ) {
                     *ip++ = c;
                     *ip++ = 256 / sum[c];
@@ -6093,7 +6093,7 @@ lin_interpolate() {
             for ( i = *ip++; i--; ip += 3 ) {
                 sum[ip[2]] += pix[ip[0]] << ip[1];
             }
-            for ( i = colors; --i; ip += 2 ) {
+            for ( i = IMAGE_colors; --i; ip += 2 ) {
                 pix[ip[0]] = sum[ip[0]] * ip[1] >> 8;
             }
         }
@@ -6267,7 +6267,7 @@ vng_interpolate() {
             for ( num = g = 0; g < 8; g++, ip += 2 ) {
                 // Average the neighbors
                 if ( gval[g] <= thold ) {
-                    for ( c = 0; c < colors; c++ ) {
+                    for ( c = 0; c < IMAGE_colors; c++ ) {
                         if ( c == color && ip[1] ) {
                             sum[c] += (pix[c] + pix[ip[1]]) >> 1;
                         } else {
@@ -6277,7 +6277,7 @@ vng_interpolate() {
                     num++;
                 }
             }
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 // Save to buffer
                 t = pix[color];
                 if ( c != color ) {
@@ -6386,7 +6386,7 @@ cielab(unsigned short rgb[3], short lab[3]) {
             cbrt[i] = r > 0.008856 ? pow(r, 1 / 3.0) : 7.787 * r + 16 / 116.0;
         }
         for ( i = 0; i < 3; i++ ) {
-            for ( j = 0; j < colors; j++ ) {
+            for ( j = 0; j < IMAGE_colors; j++ ) {
                 for ( xyz_cam[i][j] = k = 0; k < 3; k++ ) {
                     xyz_cam[i][j] += xyz_rgb[i][k] * rgb_cam[k][j] / d65_white[i];
                 }
@@ -6395,7 +6395,7 @@ cielab(unsigned short rgb[3], short lab[3]) {
         return;
     }
     xyz[0] = xyz[1] = xyz[2] = 0.5;
-    for ( c = 0; c < colors; c++ ) {
+    for ( c = 0; c < IMAGE_colors; c++ ) {
         xyz[0] += xyz_cam[0][c] * rgb[c];
         xyz[1] += xyz_cam[1][c] * rgb[c];
         xyz[2] += xyz_cam[2][c] * rgb[c];
@@ -6966,51 +6966,51 @@ blend_highlights() {
     float sum[2];
     float chratio;
 
-    if ( (unsigned) (colors - 3) > 1 ) {
+    if ((unsigned) (IMAGE_colors - 3) > 1 ) {
         return;
     }
     if ( OPTIONS_values->verbose ) {
         fprintf(stderr, _("Blending highlights...\n"));
     }
-    for ( c = 0; c < colors; c++ ) {
+    for ( c = 0; c < IMAGE_colors; c++ ) {
         if ( clip > (i = 65535 * pre_mul[c]) ) {
             clip = i;
         }
     }
     for ( row = 0; row < height; row++ ) {
         for ( col = 0; col < width; col++ ) {
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 if ( image[row * width + col][c] > clip ) {
                     break;
                 }
             }
-            if ( c == colors ) {
+            if ( c == IMAGE_colors ) {
                 continue;
             }
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 cam[0][c] = image[row * width + col][c];
                 cam[1][c] = MIN(cam[0][c], clip);
             }
             for ( i = 0; i < 2; i++ ) {
-                for ( c = 0; c < colors; c++ ) {
-                    for ( lab[i][c] = j = 0; j < colors; j++ ) {
-                        lab[i][c] += trans[colors - 3][c][j] * cam[i][j];
+                for ( c = 0; c < IMAGE_colors; c++ ) {
+                    for ( lab[i][c] = j = 0; j < IMAGE_colors; j++ ) {
+                        lab[i][c] += trans[IMAGE_colors - 3][c][j] * cam[i][j];
                     }
                 }
-                for ( sum[i] = 0, c = 1; c < colors; c++ ) {}
+                for ( sum[i] = 0, c = 1; c < IMAGE_colors; c++ ) {}
                 sum[i] += SQR(lab[i][c]);
             }
             chratio = sqrt(sum[1] / sum[0]);
-            for ( c = 1; c < colors; c++ ) {
+            for ( c = 1; c < IMAGE_colors; c++ ) {
                 lab[0][c] *= chratio;
             }
-            for ( c = 0; c < colors; c++ ) {
-                for ( cam[0][c] = j = 0; j < colors; j++ ) {
-                    cam[0][c] += itrans[colors - 3][c][j] * lab[0][j];
+            for ( c = 0; c < IMAGE_colors; c++ ) {
+                for ( cam[0][c] = j = 0; j < IMAGE_colors; j++ ) {
+                    cam[0][c] += itrans[IMAGE_colors - 3][c][j] * lab[0][j];
                 }
             }
-            for ( c = 0; c < colors; c++ ) {
-                image[row * width + col][c] = cam[0][c] / colors;
+            for ( c = 0; c < IMAGE_colors; c++ ) {
+                image[row * width + col][c] = cam[0][c] / IMAGE_colors;
             }
         }
     }
@@ -7057,17 +7057,17 @@ recover_highlights() {
     }
 
     grow = pow(2, 4 - OPTIONS_values->highlight);
-    for ( c = 0; c < colors; c++ ) {
+    for ( c = 0; c < IMAGE_colors; c++ ) {
         hsat[c] = 32000 * pre_mul[c];
     }
-    for ( kc = 0, c = 1; c < colors; c++ ) {
+    for ( kc = 0, c = 1; c < IMAGE_colors; c++ ) {
         if ( pre_mul[kc] < pre_mul[c] ) kc = c;
     }
     high = height / SCALE;
     wide = width / SCALE;
     map = (float *)calloc(high, wide * sizeof *map);
     memoryError(map, "recover_highlights()");
-    for ( c = 0; c < colors; c++ ) {
+    for ( c = 0; c < IMAGE_colors; c++ ) {
         if ( c != kc ) {
             memset(map, 0, high * wide * sizeof *map);
             for ( mrow = 0; mrow < high; mrow++ ) {
@@ -8378,8 +8378,8 @@ int parse_tiff_ifd(int base) {
                     plen = 16;
                 }
                 fread(cfa_pat, 1, plen, GLOBAL_IO_ifp);
-                for ( colors = cfa = i = 0; i < plen && colors < 4; i++ ) {
-                    colors += !(cfa & (1 << cfa_pat[i]));
+                for ( IMAGE_colors = cfa = i = 0; i < plen && IMAGE_colors < 4; i++ ) {
+                    IMAGE_colors += !(cfa & (1 << cfa_pat[i]));
                     cfa |= 1 << cfa_pat[i];
                 }
                 if ( cfa == 070 ) {
@@ -8412,7 +8412,7 @@ int parse_tiff_ifd(int base) {
                 // Leaf CatchLight color matrix
                 fread(software, 1, 7, GLOBAL_IO_ifp);
                 if ( strncmp(software, "MATRIX", 6)) break;
-                colors = 4;
+                IMAGE_colors = 4;
                 for ( GLOBAL_colorTransformForRaw = i = 0; i < 3; i++ ) {
                     for ( c = 0; c < 4; c++ ) {
                         fscanf(GLOBAL_IO_ifp, "%f", &rgb_cam[i][c ^ 1]);
@@ -8595,10 +8595,10 @@ int parse_tiff_ifd(int base) {
                 if ( len > 4 ) {
                     len = 4;
                 }
-                colors = len;
-                fread(cfa_pc, 1, colors, GLOBAL_IO_ifp);
+                IMAGE_colors = len;
+                fread(cfa_pc, 1, IMAGE_colors, GLOBAL_IO_ifp);
             guess_cfa_pc:
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     tab[cfa_pc[c]] = c;
                 }
                 GLOBAL_bayerPatternLabels[c] = 0;
@@ -8659,7 +8659,7 @@ int parse_tiff_ifd(int base) {
                 // ColorMatrix1
             case 50722:
                 // ColorMatrix2
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     for ( j = 0; j < 3; j++ ) {
                         cm[c][j] = readDouble(type);
                     }
@@ -8670,21 +8670,21 @@ int parse_tiff_ifd(int base) {
                 // CameraCalibration1
             case 50724:
                 // CameraCalibration2
-                for ( i = 0; i < colors; i++ ) {
-                    for ( c = 0; c < colors; c++ ) {
+                for ( i = 0; i < IMAGE_colors; i++ ) {
+                    for ( c = 0; c < IMAGE_colors; c++ ) {
                         cc[i][c] = readDouble(type);
                     }
                 }
                 break;
             case 50727:
                 // AnalogBalance
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     ab[c] = readDouble(type);
                 }
                 break;
             case 50728:
                 // AsShotNeutral
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     asn[c] = readDouble(type);
                 }
                 break;
@@ -8760,15 +8760,15 @@ int parse_tiff_ifd(int base) {
         GLOBAL_IO_ifp = sfp;
         free(buf);
     }
-    for ( i = 0; i < colors; i++ ) {
-        for ( c = 0; c < colors; c++ ) {
+    for ( i = 0; i < IMAGE_colors; i++ ) {
+        for ( c = 0; c < IMAGE_colors; c++ ) {
             cc[i][c] *= ab[i];
         }
     }
     if ( use_cm ) {
-        for ( c = 0; c < colors; c++ ) {
+        for ( c = 0; c < IMAGE_colors; c++ ) {
             for ( i = 0; i < 3; i++ ) {
-                for ( cam_xyz[c][i] = j = 0; j < colors; j++ ) {
+                for ( cam_xyz[c][i] = j = 0; j < IMAGE_colors; j++ ) {
                     cam_xyz[c][i] += cc[c][j] * cm[j][i] * xyz[i];
                 }
             }
@@ -8777,12 +8777,12 @@ int parse_tiff_ifd(int base) {
     }
     if ( asn[0] ) {
         cam_mul[3] = 0;
-        for ( c = 0; c < colors; c++ ) {
+        for ( c = 0; c < IMAGE_colors; c++ ) {
             cam_mul[c] = 1 / asn[c];
         };
     }
     if ( !use_cm ) {
-        for ( c = 0; c < colors; c++ ) {
+        for ( c = 0; c < IMAGE_colors; c++ ) {
             pre_mul[c] /= cc[c][c];
         }
     }
@@ -11354,8 +11354,8 @@ simple_coeff(int index) {
     int c;
 
     for ( GLOBAL_colorTransformForRaw = i = 0; i < 3; i++ ) {
-        for ( c = 0; c < colors; c++ ) {
-            rgb_cam[i][c] = table[index][i * colors + c];
+        for ( c = 0; c < IMAGE_colors; c++ ) {
+            rgb_cam[i][c] = table[index][i * IMAGE_colors + c];
         }
     }
 }
@@ -11788,7 +11788,7 @@ tiffIdentify() {
         }
     }
 
-    colors = 3;
+    IMAGE_colors = 3;
     for ( i = 0; i < 0x10000; i++ ) {
         curve[i] = i;
     }
@@ -11965,7 +11965,7 @@ tiffIdentify() {
                 width = raw_width - left_margin - table[i].rm;
                 height = raw_height - top_margin - table[i].bm;
                 filters = 0x1010101 * table[i].cf;
-                colors = 4 - !((filters & filters >> 1) & 0x5555);
+                IMAGE_colors = 4 - !((filters & filters >> 1) & 0x5555);
                 GLOBAL_loadFlags = table[i].lf;
                 switch ( tiff_bps = (fsize - data_offset) * 8 / (raw_width * raw_height) ) {
                     case 6:
@@ -12129,7 +12129,7 @@ tiffIdentify() {
     if ( GLOBAL_dngVersion ) {
         if ( filters == UINT_MAX) filters = 0;
         if ( filters ) is_raw *= tiff_samples;
-        else colors = tiff_samples;
+        else IMAGE_colors = tiff_samples;
         switch ( tiff_compress ) {
             case 0:
             case 1:
@@ -12226,13 +12226,13 @@ tiffIdentify() {
         raw_height = height = 4320;
         }
         filters = 0;
-        tiff_samples = colors = 3;
+            tiff_samples = IMAGE_colors = 3;
         TIFF_CALLBACK_loadRawData = &canon_sraw_load_raw;
     } else if ( !strcmp(model, "PowerShot 600") ) {
         height = 613;
         width = 854;
         raw_width = 896;
-        colors = 4;
+                IMAGE_colors = 4;
         filters = 0xe1e4e1e4;
         TIFF_CALLBACK_loadRawData = &canon_600_load_raw;
     } else if ( !strcmp(model, "PowerShot A5") ||
@@ -12254,13 +12254,13 @@ tiffIdentify() {
         width = 1552;
         filters = 0x1e4b4e1b;
         canon_a5:
-        colors = 4;
+                            IMAGE_colors = 4;
         tiff_bps = 10;
         TIFF_CALLBACK_loadRawData = &packed_load_raw;
         GLOBAL_loadFlags = 264;
     } else if ( !strcmp(model, "PowerShot Pro90 IS") ||
         !strcmp(model, "PowerShot G1")) {
-        colors = 4;
+                                IMAGE_colors = 4;
         filters = 0xb4b4b4b4;
     } else if ( !strcmp(model, "PowerShot A610") ) {
         if ( canon_s2is() ) {
@@ -12354,7 +12354,7 @@ tiffIdentify() {
         if ( !strcmp(model, "E2500") ) {
             height -= 2;
             GLOBAL_loadFlags = 6;
-            colors = 4;
+            IMAGE_colors = 4;
             filters = 0x4b4b4b4b;
         }
     } else if ( fsize == 4775936 ) {
@@ -12485,7 +12485,7 @@ tiffIdentify() {
             left_margin = top_margin = 0;
         }
         filters = 0x61616161;
-        colors = 3;
+                                                                                                                                                                                    IMAGE_colors = 3;
     } else if ( !strcmp(make, "Samsung") && raw_width == 5632 ) {
         GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
         height = 3694;
@@ -12724,7 +12724,7 @@ tiffIdentify() {
         data_offset = 862144;
         TIFF_CALLBACK_loadRawData = &sony_load_raw;
         filters = 0x9c9c9c9c;
-        colors = 4;
+                                                                                                                                                                                                                                                            IMAGE_colors = 4;
         strcpy(GLOBAL_bayerPatternLabels, "RGBE");
     } else if ( !strcmp(model, "DSC-V3") ) {
         width = 3109;
@@ -12809,7 +12809,7 @@ tiffIdentify() {
             goto bw;
         } else if ( !strcmp(model, "DCS760M") ) {
             bw:
-            colors = 1;
+                    IMAGE_colors = 1;
             filters = 0;
         }
         if ( !strcmp(model + 4, "20X") ) {
@@ -12831,7 +12831,7 @@ tiffIdentify() {
                 pixel_aspect = (493.0 * height) / (373.0 * width);
             }
             top_margin = left_margin = 1;
-            colors = 4;
+            IMAGE_colors = 4;
             filters = 0x8d8d8d8d;
             simple_coeff(1);
             pre_mul[1] = 1.179;
@@ -12962,7 +12962,7 @@ tiffIdentify() {
     }
 
     if ( !TIFF_CALLBACK_loadRawData || height < 22 || width < 22 ||
-         tiff_bps > 16 || tiff_samples > 6 || colors > 4 ) {
+         tiff_bps > 16 || tiff_samples > 6 || IMAGE_colors > 4 ) {
         is_raw = 0;
     }
 
@@ -12983,7 +12983,7 @@ tiffIdentify() {
 #endif
 
     if ( !GLOBAL_bayerPatternLabels[0] ) {
-        strcpy(GLOBAL_bayerPatternLabels, colors == 3 ? "RGBG" : "GMCY");
+        strcpy(GLOBAL_bayerPatternLabels, IMAGE_colors == 3 ? "RGBG" : "GMCY");
     }
 
     if ( !raw_height ) {
@@ -12994,7 +12994,7 @@ tiffIdentify() {
         raw_width = width;
     }
 
-    if ( filters > 999 && colors == 3 ) {
+    if ( filters > 999 && IMAGE_colors == 3 ) {
         filters |= ((filters >> 2 & 0x22222222) |
                     (filters << 2 & 0x88888888)) & filters << 1;
     }
@@ -13136,7 +13136,7 @@ convert_to_rgb() {
 
     gamma_curve(OPTIONS_values->gammaParameters[0], OPTIONS_values->gammaParameters[1], 0, 0);
     memcpy(out_cam, rgb_cam, sizeof out_cam);
-    GLOBAL_colorTransformForRaw |= colors == 1 || OPTIONS_values->documentMode ||
+    GLOBAL_colorTransformForRaw |= IMAGE_colors == 1 || OPTIONS_values->documentMode ||
                                    OPTIONS_values->outputColorSpace < 1 || OPTIONS_values->outputColorSpace > 6;
 
     if ( !GLOBAL_colorTransformForRaw ) {
@@ -13173,7 +13173,7 @@ convert_to_rgb() {
         strcpy((char *) GLOBAL_outputIccProfile + pbody[2] + 8, "auto-generated by dcraw");
         strcpy((char *) GLOBAL_outputIccProfile + pbody[5] + 12, name[OPTIONS_values->outputColorSpace - 1]);
         for ( i = 0; i < 3; i++ ) {
-            for ( j = 0; j < colors; j++ ) {
+            for ( j = 0; j < IMAGE_colors; j++ ) {
                 for ( out_cam[i][j] = k = 0; k < 3; k++ ) {
                     out_cam[i][j] += out_rgb[OPTIONS_values->outputColorSpace - 1][i][k] * rgb_cam[k][j];
                 }
@@ -13191,7 +13191,7 @@ convert_to_rgb() {
         for ( col = 0; col < width; col++, img += 4 ) {
             if ( !GLOBAL_colorTransformForRaw ) {
                 out[0] = out[1] = out[2] = 0;
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     out[0] += out_cam[0][c] * img[c];
                     out[1] += out_cam[1][c] * img[c];
                     out[2] += out_cam[2][c] * img[c];
@@ -13204,16 +13204,16 @@ convert_to_rgb() {
                     img[0] = img[fcol(row, col)];
                 }
             }
-            for ( c = 0; c < colors; c++ ) {
+            for ( c = 0; c < IMAGE_colors; c++ ) {
                 histogram[c][img[c] >> 3]++;
             }
         }
     }
-    if ( colors == 4 && OPTIONS_values->outputColorSpace ) {
-        colors = 3;
+    if ( IMAGE_colors == 4 && OPTIONS_values->outputColorSpace ) {
+        IMAGE_colors = 3;
     }
     if ( OPTIONS_values->documentMode && filters ) {
-        colors = 1;
+        IMAGE_colors = 1;
     }
 }
 
@@ -13257,7 +13257,7 @@ fuji_rotate() {
             fr = r - ur;
             fc = c - uc;
             pix = image + ur * width + uc;
-            for ( i = 0; i < colors; i++ ) {
+            for ( i = 0; i < IMAGE_colors; i++ ) {
                 img[row * wide + col][i] =
                         (pix[0][i] * (1 - fc) + pix[1][i] * fc) * (1 - fr) +
                         (pix[width][i] * (1 - fc) + pix[width + 1][i] * fc) * fr;
@@ -13300,7 +13300,7 @@ stretch() {
                 pix1 += width * 4;
             }
             for ( col = 0; col < width; col++, pix0 += 4, pix1 += 4 ) {
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     img[row * width + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
                 }
             }
@@ -13317,7 +13317,7 @@ stretch() {
                 pix1 += 4;
             }
             for ( row = 0; row < height; row++, pix0 += width * 4, pix1 += width * 4 ) {
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     img[row * newdim + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
                 }
             }
@@ -13442,15 +13442,15 @@ tiff_head(struct tiff_hdr *th, int full) {
         tiff_set(th, &th->ntag, 254, 4, 1, 0);
         tiff_set(th, &th->ntag, 256, 4, 1, width);
         tiff_set(th, &th->ntag, 257, 4, 1, height);
-        tiff_set(th, &th->ntag, 258, 3, colors, OPTIONS_values->outputBitsPerPixel);
-        if ( colors > 2 ) {
+        tiff_set(th, &th->ntag, 258, 3, IMAGE_colors, OPTIONS_values->outputBitsPerPixel);
+        if ( IMAGE_colors > 2 ) {
             th->tag[th->ntag - 1].val.i = TOFF(th->bps);
         }
         for ( c = 0; c < 4; c++ ) {
             th->bps[c] = OPTIONS_values->outputBitsPerPixel;
         }
         tiff_set(th, &th->ntag, 259, 3, 1, 1);
-        tiff_set(th, &th->ntag, 262, 3, 1, 1 + (colors > 1));
+        tiff_set(th, &th->ntag, 262, 3, 1, 1 + (IMAGE_colors > 1));
     }
     tiff_set(th, &th->ntag, 270, 2, 512, TOFF(th->desc));
     tiff_set(th, &th->ntag, 271, 2, 64, TOFF(th->make));
@@ -13460,9 +13460,9 @@ tiff_head(struct tiff_hdr *th, int full) {
             psize = ntohl(GLOBAL_outputIccProfile[0]);
         }
         tiff_set(th, &th->ntag, 273, 4, 1, sizeof *th + psize);
-        tiff_set(th, &th->ntag, 277, 3, 1, colors);
+        tiff_set(th, &th->ntag, 277, 3, 1, IMAGE_colors);
         tiff_set(th, &th->ntag, 278, 4, 1, height);
-        tiff_set(th, &th->ntag, 279, 4, 1, height * width * colors * OPTIONS_values->outputBitsPerPixel / 8);
+        tiff_set(th, &th->ntag, 279, 4, 1, height * width * IMAGE_colors * OPTIONS_values->outputBitsPerPixel / 8);
     } else {
         tiff_set(th, &th->ntag, 274, 3, 1, "12435867"[GLOBAL_flipsMask] - '0');
     }
@@ -13540,7 +13540,7 @@ write_ppm_tiff() {
         perc /= 2;
     }
     if ( !((OPTIONS_values->highlight & ~2) || OPTIONS_values->noAutoBright) ) {
-        for ( ppmWhite = c = 0; c < colors; c++ ) {
+        for ( ppmWhite = c = 0; c < IMAGE_colors; c++ ) {
             for ( val = 0x2000, total = 0; --val > 32; ) {
                 if ((total += histogram[c][val]) > perc ) {
                     break;
@@ -13558,7 +13558,7 @@ write_ppm_tiff() {
     if ( GLOBAL_flipsMask & 4 ) {
         SWAP(height, width);
     }
-    ppm = (unsigned char *)calloc(width, colors * OPTIONS_values->outputBitsPerPixel / 8);
+    ppm = (unsigned char *)calloc(width, IMAGE_colors * OPTIONS_values->outputBitsPerPixel / 8);
     ppm2 = (unsigned short *) ppm;
     memoryError(ppm, "write_ppm_tiff()");
     if ( OPTIONS_values->outputTiff ) {
@@ -13568,13 +13568,13 @@ write_ppm_tiff() {
             fwrite(GLOBAL_outputIccProfile, ntohl(GLOBAL_outputIccProfile[0]), 1, ofp);
         }
     } else {
-        if ( colors > 3 ) {
+        if ( IMAGE_colors > 3 ) {
             fprintf(ofp,
                     "P7\nWIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
-                    width, height, colors, (1 << OPTIONS_values->outputBitsPerPixel) - 1, GLOBAL_bayerPatternLabels);
+                    width, height, IMAGE_colors, (1 << OPTIONS_values->outputBitsPerPixel) - 1, GLOBAL_bayerPatternLabels);
         } else {
             fprintf(ofp, "P%d\n%d %d\n%d\n",
-                    colors / 2 + 5, width, height, (1 << OPTIONS_values->outputBitsPerPixel) - 1);
+                    IMAGE_colors / 2 + 5, width, height, (1 << OPTIONS_values->outputBitsPerPixel) - 1);
         }
     }
     soff = flip_index(0, 0);
@@ -13583,19 +13583,19 @@ write_ppm_tiff() {
     for ( row = 0; row < height; row++, soff += rstep ) {
         for ( col = 0; col < width; col++, soff += cstep ) {
             if ( OPTIONS_values->outputBitsPerPixel == 8 ) {
-                for ( c = 0; c < colors; c++ ) {
-                    ppm[col * colors + c] = curve[image[soff][c]] >> 8;
+                for ( c = 0; c < IMAGE_colors; c++ ) {
+                    ppm[col * IMAGE_colors + c] = curve[image[soff][c]] >> 8;
                 }
             } else {
-                for ( c = 0; c < colors; c++ ) {
-                    ppm2[col * colors + c] = curve[image[soff][c]];
+                for ( c = 0; c < IMAGE_colors; c++ ) {
+                    ppm2[col * IMAGE_colors + c] = curve[image[soff][c]];
                 }
             }
         }
         if ( OPTIONS_values->outputBitsPerPixel == 16 && !OPTIONS_values->outputTiff && htons(0x55aa) != 0x55aa ) {
-            swab(ppm2, ppm2, width * colors * 2);
+            swab(ppm2, ppm2, width * IMAGE_colors * 2);
         }
-        fwrite(ppm, colors * OPTIONS_values->outputBitsPerPixel / 8, width, ofp);
+        fwrite(ppm, IMAGE_colors * OPTIONS_values->outputBitsPerPixel / 8, width, ofp);
     }
     free(ppm);
 }
@@ -13608,7 +13608,6 @@ main(int argc, const char **argv) {
     int i;
     int c;
     const char *sp;
-    const char *write_ext;
     char opm;
     char opt;
     char *ofname;
@@ -13710,7 +13709,7 @@ main(int argc, const char **argv) {
                     height = thumb_height;
                     width = thumb_width;
                     filters = 0;
-                    colors = 3;
+                    IMAGE_colors = 3;
                 } else {
                     fseek(GLOBAL_IO_ifp, thumb_offset, SEEK_SET);
                     write_fun = write_thumb;
@@ -13787,9 +13786,9 @@ main(int argc, const char **argv) {
                 if ( GLOBAL_flipsMask & 4 ) {
                     SWAP(iheight, iwidth);
                 }
-                printf(_("Image size:  %4d x %d\n"), width, height);
-                printf(_("Output size: %4d x %d\n"), iwidth, iheight);
-                printf(_("Raw colors: %d"), colors);
+                printf("Image size:  %4d x %d\n", width, height);
+                printf("Output size: %4d x %d\n", iwidth, iheight);
+                printf("Raw colors: %d", IMAGE_colors);
                 if ( filters ) {
                     int fhigh = 2, fwide = 2;
                     if ((filters ^ (filters >> 8)) & 0xff ) fhigh = 4;
@@ -13804,7 +13803,7 @@ main(int argc, const char **argv) {
                     }
                 }
                 printf(_("\nDaylight multipliers:"));
-                for ( c = 0; c < colors; c++ ) {
+                for ( c = 0; c < IMAGE_colors; c++ ) {
                     printf(" %f", pre_mul[c]);
                 }
                 if ( cam_mul[0] > 0 ) {
@@ -13825,7 +13824,7 @@ main(int argc, const char **argv) {
             meta_data = (char *) malloc(meta_length);
             memoryError(meta_data, "main()");
         }
-        if ( filters || colors == 1 ) {
+        if ( filters || IMAGE_colors == 1 ) {
             raw_image = (unsigned short *) calloc((raw_height + 7), raw_width * 2);
             memoryError(raw_image, "main()");
         } else {
@@ -13920,7 +13919,7 @@ main(int argc, const char **argv) {
         if ( filters && !OPTIONS_values->documentMode ) {
             if ( quality == 0 ) {
                 lin_interpolate();
-            } else if ( quality == 1 || colors > 3 ) {
+            } else if ( quality == 1 || IMAGE_colors > 3 ) {
                 vng_interpolate();
             } else if ( quality == 2 && filters > 1000 ) {
                 ppg_interpolate();
@@ -13931,11 +13930,11 @@ main(int argc, const char **argv) {
             }
         }
         if ( mix_green ) {
-            for ( colors = 3, i = 0; i < height * width; i++ ) {
+            for ( IMAGE_colors = 3, i = 0; i < height * width; i++ ) {
                 image[i][1] = (image[i][1] + image[i][3]) >> 1;
             }
         }
-        if ( !is_foveon && colors == 3 ) {
+        if ( !is_foveon && IMAGE_colors == 3 ) {
             median_filter();
         }
         if ( !is_foveon && OPTIONS_values->highlight == 2 ) {
@@ -13957,14 +13956,18 @@ main(int argc, const char **argv) {
             stretch();
         }
         thumbnail:
+
+        const char *write_ext;
+
         if ( write_fun == &jpeg_thumb ) {
             write_ext = ".jpg";
         } else {
             if ( OPTIONS_values->outputTiff && write_fun == &write_ppm_tiff ) {
                 write_ext = ".tiff";
             } else {
-                char extensions[4][5] = {".pgm", ".ppm", ".ppm", ".pam"};
-                write_ext = extensions[colors - 1];
+                int extensionIndex = (int)IMAGE_colors - 1;
+                const char *extensions[] = {".pgm", ".ppm", ".ppm", ".pam"};
+                write_ext = extensions[extensionIndex];
             }
         }
         ofname = (char *) malloc(strlen(CAMERA_IMAGE_information.inputFilename) + 64);
