@@ -43,6 +43,8 @@ cmake-build-release-coverage
 
 # Uncompressed sample raw files
 **/*.arw
+**/*.cr2
+**/*.3fr
 **/*.ppm
 **/*.pgm
 **/*.pam
