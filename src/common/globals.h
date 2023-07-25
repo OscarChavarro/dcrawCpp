@@ -41,4 +41,11 @@ extern char GLOBAL_model[64];
 extern off_t GLOBAL_meta_offset;
 extern float GLOBAL_cam_mul[4];
 
+extern unsigned short cblack[4102];
+extern unsigned tiff_samples;
+extern unsigned short top_margin;
+extern unsigned short left_margin;
+extern unsigned mix_green;
+
+
 #endif

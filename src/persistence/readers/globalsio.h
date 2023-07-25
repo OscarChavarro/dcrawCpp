@@ -18,6 +18,8 @@ extern off_t GLOBAL_IO_profileOffset;
 
 #define getbits(n) getbithuff((n), 0)
 #define gethuff(h) getbithuff(*(h), (h) + 1)
+#define ph1_bits(n) ph1_bithuff(n,0)
+#define ph1_huff(h) ph1_bithuff(*h,h+1)
 
 extern void inputOutputError();
 extern unsigned short unsignedShortEndianSwap(const unsigned char *s);
@@ -28,6 +30,7 @@ extern unsigned readInt(int type);
 extern double readDouble(int type);
 extern void readShorts(unsigned short *pixel, int count);
 extern float intToFloat(int i);
-extern unsigned getbithuff(int nbits, unsigned short *huff);
+extern unsigned getbithuff(int nbits, const unsigned short *huff);
+extern unsigned ph1_bithuff(int nbits, unsigned short *huff);
 
 #endif

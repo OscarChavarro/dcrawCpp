@@ -120,7 +120,7 @@ readShorts(unsigned short *pixel, int count) {
 }
 
 unsigned
-getbithuff(int nbits, unsigned short *huff) {
+getbithuff(int nbits, const unsigned short *huff) {
     static unsigned bitbuf = 0;
     static int vbits = 0;
     static int reset = 0;
@@ -150,6 +150,31 @@ getbithuff(int nbits, unsigned short *huff) {
     if ( vbits < 0 ) {
         inputOutputError();
     }
+    return c;
+}
+
+unsigned
+ph1_bithuff(int nbits, unsigned short *huff) {
+    static unsigned long long bitbuf = 0;
+    static int vbits = 0;
+    unsigned c;
+
+    if ( nbits == -1 ) {
+        return bitbuf = vbits = 0;
+    }
+    if ( nbits == 0 ) {
+        return 0;
+    }
+    if ( vbits < nbits ) {
+        bitbuf = bitbuf << 32 | read4bytes();
+        vbits += 32;
+    }
+    c = bitbuf << (64 - vbits) >> (64 - nbits);
+    if ( huff ) {
+        vbits -= huff[c] >> 8;
+        return (unsigned char)huff[c];
+    }
+    vbits -= nbits;
     return c;
 }
 

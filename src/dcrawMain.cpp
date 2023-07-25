@@ -120,6 +120,7 @@ typedef unsigned long long UINT64;
 #include "persistence/readers/rawloaders/jpegRawLoaders.h"
 #include "persistence/readers/rawloaders/sonyRawLoaders.h"
 #include "persistence/readers/rawloaders/nikonRawLoaders.h"
+#include "persistence/readers/rawloaders/hasselbladRawLoaders.h"
 
 FILE *ofp;
 
@@ -148,9 +149,7 @@ unsigned profile_length;
 unsigned thumb_misc;
 unsigned fuji_layout;
 unsigned numberOfRawImages;
-unsigned tiff_samples;
 unsigned tiff_compress;
-unsigned mix_green;
 unsigned zero_is_bad;
 unsigned is_raw;
 unsigned is_foveon;
@@ -162,15 +161,12 @@ unsigned filters;
 unsigned IMAGE_colors;
 unsigned short height;
 unsigned short width;
-unsigned short top_margin;
-unsigned short left_margin;
 unsigned short shrink;
 unsigned short iheight;
 unsigned short iwidth;
 unsigned short fuji_width;
 unsigned short thumb_width;
 unsigned short thumb_height;
-unsigned short cblack[4102];
 unsigned short white[8][8];
 unsigned short cr2_slice[3];
 unsigned short sraw_mul[4];
@@ -785,105 +781,6 @@ canon_load_raw() {
     for ( c = 0; c < 2; c++ ) {
         free(huff[c]);
     }
-}
-
-int
-ljpeg_start(struct jhead *jh, int info_only) {
-    unsigned short c;
-    unsigned short tag;
-    unsigned short len;
-    unsigned char data[0x10000];
-    const unsigned char *dp;
-
-    memset(jh, 0, sizeof *jh);
-    jh->restart = INT_MAX;
-    if ((fgetc(GLOBAL_IO_ifp), fgetc(GLOBAL_IO_ifp)) != 0xd8 ) {
-        return 0;
-    }
-    do {
-        if ( !fread(data, 2, 2, GLOBAL_IO_ifp)) {
-            return 0;
-        }
-        tag = data[0] << 8 | data[1];
-        len = (data[2] << 8 | data[3]) - 2;
-        if ( tag <= 0xff00 ) {
-            return 0;
-        }
-        fread(data, 1, len, GLOBAL_IO_ifp);
-        switch ( tag ) {
-            case 0xffc3:
-                jh->sraw = ((data[7] >> 4) * (data[7] & 15) - 1) & 3;
-            case 0xffc1:
-            case 0xffc0:
-                jh->algo = tag & 0xff;
-                jh->bits = data[0];
-                jh->high = data[1] << 8 | data[2];
-                jh->wide = data[3] << 8 | data[4];
-                jh->clrs = data[5] + jh->sraw;
-                if ( len == 9 && !GLOBAL_dngVersion ) {
-                    getc(GLOBAL_IO_ifp);
-                }
-                break;
-            case 0xffc4:
-                if ( info_only ) {
-                    break;
-                }
-                for ( dp = data; dp < data + len && !((c = *dp++) & -20); ) {
-                    jh->free[c] = jh->huff[c] = make_decoder_ref(&dp);
-                }
-                break;
-            case 0xffda:
-                jh->psv = data[1 + data[0] * 2];
-                jh->bits -= data[3 + data[0] * 2] & 15;
-                break;
-            case 0xffdb:
-                for ( c = 0; c < 64; c++ ) {
-                    jh->quant[c] = data[c * 2 + 1] << 8 | data[c * 2 + 2];
-                }
-                break;
-            case 0xffdd:
-                jh->restart = data[0] << 8 | data[1];
-        }
-    }
-    while ( tag != 0xffda );
-
-    if ( jh->bits > 16 || jh->clrs > 6 || !jh->bits || !jh->high || !jh->wide || !jh->clrs ) {
-        return 0;
-    }
-    if ( info_only ) {
-        return 1;
-    }
-    if ( !jh->huff[0] ) {
-        return 0;
-    }
-    for ( c = 0; c < 19; c++ ) {
-        if ( !jh->huff[c + 1] ) {
-            jh->huff[c + 1] = jh->huff[c];
-        }
-    }
-    if ( jh->sraw ) {
-        for ( c = 0; c < 4; c++ ) {
-            jh->huff[2 + c] = jh->huff[1];
-        }
-        for ( c = 0; c < jh->sraw; c++ ) {
-            jh->huff[1 + c] = jh->huff[0];
-        }
-    }
-    jh->row = (unsigned short *) calloc(jh->wide * jh->clrs, 4);
-    memoryError(jh->row, "ljpeg_start()");
-    return GLOBAL_IO_zeroAfterFf = 1;
-}
-
-void
-ljpeg_end(struct jhead *jh) {
-    int c;
-
-    for ( c = 0; c < 4; c++ ) {
-        if ( jh->free[c] ) {
-            free(jh->free[c]);
-        }
-    }
-    free(jh->row);
 }
 
 void
@@ -1794,34 +1691,6 @@ phase_one_load_raw() {
     }
 }
 
-unsigned
-ph1_bithuff(int nbits, unsigned short *huff) {
-    static UINT64 bitbuf = 0;
-    static int vbits = 0;
-    unsigned c;
-
-    if ( nbits == -1 ) {
-        return bitbuf = vbits = 0;
-    }
-    if ( nbits == 0 ) {
-        return 0;
-    }
-    if ( vbits < nbits ) {
-        bitbuf = bitbuf << 32 | read4bytes();
-        vbits += 32;
-    }
-    c = bitbuf << (64 - vbits) >> (64 - nbits);
-    if ( huff ) {
-        vbits -= huff[c] >> 8;
-        return (unsigned char) huff[c];
-    }
-    vbits -= nbits;
-    return c;
-}
-
-#define ph1_bits(n) ph1_bithuff(n,0)
-#define ph1_huff(h) ph1_bithuff(*h,h+1)
-
 void
 phase_one_load_raw_c() {
     static const int length[] = {8, 7, 6, 9, 11, 10, 5, 12, 14, 13};
@@ -1896,89 +1765,6 @@ phase_one_load_raw_c() {
     }
     free(pixel);
     ADOBE_maximum = 0xfffc - ph1.black;
-}
-
-void
-hasselblad_load_raw() {
-    struct jhead jh;
-    int shot;
-    int row;
-    int col;
-    int *back[5];
-    int len[2];
-    int diff[12];
-    int pred;
-    int sh;
-    int f;
-    int s;
-    int c;
-    unsigned upix;
-    unsigned urow;
-    unsigned ucol;
-    unsigned short *ip;
-
-    if ( !ljpeg_start(&jh, 0) ) {
-        return;
-    }
-    GLOBAL_endianOrder = LITTLE_ENDIAN_ORDER;
-    ph1_bits(-1);
-    back[4] = (int *) calloc(THE_image.width, 3 * sizeof **back);
-    memoryError(back[4], "hasselblad_load_raw()");
-    for ( c = 0; c < 3; c++ ) {
-        back[c] = back[4] + c * THE_image.width;
-    }
-    cblack[6] >>= sh = tiff_samples > 1;
-    shot = LIM(OPTIONS_values->shotSelect, 1, tiff_samples) - 1;
-    for ( row = 0; row < THE_image.height; row++ ) {
-        for ( c = 0; c < 4; c++ ) {
-            back[(c + 3) & 3] = back[c];
-        }
-        for ( col = 0; col < THE_image.width; col += 2 ) {
-            for ( s = 0; s < tiff_samples * 2; s += 2 ) {
-                for ( c = 0; c < 2; c++ ) {
-                    len[c] = ph1_huff(jh.huff[0]);
-                }
-                for ( c = 0; c < 2; c++ ) {
-                    diff[s + c] = ph1_bits(len[c]);
-                    if ((diff[s + c] & (1 << (len[c] - 1))) == 0 )
-                        diff[s + c] -= (1 << len[c]) - 1;
-                    if ( diff[s + c] == 65535 ) diff[s + c] = -32768;
-                }
-            }
-            for ( s = col; s < col + 2; s++ ) {
-                pred = 0x8000 + GLOBAL_loadFlags;
-                if ( col ) pred = back[2][s - 2];
-                if ( col && row > 1 )
-                    switch ( jh.psv ) {
-                        case 11:
-                            pred += back[0][s] / 2 - back[0][s - 2] / 2;
-                            break;
-                    }
-                f = (row & 1) * 3 ^ ((col + s) & 1);
-                for ( c = 0; c < tiff_samples; c++ ) {
-                    pred += diff[(s & 1) * tiff_samples + c];
-                    upix = pred >> sh & 0xffff;
-                    if ( THE_image.rawData && c == shot ) {
-                        RAW(row, s) = upix;
-                    }
-                    if ( GLOBAL_image ) {
-                        urow = row - top_margin + (c & 1);
-                        ucol = col - left_margin - ((c >> 1) & 1);
-                        ip = &GLOBAL_image[urow * width + ucol][f];
-                        if ( urow < height && ucol < width ) {
-                            *ip = c < 4 ? upix : (*ip + upix) >> 1;
-                        }
-                    }
-                }
-                back[2][s] = pred;
-            }
-        }
-    }
-    free(back[4]);
-    ljpeg_end(&jh);
-    if ( GLOBAL_image ) {
-        mix_green = 1;
-    }
 }
 
 void

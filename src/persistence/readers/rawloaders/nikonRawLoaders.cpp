@@ -114,7 +114,7 @@ nikon_yuv_load_raw() {
     int rgb[3];
     int b;
     int c;
-    unsigned long long bitbuf = 0;
+    unsigned long long bitbuf;
 
     for ( row = 0; row < THE_image.height; row++ ) {
         for ( col = 0; col < THE_image.width; col++ ) {
