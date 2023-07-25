@@ -1,9 +1,36 @@
 #include <cstring>
 #include "../../../common/globals.h"
-#include "../globalsio.h"
+#include "../../../common/mathMacros.h"
+#include "../../../common/util.h"
 #include "../../../imageHandling/BayessianImage.h"
 #include "../../../colorRepresentation/adobeCoeff.h"
+#include "../globalsio.h"
 #include "canonRawLoaders.h"
+
+/*
+Return 0 if the GLOBAL_image starts with compressed data,
+1 if it starts with uncompressed low-order bits.
+
+In Canon compressed data, 0xff is always followed by 0x00.
+*/
+static int
+canon_has_lowbits() {
+    unsigned char test[0x4000];
+    int ret = 1;
+    int i;
+
+    fseek(GLOBAL_IO_ifp, 0, SEEK_SET);
+    fread(test, 1, sizeof test, GLOBAL_IO_ifp);
+    for ( i = 540; i < sizeof test - 1; i++ ) {
+        if ( test[i] == 0xff ) {
+            if ( test[i + 1] ) {
+                return 1;
+            }
+            ret = 0;
+        }
+    }
+    return ret;
+}
 
 void
 canon_600_fixed_wb(int temp) {
@@ -260,4 +287,90 @@ canon_s2is() {
         }
     }
     return 0;
+}
+
+void
+canon_load_raw() {
+    unsigned short *pixel;
+    unsigned short *prow;
+    unsigned short *huff[2];
+    int nblocks;
+    int lowbits;
+    int i;
+    int c;
+    int row;
+    int r;
+    int save;
+    int val;
+    int block;
+    int diffbuf[64];
+    int leaf;
+    int len;
+    int diff;
+    int carry = 0;
+    int pnum = 0;
+    int base[2];
+
+    crw_init_tables(tiff_compress, huff);
+    lowbits = canon_has_lowbits();
+    if ( !lowbits ) ADOBE_maximum = 0x3ff;
+    fseek(GLOBAL_IO_ifp, 540 + lowbits * THE_image.height * THE_image.width / 4, SEEK_SET);
+    GLOBAL_IO_zeroAfterFf = 1;
+    getbits(-1);
+    for ( row = 0; row < THE_image.height; row += 8 ) {
+        pixel = THE_image.rawData + row * THE_image.width;
+        nblocks = MIN(8, THE_image.height - row) * THE_image.width >> 6;
+        for ( block = 0; block < nblocks; block++ ) {
+            memset(diffbuf, 0, sizeof diffbuf);
+            for ( i = 0; i < 64; i++ ) {
+                leaf = gethuff(huff[i > 0]);
+                if ( leaf == 0 && i ) {
+                    break;
+                }
+                if ( leaf == 0xff ) {
+                    continue;
+                }
+                i += leaf >> 4;
+                len = leaf & 15;
+                if ( len == 0 ) {
+                    continue;
+                }
+                diff = getbits(len);
+                if ( (diff & (1 << (len - 1))) == 0 ) {
+                    diff -= (1 << len) - 1;
+                }
+                if ( i < 64 ) {
+                    diffbuf[i] = diff;
+                }
+            }
+            diffbuf[0] += carry;
+            carry = diffbuf[0];
+            for ( i = 0; i < 64; i++ ) {
+                if ( pnum++ % THE_image.width == 0 ) {
+                    base[0] = base[1] = 512;
+                }
+                if ( (pixel[(block << 6) + i] = base[i & 1] += diffbuf[i]) >> 10 ) {
+                    inputOutputError();
+                }
+            }
+        }
+        if ( lowbits ) {
+            save = ftell(GLOBAL_IO_ifp);
+            fseek(GLOBAL_IO_ifp, 26 + row * THE_image.width / 4, SEEK_SET);
+            for ( prow = pixel, i = 0; i < THE_image.width * 2; i++ ) {
+                c = fgetc(GLOBAL_IO_ifp);
+                for ( r = 0; r < 8; r += 2, prow++ ) {
+                    val = (*prow << 2) + ((c >> r) & 3);
+                    if ( THE_image.width == 2672 && val < 512 ) {
+                        val += 2;
+                    }
+                    *prow = val;
+                }
+            }
+            fseek(GLOBAL_IO_ifp, save, SEEK_SET);
+        }
+    }
+    for ( c = 0; c < 2; c++ ) {
+        free(huff[c]);
+    }
 }

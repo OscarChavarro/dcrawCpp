@@ -24,3 +24,4 @@ float pre_mul[4];
 float flash_used;
 float rgb_cam[3][4];
 float canon_ev;
+unsigned tiff_compress;
