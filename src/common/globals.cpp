@@ -25,3 +25,4 @@ float flash_used;
 float rgb_cam[3][4];
 float canon_ev;
 unsigned tiff_compress;
+unsigned short cr2_slice[3];

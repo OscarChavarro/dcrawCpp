@@ -161,7 +161,6 @@ unsigned short fuji_width;
 unsigned short thumb_width;
 unsigned short thumb_height;
 unsigned short white[8][8];
-unsigned short cr2_slice[3];
 unsigned short sraw_mul[4];
 double pixel_aspect;
 int mask[8][4];
@@ -340,56 +339,6 @@ cubic_spline(const int *x_, const int *y_, const int len) {
         GAMMA_curveFunctionLookupTable[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 : (unsigned short) (y_out * 65535.0 + 0.5));
     }
     free(A);
-}
-
-void
-lossless_jpeg_load_raw() {
-    int jwide;
-    int jrow;
-    int jcol;
-    int val;
-    int jidx;
-    int i;
-    int j;
-    int row = 0;
-    int col = 0;
-    struct jhead jh;
-    unsigned short *rp;
-
-    if ( !ljpeg_start(&jh, 0) ) {
-        return;
-    }
-    jwide = jh.wide * jh.clrs;
-
-    for ( jrow = 0; jrow < jh.high; jrow++ ) {
-        rp = ljpeg_row(jrow, &jh);
-        if ( GLOBAL_loadFlags & 1 ) {
-            row = jrow & 1 ? height - 1 - jrow / 2 : jrow / 2;
-        }
-        for ( jcol = 0; jcol < jwide; jcol++ ) {
-            val = GAMMA_curveFunctionLookupTable[*rp++];
-            if ( cr2_slice[0] ) {
-                jidx = jrow * jwide + jcol;
-                i = jidx / (cr2_slice[1] * THE_image.height);
-                if ( (j = i >= cr2_slice[0]) ) {
-                    i = cr2_slice[0];
-                }
-                jidx -= i * (cr2_slice[1] * THE_image.height);
-                row = jidx / cr2_slice[1 + j];
-                col = jidx % cr2_slice[1 + j] + i * cr2_slice[1];
-            }
-            if ( THE_image.width == 3984 && (col -= 2) < 0 ) {
-                col += (row--, THE_image.width);
-            }
-            if ((unsigned) row < THE_image.height ) {
-                RAW(row, col) = val;
-            }
-            if ( ++col >= THE_image.width ) {
-                col = (row++, 0);
-            }
-        }
-    }
-    ljpeg_end(&jh);
 }
 
 void

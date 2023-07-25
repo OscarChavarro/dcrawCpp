@@ -14,7 +14,7 @@ Return 0 if the GLOBAL_image starts with compressed data,
 In Canon compressed data, 0xff is always followed by 0x00.
 */
 static int
-canon_has_lowbits() {
+canonHasLowBits() {
     unsigned char test[0x4000];
     int ret = 1;
     int i;
@@ -129,7 +129,7 @@ canon_600_auto_wb() {
     int stat[2];
 
     memset(&total, 0, sizeof total);
-    i = canon_ev + 0.5;
+    i = (int)lround(canon_ev + 0.5);
     if ( i < 10 ) {
         mar = 150;
     } else {
@@ -312,7 +312,7 @@ canon_load_raw() {
     int base[2];
 
     crw_init_tables(tiff_compress, huff);
-    lowbits = canon_has_lowbits();
+    lowbits = canonHasLowBits();
     if ( !lowbits ) ADOBE_maximum = 0x3ff;
     fseek(GLOBAL_IO_ifp, 540 + lowbits * THE_image.height * THE_image.width / 4, SEEK_SET);
     GLOBAL_IO_zeroAfterFf = 1;

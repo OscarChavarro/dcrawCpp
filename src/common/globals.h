@@ -51,6 +51,6 @@ extern float flash_used;
 extern float rgb_cam[3][4];
 extern float canon_ev;
 extern unsigned tiff_compress;
-
+extern unsigned short cr2_slice[3];
 
 #endif

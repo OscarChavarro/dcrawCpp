@@ -2,9 +2,12 @@
 #include <cstring>
 #include <cstdlib>
 #include "jpegRawLoaders.h"
-#include "../globalsio.h"
 #include "../../../common/globals.h"
 #include "../../../common/util.h"
+#include "../../../imageHandling/BayessianImage.h"
+#include "../../../postprocessors/gamma.h"
+#include "../globalsio.h"
+#include "jpegRawLoaders.h"
 
 int
 ljpeg_start(struct jhead *jh, int info_only) {
@@ -195,3 +198,52 @@ ljpeg_diff(unsigned short *huff) {
     return diff;
 }
 
+void
+lossless_jpeg_load_raw() {
+    int jwide;
+    int jrow;
+    int jcol;
+    int val;
+    int jidx;
+    int i;
+    int j;
+    int row = 0;
+    int col = 0;
+    struct jhead jh;
+    unsigned short *rp;
+
+    if ( !ljpeg_start(&jh, 0) ) {
+        return;
+    }
+    jwide = jh.wide * jh.clrs;
+
+    for ( jrow = 0; jrow < jh.high; jrow++ ) {
+        rp = ljpeg_row(jrow, &jh);
+        if ( GLOBAL_loadFlags & 1 ) {
+            row = jrow & 1 ? THE_image.height - 1 - jrow / 2 : jrow / 2;
+        }
+        for ( jcol = 0; jcol < jwide; jcol++ ) {
+            val = GAMMA_curveFunctionLookupTable[*rp++];
+            if ( cr2_slice[0] ) {
+                jidx = jrow * jwide + jcol;
+                i = jidx / (cr2_slice[1] * THE_image.height);
+                if ( (j = i >= cr2_slice[0]) ) {
+                    i = cr2_slice[0];
+                }
+                jidx -= i * (cr2_slice[1] * THE_image.height);
+                row = jidx / cr2_slice[1 + j];
+                col = jidx % cr2_slice[1 + j] + i * cr2_slice[1];
+            }
+            if ( THE_image.width == 3984 && (col -= 2) < 0 ) {
+                col += (row--, THE_image.width);
+            }
+            if ((unsigned) row < THE_image.height ) {
+                RAW(row, col) = val;
+            }
+            if ( ++col >= THE_image.width ) {
+                col = (row++, 0);
+            }
+        }
+    }
+    ljpeg_end(&jh);
+}
