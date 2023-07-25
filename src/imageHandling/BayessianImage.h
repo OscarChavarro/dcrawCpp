@@ -71,14 +71,19 @@ All RGB cameras use one of these Bayer grids:
     THE_image.rawData[(row)*THE_image.width+(col)]
 
 #define FC(row, col) \
-    (filters >> ((((row) << 1 & 14) + ((col) & 1)) << 1) & 3)
+    (IMAGE_filters >> ((((row) << 1 & 14) + ((col) & 1)) << 1) & 3)
 
 #define BAYER(row, col) \
-    GLOBAL_image[((row) >> shrink)*iwidth + ((col) >> shrink)][FC(row,col)]
+    GLOBAL_image[((row) >> IMAGE_shrink)*IMAGE_iwidth + ((col) >> IMAGE_shrink)][FC(row,col)]
 
 #define BAYER2(row, col) \
-    GLOBAL_image[((row) >> shrink)*iwidth + ((col) >> shrink)][fcol(row,col)]
+    GLOBAL_image[((row) >> IMAGE_shrink)*IMAGE_iwidth + ((col) >> IMAGE_shrink)][fcol(row,col)]
 
 extern BayessianImage THE_image;
+extern unsigned IMAGE_colors;
+extern unsigned IMAGE_filters;
+extern unsigned short IMAGE_shrink;
+extern unsigned short IMAGE_iheight;
+extern unsigned short IMAGE_iwidth;
 
 #endif

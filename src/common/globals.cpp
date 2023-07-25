@@ -20,3 +20,7 @@ unsigned tiff_samples;
 unsigned short top_margin;
 unsigned short left_margin;
 unsigned mix_green;
+float pre_mul[4];
+float flash_used;
+float rgb_cam[3][4];
+float canon_ev;

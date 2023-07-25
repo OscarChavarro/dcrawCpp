@@ -1,7 +1,6 @@
 #include "../../../common/globals.h"
 #include "../globalsio.h"
 #include "../../../imageHandling/BayessianImage.h"
-#include "../../../postprocessors/gamma.h"
 #include "../../../common/mathMacros.h"
 #include "../../../common/util.h"
 #include "../../../common/Options.h"

@@ -46,6 +46,9 @@ extern unsigned tiff_samples;
 extern unsigned short top_margin;
 extern unsigned short left_margin;
 extern unsigned mix_green;
-
+extern float pre_mul[4];
+extern float flash_used;
+extern float rgb_cam[3][4];
+extern float canon_ev;
 
 #endif
