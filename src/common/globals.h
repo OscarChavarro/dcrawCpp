@@ -56,5 +56,6 @@ extern off_t strip_offset;
 extern unsigned is_raw;
 extern unsigned tile_width;
 extern unsigned tile_length;
+extern unsigned thumb_misc;
 
 #endif
