@@ -62,5 +62,8 @@ extern unsigned short width;
 extern char model2[64];
 extern unsigned unique_id;
 extern unsigned short sraw_mul[4];
+extern unsigned thumb_length;
+extern unsigned short thumb_width;
+extern unsigned short thumb_height;
 
 #endif

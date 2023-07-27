@@ -6,6 +6,7 @@
 #include "../../common/CameraImageInformation.h"
 
 FILE *GLOBAL_IO_ifp;
+FILE *ofp;
 unsigned GLOBAL_IO_dataError;
 unsigned GLOBAL_IO_zeroAfterFf;
 off_t GLOBAL_IO_profileOffset;

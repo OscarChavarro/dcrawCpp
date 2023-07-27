@@ -36,3 +36,6 @@ unsigned short width;
 char model2[64];
 unsigned unique_id;
 unsigned short sraw_mul[4];
+unsigned thumb_length;
+unsigned short thumb_width;
+unsigned short thumb_height;

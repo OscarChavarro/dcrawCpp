@@ -12,6 +12,7 @@
 #include <cstdio>
 
 extern FILE *GLOBAL_IO_ifp;
+extern FILE *ofp;
 extern unsigned GLOBAL_IO_zeroAfterFf;
 extern unsigned GLOBAL_IO_dataError;
 extern off_t GLOBAL_IO_profileOffset;
