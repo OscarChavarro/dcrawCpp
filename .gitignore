@@ -47,6 +47,7 @@ cmake-build-release-coverage
 **/*.nef
 **/*.3fr
 **/*.dng
+**/*.pef
 **/*.raw
 **/*.ppm
 **/*.pgm
