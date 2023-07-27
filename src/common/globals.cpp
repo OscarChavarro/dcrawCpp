@@ -27,3 +27,6 @@ float canon_ev;
 unsigned tiff_compress;
 unsigned short cr2_slice[3];
 off_t strip_offset;
+unsigned is_raw;
+unsigned tile_width;
+unsigned tile_length;

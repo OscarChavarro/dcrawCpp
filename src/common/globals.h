@@ -53,5 +53,8 @@ extern float canon_ev;
 extern unsigned tiff_compress;
 extern unsigned short cr2_slice[3];
 extern off_t strip_offset;
+extern unsigned is_raw;
+extern unsigned tile_width;
+extern unsigned tile_length;
 
 #endif

@@ -23,5 +23,6 @@ extern void ljpeg_end(struct jhead *jh);
 extern unsigned short *ljpeg_row(int jrow, struct jhead *jh);
 extern int ljpeg_diff(unsigned short *huff);
 extern void lossless_jpeg_load_raw();
+extern void ljpeg_idct(struct jhead *jh);
 
 #endif

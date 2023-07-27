@@ -141,10 +141,7 @@ unsigned thumb_misc;
 unsigned fuji_layout;
 unsigned numberOfRawImages;
 unsigned zero_is_bad;
-unsigned is_raw;
 unsigned is_foveon;
-unsigned tile_width;
-unsigned tile_length;
 unsigned gpsdata[32];
 unsigned cameraFlip;
 unsigned short height;
@@ -433,132 +430,6 @@ canon_sraw_load_raw() {
     }
     ljpeg_end(&jh);
     ADOBE_maximum = 0x3fff;
-}
-
-void
-ljpeg_idct(struct jhead *jh) {
-    int c;
-    int i;
-    int j;
-    int len;
-    int skip;
-    int coef;
-    float work[3][8][8];
-    static float cs[106] = {0};
-    static const unsigned char zigzag[80] =
-            {0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33,
-             40, 48, 41, 34, 27, 20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36,
-             29, 22, 15, 23, 30, 37, 44, 51, 58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54,
-             47, 55, 62, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63};
-
-    if ( !cs[0] ) {
-        for ( c = 0; c < 106; c++ ) {
-            cs[c] = cos((c & 31) * M_PI / 16) / 2;
-        }
-    }
-    memset(work, 0, sizeof work);
-    work[0][0][0] = jh->vpred[0] += ljpeg_diff(jh->huff[0]) * jh->quant[0];
-    for ( i = 1; i < 64; i++ ) {
-        len = gethuff (jh->huff[16]);
-        i += skip = len >> 4;
-        if ( !(len &= 15) && skip < 15 ) {
-            break;
-        }
-        coef = getbits(len);
-        if ( (coef & (1 << (len - 1))) == 0 ) {
-            coef -= (1 << len) - 1;
-        }
-        ((float *) work)[zigzag[i]] = coef * jh->quant[i];
-    }
-    for ( c = 0; c < 8; c++ ) {
-        work[0][0][c] *= M_SQRT1_2;
-    }
-    for ( c = 0; c < 8; c++ ) {
-        work[0][c][0] *= M_SQRT1_2;
-    }
-    for ( i = 0; i < 8; i++ ) {
-        for ( j = 0; j < 8; j++ ) {
-            for ( c = 0; c < 8; c++ ) {
-                work[1][i][j] += work[0][i][c] * cs[(j * 2 + 1) * c];
-            }
-        }
-    }
-    for ( i = 0; i < 8; i++ ) {
-        for ( j = 0; j < 8; j++ ) {
-            for ( c = 0; c < 8; c++ ) {
-                work[2][i][j] += work[1][c][j] * cs[(i * 2 + 1) * c];
-            }
-        }
-    }
-
-    for ( c = 0; c < 64; c++ ) {
-        jh->idct[c] = CLIP(((float *) work[2])[c] + 0.5);
-    }
-}
-
-void
-lossless_dng_load_raw() {
-    unsigned save;
-    unsigned trow = 0;
-    unsigned tcol = 0;
-    unsigned jwide;
-    unsigned jrow;
-    unsigned jcol;
-    unsigned row;
-    unsigned col;
-    unsigned i;
-    unsigned j;
-    struct jhead jh;
-    unsigned short *rp;
-
-    while ( trow < THE_image.height ) {
-        save = ftell(GLOBAL_IO_ifp);
-        if ( tile_length < INT_MAX ) {
-            fseek(GLOBAL_IO_ifp, read4bytes(), SEEK_SET);
-        }
-        if ( !ljpeg_start(&jh, 0)) {
-            break;
-        }
-        jwide = jh.wide;
-        if ( IMAGE_filters ) {
-            jwide *= jh.clrs;
-        }
-        jwide /= MIN (is_raw, tiff_samples);
-        switch ( jh.algo ) {
-            case 0xc1:
-                jh.vpred[0] = 16384;
-                getbits(-1);
-                for ( jrow = 0; jrow + 7 < jh.high; jrow += 8 ) {
-                    for ( jcol = 0; jcol + 7 < jh.wide; jcol += 8 ) {
-                        ljpeg_idct(&jh);
-                        rp = jh.idct;
-                        row = trow + jcol / tile_width + jrow * 2;
-                        col = tcol + jcol % tile_width;
-                        for ( i = 0; i < 16; i += 2 ) {
-                            for ( j = 0; j < 8; j++ ) {
-                                adobe_copy_pixel(row + i, col + j, &rp);
-                            }
-                        }
-                    }
-                }
-                break;
-            case 0xc3:
-                for ( row = col = jrow = 0; jrow < jh.high; jrow++ ) {
-                    rp = ljpeg_row(jrow, &jh);
-                    for ( jcol = 0; jcol < jwide; jcol++ ) {
-                        adobe_copy_pixel(trow + row, tcol + col, &rp);
-                        if ( ++col >= tile_width || col >= THE_image.width ) {
-                            row += 1 + (col = 0);
-                        }
-                    }
-                }
-        }
-        fseek(GLOBAL_IO_ifp, save + 4, SEEK_SET);
-        if ((tcol += tile_width) >= THE_image.width ) {
-            trow += tile_length + (tcol = 0);
-        }
-        ljpeg_end(&jh);
-    }
 }
 
 void
