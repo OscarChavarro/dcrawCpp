@@ -144,8 +144,6 @@ unsigned zero_is_bad;
 unsigned is_foveon;
 unsigned gpsdata[32];
 unsigned cameraFlip;
-unsigned short height;
-unsigned short width;
 unsigned short fuji_width;
 unsigned short thumb_width;
 unsigned short thumb_height;

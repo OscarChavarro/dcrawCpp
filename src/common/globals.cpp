@@ -31,3 +31,5 @@ unsigned is_raw;
 unsigned tile_width;
 unsigned tile_length;
 unsigned thumb_misc;
+unsigned short height;
+unsigned short width;

@@ -23,14 +23,14 @@ kodak_c330_load_raw() {
 
     pixel = (unsigned char *)calloc(THE_image.width, 2 * sizeof *pixel);
     memoryError(pixel, "kodak_c330_load_raw()");
-    for ( row = 0; row < THE_image.height; row++ ) {
+    for ( row = 0; row < height; row++ ) {
         if ( fread(pixel, THE_image.width, 2, GLOBAL_IO_ifp) < 2 ) {
             inputOutputError();
         }
         if ( GLOBAL_loadFlags && (row & 31) == 31 ) {
             fseek(GLOBAL_IO_ifp, THE_image.width * 32, SEEK_CUR);
         }
-        for ( col = 0; col < THE_image.width; col++ ) {
+        for ( col = 0; col < width; col++ ) {
             y = pixel[col * 2];
             cb = pixel[(col * 2 & -4) | 1] - 128;
             cr = pixel[(col * 2 & -4) | 3] - 128;
@@ -38,7 +38,7 @@ kodak_c330_load_raw() {
             rgb[2] = rgb[1] + cb;
             rgb[0] = rgb[1] + cr;
             for ( c = 0; c < 3; c++ ) {
-                GLOBAL_image[row * THE_image.width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
+                GLOBAL_image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
             };
         }
     }
