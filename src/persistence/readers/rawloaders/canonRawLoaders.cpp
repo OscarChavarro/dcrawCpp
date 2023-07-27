@@ -5,6 +5,7 @@
 #include "../../../common/util.h"
 #include "../../../imageHandling/BayessianImage.h"
 #include "../../../colorRepresentation/adobeCoeff.h"
+#include "../../../postprocessors/gamma.h"
 #include "../globalsio.h"
 #include "jpegRawLoaders.h"
 #include "canonRawLoaders.h"
@@ -477,4 +478,36 @@ canon_sraw_load_raw() {
     }
     ljpeg_end(&jh);
     ADOBE_maximum = 0x3fff;
+}
+
+void
+canon_rmf_load_raw() {
+    int row;
+    int col;
+    int bits;
+    int orow;
+    int ocol;
+    int c;
+
+    for ( row = 0; row < THE_image.height; row++ ) {
+        for ( col = 0; col < THE_image.width - 2; col += 3 ) {
+            bits = read4bytes();
+            for ( c = 0; c < 3; c++ ) {
+                orow = row;
+                if ((ocol = col + c - 4) < 0 ) {
+                    ocol += THE_image.width;
+                    if ((orow -= 2) < 0 ) {
+                        orow += THE_image.height;
+                    }
+                }
+                RAW(orow, ocol) = GAMMA_curveFunctionLookupTable[bits >> (10 * c + 2) & 0x3ff];
+            }
+        }
+    }
+    ADOBE_maximum = GAMMA_curveFunctionLookupTable[0x3ff];
+}
+
+void
+canon_crx_load_raw() {
+    fprintf(stderr, "canon_crx_load_raw() not implemented");
 }

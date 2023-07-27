@@ -909,33 +909,6 @@ nokia_load_raw() {
     }
 }
 
-void
-canon_rmf_load_raw() {
-    int row;
-    int col;
-    int bits;
-    int orow;
-    int ocol;
-    int c;
-
-    for ( row = 0; row < THE_image.height; row++ ) {
-        for ( col = 0; col < THE_image.width - 2; col += 3 ) {
-            bits = read4bytes();
-            for ( c = 0; c < 3; c++ ) {
-                orow = row;
-                if ((ocol = col + c - 4) < 0 ) {
-                    ocol += THE_image.width;
-                    if ((orow -= 2) < 0 ) {
-                        orow += THE_image.height;
-                    }
-                }
-                RAW(orow, ocol) = GAMMA_curveFunctionLookupTable[bits >> (10 * c + 2) & 0x3ff];
-            }
-        }
-    }
-    ADOBE_maximum = GAMMA_curveFunctionLookupTable[0x3ff];
-}
-
 unsigned
 pana_bits(int nbits) {
     static unsigned char buf[0x4000];
@@ -1063,10 +1036,6 @@ olympus_load_raw() {
             }
         }
     }
-}
-
-void
-canon_crx_load_raw() {
 }
 
 void
