@@ -101,16 +101,9 @@ typedef unsigned long long UINT64;
 #include "common/globals.h"
 #include "common/mathMacros.h"
 #include "common/Options.h"
-#include "colorRepresentation/whiteBalance.h"
-#include "imageProcess.h"
 #include "imageHandling/rawAnalysis.h"
-#include "persistence/readers/tiffparser.h"
 #include "persistence/readers/globalsio.h"
-#include "persistence/readers/timestamp.h"
-#include "colorRepresentation/cielab.h"
-#include "colorRepresentation/iccProfile.h"
 #include "common/CameraImageInformation.h"
-#include "thumbnailExport.h"
 #include "common/util.h"
 #include "colorRepresentation/adobeCoeff.h"
 #include "postprocessors/gamma.h"
@@ -121,6 +114,7 @@ typedef unsigned long long UINT64;
 #include "persistence/readers/rawloaders/canonRawLoaders.h"
 #include "persistence/readers/rawloaders/standardRawLoaders.h"
 #include "persistence/readers/rawloaders/samsungRawLoaders.h"
+#include "persistence/readers/rawloaders/dngRawLoaders.h"
 
 FILE *ofp;
 
@@ -442,31 +436,6 @@ canon_sraw_load_raw() {
 }
 
 void
-adobe_copy_pixel(unsigned row, unsigned col, unsigned short **rp) {
-    int c;
-
-    if ( tiff_samples == 2 && OPTIONS_values->shotSelect ) {
-        (*rp)++;
-    }
-    if ( THE_image.rawData ) {
-        if ( row < THE_image.height && col < THE_image.width ) {
-            RAW(row, col) = GAMMA_curveFunctionLookupTable[**rp];
-        }
-        *rp += tiff_samples;
-    } else {
-        if ( row < height && col < width ) {
-            for ( c = 0; c < tiff_samples; c++ ) {
-                GLOBAL_image[row * width + col][c] = GAMMA_curveFunctionLookupTable[(*rp)[c]];
-            }
-        }
-        *rp += tiff_samples;
-    }
-    if ( tiff_samples == 2 && OPTIONS_values->shotSelect ) {
-        (*rp)--;
-    }
-}
-
-void
 ljpeg_idct(struct jhead *jh) {
     int c;
     int i;
@@ -590,31 +559,6 @@ lossless_dng_load_raw() {
         }
         ljpeg_end(&jh);
     }
-}
-
-void
-packed_dng_load_raw() {
-    unsigned short *pixel;
-    unsigned short *rp;
-    int row;
-    int col;
-
-    pixel = (unsigned short *) calloc(THE_image.width, tiff_samples * sizeof *pixel);
-    memoryError(pixel, "packed_dng_load_raw()");
-    for ( row = 0; row < THE_image.height; row++ ) {
-        if ( THE_image.bitsPerSample == 16 ) {
-            readShorts(pixel, THE_image.width * tiff_samples);
-        } else {
-            getbits(-1);
-            for ( col = 0; col < THE_image.width * tiff_samples; col++ ) {
-                pixel[col] = getbits(THE_image.bitsPerSample);
-            }
-        }
-        for ( rp = pixel, col = 0; col < THE_image.width; col++ ) {
-            adobe_copy_pixel(row, col, &rp);
-        }
-    }
-    free(pixel);
 }
 
 void
