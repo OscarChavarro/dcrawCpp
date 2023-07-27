@@ -33,3 +33,6 @@ unsigned tile_length;
 unsigned thumb_misc;
 unsigned short height;
 unsigned short width;
+char model2[64];
+unsigned unique_id;
+unsigned short sraw_mul[4];

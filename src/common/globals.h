@@ -59,5 +59,8 @@ extern unsigned tile_length;
 extern unsigned thumb_misc;
 extern unsigned short height;
 extern unsigned short width;
+extern char model2[64];
+extern unsigned unique_id;
+extern unsigned short sraw_mul[4];
 
 #endif
