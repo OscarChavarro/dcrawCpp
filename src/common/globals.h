@@ -66,4 +66,18 @@ extern unsigned thumb_length;
 extern unsigned short thumb_width;
 extern unsigned short thumb_height;
 
+struct ph1 {
+    int format;
+    int key_off;
+    int tag_21a;
+    int black;
+    int split_col;
+    int black_col;
+    int split_row;
+    int black_row;
+    float tag_210;
+};
+
+extern struct ph1 ph1;
+
 #endif

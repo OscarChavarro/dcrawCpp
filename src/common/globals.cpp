@@ -39,3 +39,4 @@ unsigned short sraw_mul[4];
 unsigned thumb_length;
 unsigned short thumb_width;
 unsigned short thumb_height;
+struct ph1 ph1;
