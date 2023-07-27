@@ -59,22 +59,22 @@ kodak_c603_load_raw() {
 
     pixel = (unsigned char *)calloc(THE_image.width, 3 * sizeof *pixel);
     memoryError(pixel, "kodak_c603_load_raw()");
-    for ( row = 0; row < THE_image.height; row++ ) {
+    for ( row = 0; row < height; row++ ) {
         if ( ~row & 1 ) {
             if ( fread(pixel, THE_image.width, 3, GLOBAL_IO_ifp) < 3 ) {
                 inputOutputError();
             }
         }
-        for ( col = 0; col < THE_image.width; col++ ) {
-            y = pixel[THE_image.width * 2 * (row & 1) + col];
-            cb = pixel[THE_image.width + (col & -2)] - 128;
-            cr = pixel[THE_image.width + (col & -2) + 1] - 128;
+        for ( col = 0; col < width; col++ ) {
+            y = pixel[width * 2 * (row & 1) + col];
+            cb = pixel[width + (col & -2)] - 128;
+            cr = pixel[width + (col & -2) + 1] - 128;
             rgb[1] = y - ((cb + cr + 2) >> 2);
             rgb[2] = rgb[1] + cb;
             rgb[0] = rgb[1] + cr;
             for ( c = 0; c < 3; c++ ) {
-                GLOBAL_image[row * THE_image.width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
-            }
+                GLOBAL_image[row * width + col][c] = GAMMA_curveFunctionLookupTable[LIM(rgb[c], 0, 255)];
+            };
         }
     }
     free(pixel);
@@ -188,7 +188,7 @@ kodak_65000_decode(short *out, int bsize) {
         len = blen[i];
         if ( bits < len ) {
             for ( j = 0; j < 32; j += 8 ) {
-                bitbuf += (long long)fgetc(GLOBAL_IO_ifp) << (bits + (j ^ 8));
+                bitbuf += (long long) fgetc(GLOBAL_IO_ifp) << (bits + (j ^ 8));
             }
             bits += 32;
         }
@@ -213,10 +213,10 @@ kodak_65000_load_raw() {
     int ret;
     int i;
 
-    for ( row = 0; row < THE_image.height; row++ ) {
-        for ( col = 0; col < THE_image.width; col += 256 ) {
+    for ( row = 0; row < height; row++ ) {
+        for ( col = 0; col < width; col += 256 ) {
             pred[0] = pred[1] = 0;
-            len = MIN (256, THE_image.width - col);
+            len = MIN (256, width - col);
             ret = kodak_65000_decode(buf, len);
             for ( i = 0; i < len; i++ ) {
                 if ( (RAW(row, col + i) = GAMMA_curveFunctionLookupTable[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12 ) {
@@ -247,9 +247,9 @@ kodak_ycbcr_load_raw() {
     if ( !GLOBAL_image ) {
         return;
     }
-    for ( row = 0; row < THE_image.height; row += 2 ) {
-        for ( col = 0; col < THE_image.width; col += 128 ) {
-            len = MIN (128, THE_image.width - col);
+    for ( row = 0; row < height; row += 2 ) {
+        for ( col = 0; col < width; col += 128 ) {
+            len = MIN (128, width - col);
             kodak_65000_decode(buf, len * 3);
             y[0][1] = y[1][1] = cb = cr = 0;
             for ( bp = buf, i = 0; i < len; i += 2, bp += 2 ) {
@@ -261,7 +261,7 @@ kodak_ycbcr_load_raw() {
                 for ( j = 0; j < 2; j++ )
                     for ( k = 0; k < 2; k++ ) {
                         if ((y[j][k] = y[j][k ^ 1] + *bp++) >> 10 ) inputOutputError();
-                        ip = GLOBAL_image[(row + j) * THE_image.width + col + i + k];
+                        ip = GLOBAL_image[(row + j) * width + col + i + k];
                         for ( c = 0; c < 3; c++ ) {
                             ip[c] = GAMMA_curveFunctionLookupTable[LIM(y[j][k] + rgb[c], 0, 0xfff)];
                         }
@@ -283,9 +283,9 @@ kodak_rgb_load_raw() {
     int rgb[3];
     unsigned short *ip = GLOBAL_image[0];
 
-    for ( row = 0; row < THE_image.height; row++ ) {
-        for ( col = 0; col < THE_image.width; col += 256 ) {
-            len = MIN (256, THE_image.width - col);
+    for ( row = 0; row < height; row++ ) {
+        for ( col = 0; col < width; col += 256 ) {
+            len = MIN (256, width - col);
             kodak_65000_decode(buf, len * 3);
             memset(rgb, 0, sizeof rgb);
             for ( bp = buf, i = 0; i < len; i++, ip += 4 ) {
@@ -303,9 +303,9 @@ kodak_thumb_load_raw() {
     int col;
 
     IMAGE_colors = thumb_misc >> 5;
-    for ( row = 0; row < THE_image.height; row++ ) {
-        for ( col = 0; col < THE_image.width; col++ ) {
-            readShorts(GLOBAL_image[row * THE_image.width + col], IMAGE_colors);
+    for ( row = 0; row < height; row++ ) {
+        for ( col = 0; col < width; col++ ) {
+            readShorts(GLOBAL_image[row * width + col], IMAGE_colors);
         }
     }
     ADOBE_maximum = (1 << (thumb_misc & 31)) - 1;
