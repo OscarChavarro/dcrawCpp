@@ -11804,7 +11804,7 @@ main(int argc, const char **argv) {
             memoryError(GLOBAL_image, "main()");
         }
         if ( OPTIONS_values->verbose ) {
-            fprintf(stderr, _("Loading %s %s GLOBAL_image from %s ...\n"), GLOBAL_make, GLOBAL_model, CAMERA_IMAGE_information.inputFilename);
+            fprintf(stderr, _("Loading %s %s image from %s ...\n"), GLOBAL_make, GLOBAL_model, CAMERA_IMAGE_information.inputFilename);
         }
         if ( OPTIONS_values->shotSelect >= is_raw ) {
             fprintf(stderr, _("%s: \"-s %d\" requests a nonexistent GLOBAL_image!\n"), CAMERA_IMAGE_information.inputFilename, OPTIONS_values->shotSelect);
