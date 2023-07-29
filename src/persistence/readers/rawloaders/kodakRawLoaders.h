@@ -9,5 +9,6 @@ extern void kodak_65000_load_raw();
 extern void kodak_ycbcr_load_raw();
 extern void kodak_rgb_load_raw();
 extern void kodak_thumb_load_raw();
+extern void kodak_jpeg_load_raw();
 
 #endif

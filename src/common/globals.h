@@ -2,6 +2,7 @@
 #define __GLOBALS_H__
 
 #include <cstdio>
+#include <csetjmp>
 
 // II in ASCII
 #define LITTLE_ENDIAN_ORDER 0x4949
@@ -66,6 +67,7 @@ extern unsigned thumb_length;
 extern unsigned short thumb_width;
 extern unsigned short thumb_height;
 extern unsigned meta_length;
+extern jmp_buf failure;
 
 struct ph1 {
     int format;

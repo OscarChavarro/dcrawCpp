@@ -156,8 +156,6 @@ void (*write_thumb)(), (*write_fun)();
 
 void (*TIFF_CALLBACK_loadRawData)();
 
-jmp_buf failure;
-
 struct decode {
     struct decode *branch[2];
     int leaf;
@@ -728,59 +726,6 @@ kodak_radc_load_raw() {
 void kodak_jpeg_load_raw() {}
 void lossy_dng_load_raw() {}
 #else
-
-METHODDEF(boolean)
-fill_input_buffer(j_decompress_ptr cinfo) {
-    static unsigned char jpeg_buffer[4096];
-    size_t nbytes;
-
-    nbytes = fread(jpeg_buffer, 1, 4096, GLOBAL_IO_ifp);
-    swab(jpeg_buffer, jpeg_buffer, nbytes);
-    cinfo->src->next_input_byte = jpeg_buffer;
-    cinfo->src->bytes_in_buffer = nbytes;
-    return TRUE;
-}
-
-void
-kodak_jpeg_load_raw() {
-    struct jpeg_decompress_struct cinfo;
-    struct jpeg_error_mgr jerr;
-    JSAMPARRAY buf;
-    JSAMPLE (*pixel)[3];
-    int row;
-    int col;
-
-    cinfo.err = jpeg_std_error(&jerr);
-    jpeg_create_decompress (&cinfo);
-    jpeg_stdio_src(&cinfo, GLOBAL_IO_ifp);
-    cinfo.src->fill_input_buffer = fill_input_buffer;
-    jpeg_read_header(&cinfo, TRUE);
-    jpeg_start_decompress(&cinfo);
-    if ( (cinfo.output_width != width) ||
-        (cinfo.output_height * 2 != height) ||
-        (cinfo.output_components != 3) ) {
-        fprintf(stderr, _("%s: incorrect JPEG dimensions\n"), CAMERA_IMAGE_information.inputFilename);
-        jpeg_destroy_decompress(&cinfo);
-        longjmp(failure, 3);
-    }
-    buf = (*cinfo.mem->alloc_sarray)
-            ((j_common_ptr) &cinfo, JPOOL_IMAGE, width * 3, 1);
-
-    while ( cinfo.output_scanline < cinfo.output_height ) {
-        row = cinfo.output_scanline * 2;
-        jpeg_read_scanlines(&cinfo, buf, 1);
-        pixel = (JSAMPLE (*)[3]) buf[0];
-        for ( col = 0; col < width; col += 2 ) {
-            RAW(row + 0, col + 0) = pixel[col + 0][1] << 1;
-            RAW(row + 1, col + 1) = pixel[col + 1][1] << 1;
-            RAW(row + 0, col + 1) = pixel[col][0] + pixel[col + 1][0];
-            RAW(row + 1, col + 0) = pixel[col][2] + pixel[col + 1][2];
-        }
-    }
-    jpeg_finish_decompress(&cinfo);
-    jpeg_destroy_decompress(&cinfo);
-    ADOBE_maximum = 0xff << 1;
-}
 
 void
 gamma_curve(double pwr, double ts, int mode, int imax);
