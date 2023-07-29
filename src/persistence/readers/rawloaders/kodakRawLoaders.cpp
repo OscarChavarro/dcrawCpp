@@ -153,7 +153,7 @@ kodak_262_load_raw() {
     }
 }
 
-int
+static int
 kodak_65000_decode(short *out, int bsize) {
     unsigned char c;
     unsigned char blen[768];
@@ -367,4 +367,23 @@ kodak_jpeg_load_raw() {
     jpeg_finish_decompress(&cinfo);
     jpeg_destroy_decompress(&cinfo);
     ADOBE_maximum = 0xff << 1;
+}
+
+void
+kodak_dc120_load_raw() {
+    static const int mul[4] = {162, 192, 187, 92};
+    static const int add[4] = {0, 636, 424, 212};
+    unsigned char pixel[848];
+    int row;
+    int shift;
+    int col;
+
+    for ( row = 0; row < height; row++ ) {
+        if ( fread(pixel, 1, 848, GLOBAL_IO_ifp) < 848 ) inputOutputError();
+        shift = row * mul[row & 3] + add[row & 3];
+        for ( col = 0; col < width; col++ ) {
+            RAW(row, col) = (unsigned short) pixel[(col + shift) % 848];
+        }
+    }
+    ADOBE_maximum = 0xff;
 }

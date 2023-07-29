@@ -758,25 +758,6 @@ lossy_dng_load_raw() {
 #endif
 
 void
-kodak_dc120_load_raw() {
-    static const int mul[4] = {162, 192, 187, 92};
-    static const int add[4] = {0, 636, 424, 212};
-    unsigned char pixel[848];
-    int row;
-    int shift;
-    int col;
-
-    for ( row = 0; row < height; row++ ) {
-        if ( fread(pixel, 1, 848, GLOBAL_IO_ifp) < 848 ) inputOutputError();
-        shift = row * mul[row & 3] + add[row & 3];
-        for ( col = 0; col < width; col++ ) {
-            RAW(row, col) = (unsigned short) pixel[(col + shift) % 848];
-        }
-    }
-    ADOBE_maximum = 0xff;
-}
-
-void
 eight_bit_load_raw() {
     unsigned char *pixel;
     unsigned row;
