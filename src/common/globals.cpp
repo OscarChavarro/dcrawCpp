@@ -40,6 +40,7 @@ unsigned thumb_length;
 unsigned short thumb_width;
 unsigned short thumb_height;
 unsigned meta_length;
+unsigned kodak_cbpp;
 jmp_buf failure;
 
 struct ph1 ph1;

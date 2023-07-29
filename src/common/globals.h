@@ -67,6 +67,7 @@ extern unsigned thumb_length;
 extern unsigned short thumb_width;
 extern unsigned short thumb_height;
 extern unsigned meta_length;
+extern unsigned kodak_cbpp;
 extern jmp_buf failure;
 
 struct ph1 {
