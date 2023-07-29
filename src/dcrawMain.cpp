@@ -121,6 +121,7 @@ typedef unsigned long long UINT64;
 #include "persistence/readers/rawloaders/phaseoneRawLoaders.h"
 #include "persistence/readers/rawloaders/leafRawLoaders.h"
 #include "persistence/readers/rawloaders/sinarRawLoaders.h"
+#include "persistence/readers/rawloaders/imaconRawLoaders.h"
 
 char *meta_data;
 char xtrans[6][6];
@@ -774,21 +775,6 @@ phase_one_correct() {
             }
         }
         free(yval[0]);
-    }
-}
-
-void
-imacon_full_load_raw() {
-    int row;
-    int col;
-
-    if ( !GLOBAL_image ) {
-        return;
-    }
-    for ( row = 0; row < height; row++ ) {
-        for ( col = 0; col < width; col++ ) {
-            readShorts(GLOBAL_image[row * width + col], 3);
-        }
     }
 }
 
