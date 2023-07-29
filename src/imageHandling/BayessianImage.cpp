@@ -45,3 +45,8 @@ adobe_copy_pixel(unsigned row, unsigned col, unsigned short **rp) {
         (*rp)--;
     }
 }
+
+int
+raw(unsigned row, unsigned col) {
+    return (row < THE_image.height && col < THE_image.width) ? RAW(row, col) : 0;
+}

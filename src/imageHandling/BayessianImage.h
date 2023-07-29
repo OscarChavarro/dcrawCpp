@@ -86,5 +86,6 @@ extern unsigned short IMAGE_shrink;
 extern unsigned short IMAGE_iheight;
 extern unsigned short IMAGE_iwidth;
 extern void adobe_copy_pixel(unsigned row, unsigned col, unsigned short **rp);
+extern int raw(unsigned row, unsigned col);
 
 #endif

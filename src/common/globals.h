@@ -65,6 +65,7 @@ extern unsigned short sraw_mul[4];
 extern unsigned thumb_length;
 extern unsigned short thumb_width;
 extern unsigned short thumb_height;
+extern unsigned meta_length;
 
 struct ph1 {
     int format;
@@ -79,5 +80,12 @@ struct ph1 {
 };
 
 extern struct ph1 ph1;
+
+#ifdef LOCALEDIR
+#include <libintl.h>
+#define _(String) gettext(String)
+#else
+#define _(String) (String)
+#endif
 
 #endif

@@ -10,4 +10,6 @@
 #define CLIP(x) LIM((int)(x),0,65535)
 #define SWAP(a,b) { a=a+b; b=a-b; a=a-b; }
 
+extern void cubic_spline(const int *x_, const int *y_, const int len);
+
 #endif
